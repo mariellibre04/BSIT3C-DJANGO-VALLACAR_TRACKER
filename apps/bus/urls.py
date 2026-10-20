@@ -9,6 +9,7 @@ urlpatterns = [
     path('eta/', views.passenger_eta_page, name='passenger_eta'),
     path('ajax/list/', views.bus_list_ajax, name='bus_list_ajax'),
     path('ajax/locations/', views.bus_locations_ajax, name='bus_locations_ajax'),
+    path('ajax/geocode/', views.geocode_ajax, name='geocode_ajax'),
     path('ajax/get/<int:pk>/', views.bus_get_ajax, name='bus_get_ajax'),
     path('ajax/save/', views.bus_save_ajax, name='bus_save_ajax'),
     path('ajax/gps/<int:pk>/', views.bus_gps_update_ajax, name='bus_gps_update_ajax'),

@@ -1,11 +1,15 @@
 import json
 from decimal import Decimal, InvalidOperation
+from urllib.error import URLError
+from urllib.parse import urlencode
+from urllib.request import Request, urlopen
 
 from django.shortcuts import get_object_or_404, render
 from django.http import JsonResponse
 from django.contrib import messages
 from django.contrib.auth.decorators import login_required
 from django.views.decorators.http import require_POST
+from django.core.cache import cache
 from django.core.paginator import Paginator
 from django.db import IntegrityError
 from django.db.models import Q
@@ -413,6 +417,7 @@ def build_eta_results(buses, origin, dest, waiting, today, now):
         results.append({
             'bus_id': b.id, 'bus_number': b.bus_number, 'plate_number': b.plate_number,
             'route': b.route, 'current_location': b.current_location or b.route,
+            'movement_status': b.movement_status,
             'movement_display': b.get_movement_status_display(),
             'is_approx': is_approx, 'lat': lat, 'lng': lng,
             'capacity': b.capacity, 'occupied': occupied, 'seats_free': seats_free,
@@ -424,10 +429,24 @@ def build_eta_results(buses, origin, dest, waiting, today, now):
 
 def eta_map_json(results, waiting):
     """Payload the Leaflet map on the tracking pages renders."""
+    buses = []
+    for r in results:
+        frm, to = route_endpoints(r['route'])
+        buses.append({
+            'bus_id': r.get('bus_id'),
+            'bus_number': r['bus_number'],
+            'route': r['route'],
+            'lat': r['lat'], 'lng': r['lng'],
+            'seats_free': r['seats_free'],
+            'is_approx': r['is_approx'],
+            'movement_status': r.get('movement_status'),
+            'route_from': terminal_json(frm),
+            'route_to': terminal_json(to),
+        })
     return json.dumps({
         'waiting': {'name': waiting['name'], 'lat': waiting['lat'], 'lng': waiting['lng']} if waiting else None,
-        'buses': [{'bus_number': r['bus_number'], 'route': r['route'], 'lat': r['lat'], 'lng': r['lng'],
-                   'seats_free': r['seats_free'], 'is_approx': r['is_approx']} for r in results],
+        'buses': buses,
+        'terminals': [terminal_json(t) for t in TERMINALS],
     })
 
 
@@ -492,6 +511,84 @@ def bus_locations_ajax(request):
     buses_qs = scoped_buses(request.user) if request.user.is_authenticated else Bus.objects.all()
     buses = buses_qs.annotate(total_passengers=Count('passengers')).order_by('bus_number')
     return JsonResponse({'buses': [_bus_gps_payload(b, b.total_passengers, use_fallback=True) for b in buses]})
+
+
+NEGROS_VIEWBOX = '121.8,8.5,124.2,11.5'  # lon_min, lat_min, lon_max, lat_max
+
+
+def _local_place_matches(query, limit=5):
+    """Match known Vallacar terminals locally so search still works offline."""
+    q = (query or '').lower()
+    matches = []
+    for t in TERMINALS:
+        terms = (t['name'].lower(),) + tuple(t['keywords'])
+        if any(q in term or term in q for term in terms):
+            matches.append({
+                'lat': t['lat'], 'lon': t['lng'],
+                'display_name': f"{t['name']}, Negros Island, Philippines",
+                'local': True,
+            })
+    return matches[:limit]
+
+
+def geocode_ajax(request):
+    """Place search proxy for the live map.
+
+    Uses Nominatim (server-side, with a proper User-Agent) and falls back to
+    the built-in terminal list when the remote geocoder is unavailable.
+    """
+    query = request.GET.get('q', '').strip()
+    if len(query) < 2:
+        return JsonResponse({'results': []})
+
+    cache_key = 'negros-geocode:' + query.lower()
+    cached = cache.get(cache_key)
+    if cached is not None:
+        return JsonResponse({'results': cached})
+
+    results = _local_place_matches(query)
+    remote_failed = False
+
+    params = {
+        'format': 'json', 'limit': 8, 'q': query,
+        'viewbox': NEGROS_VIEWBOX, 'bounded': 1,
+        'countrycodes': 'ph', 'addressdetails': 0,
+    }
+    try:
+        req = Request(
+            'https://nominatim.openstreetmap.org/search?' + urlencode(params),
+            headers={
+                'User-Agent': 'VallacarTracker/1.0 (student project; live map place search)',
+                'Accept-Language': 'en',
+            },
+        )
+        with urlopen(req, timeout=6) as resp:
+            payload = json.loads(resp.read().decode('utf-8'))
+        for item in payload:
+            try:
+                lat, lon = float(item['lat']), float(item['lon'])
+            except (KeyError, TypeError, ValueError):
+                continue
+            results.append({
+                'lat': lat, 'lon': lon,
+                'display_name': item.get('display_name') or query,
+                'local': False,
+            })
+    except (URLError, OSError, ValueError, json.JSONDecodeError):
+        remote_failed = True
+
+    # Drop duplicates (same place returned by both sources).
+    seen, unique = set(), []
+    for place in results:
+        key = (round(place['lat'], 3), round(place['lon'], 3))
+        if key in seen:
+            continue
+        seen.add(key)
+        unique.append(place)
+
+    if not remote_failed:
+        cache.set(cache_key, unique, 60 * 60)
+    return JsonResponse({'results': unique, 'local_only': remote_failed})
 
 
 @login_required(login_url='login')
