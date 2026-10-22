@@ -155,7 +155,10 @@
           <div class="live-track-bus-item" role="listitem" data-bus-id="{{ r.bus_id }}" data-bus-number="{{ r.bus_number }}">
             <div class="live-track-bus-icon" aria-hidden="true"><i class="fa-solid fa-bus"></i></div>
             <div class="live-track-bus-info">
-              <div class="live-track-bus-number">{{ r.bus_number }}</div>
+              <div class="live-track-bus-number d-flex align-items-center gap-2">
+                {{ r.bus_number }}
+                <span class="badge bg-secondary-lt text-secondary">{{ r.movement_display }}</span>
+              </div>
               <div class="live-track-bus-plate">{{ r.plate_number }} &bull; {{ r.route }}</div>
               {% if r.eta_wait %}
               <div class="live-track-bus-eta">
@@ -175,16 +178,18 @@
                 </span>
               </div>
               {% endif %}
+              {% if r.movement_status == 'at_terminal' %}
+                {% if r.departure %}
+                <div class="text-muted small"><i class="fa-regular fa-clock me-1"></i>Departs {{ r.departure.label }}</div>
+                {% else %}
+                <div class="text-muted small">Departure time to be announced</div>
+                {% endif %}
+              {% elif r.reason %}
+                <div class="small" style="color:#b91c1c;"><i class="fa-solid fa-circle-info me-1"></i>{{ r.reason }}</div>
+              {% elif r.movement_status == 'delayed' or r.movement_status == 'stopped' %}
+                <div class="text-muted small">Reason not provided by dispatch</div>
+              {% endif %}
             </div>
-            {% if r.route|lower|slice:":7" == "ruta d" %}
-              <div class="live-track-route-badge route-badge-ruta-d">Ruta D</div>
-            {% elif r.route|lower|slice:":7" == "ruta 14" %}
-              <div class="live-track-route-badge route-badge-ruta-14">Ruta 14</div>
-            {% else %}
-              <div class="live-track-route-badge">{{ r.route }}</div>
-            {% endif %}
-            <div class="live-track-bus-contact">{{ r.contact_number|default:'—' }}</div>
-            <div class="live-track-distance dist-{{ r.distance_km|default:'4' }}km" aria-label="{{ r.distance_km|default:'4' }} kilometers away">{{ r.distance_km|default:'4' }}km</div>
           </div>
           {% empty %}
           <div class="text-center py-3 text-muted small" role="status">No buses on this route right now.</div>
@@ -386,13 +391,11 @@
     return lat >= 8.4 && lat <= 11.6 && lng >= 121.7 && lng <= 124.3;
   }
 
-  // Simulated cruising speed (km/h) by movement status. Active buses keep
-  // moving along their route; only explicitly stopped/off-route buses park.
+  // Only en-route buses animate. Terminal, delayed, stopped and off-route
+  // buses stay parked at their last known position.
   function busSpeed(bus) {
     if (bus.bus_status && bus.bus_status !== 'active') return 0;
-    if (bus.movement_status === 'stopped' || bus.movement_status === 'off_route') return 0;
-    if (bus.movement_status === 'delayed') return 22;
-    return 45;
+    return bus.movement_status === 'en_route' ? 45 : 0;
   }
 
   const STATUS_COLORS = {
@@ -518,7 +521,10 @@
     const rotation = track ? bearing(track.from.lat, track.from.lng, track.to.lat, track.to.lng) : 0;
     const icon = createBusIcon(b, rotation);
     const m = L.marker([start.lat, start.lng], { icon: icon }).addTo(map);
-    m.bindPopup(`<b>${escapeHtml(b.bus_number)}</b><br>${escapeHtml(b.route)}<br>Status: ${escapeHtml(b.movement_display || 'At Terminal')}<br>${escapeHtml(b.seats_free)} seats free`);
+    const statusNote = b.movement_status === 'at_terminal' && b.departure
+      ? `<br>Departs ${escapeHtml(b.departure.label)}`
+      : (b.reason ? `<br>Reason: ${escapeHtml(b.reason)}` : '');
+    m.bindPopup(`<b>${escapeHtml(b.bus_number)}</b><br>${escapeHtml(b.route)}<br>Status: ${escapeHtml(b.movement_display || 'At Terminal')}<br>${escapeHtml(b.seats_free)} seats free${statusNote}`);
 
     busMarkers[b.bus_number] = {
       id: b.bus_id,
@@ -528,6 +534,8 @@
       seats: b.seats_free,
       movement_status: b.movement_status,
       movement_display: b.movement_display,
+      departure: b.departure,
+      reason: b.reason,
       bus_status: b.bus_status,
       lat: start.lat,
       lng: start.lng,

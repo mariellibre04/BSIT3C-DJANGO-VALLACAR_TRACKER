@@ -51,6 +51,10 @@ class Bus(models.Model):
     movement_status = models.CharField(
         max_length=20, choices=MOVEMENT_CHOICES, default=MOVE_AT_TERMINAL
     )
+    movement_reason = models.CharField(
+        max_length=255, blank=True, default='',
+        help_text='Why the bus is delayed or stopped, shown to passengers.',
+    )
     last_gps_update = models.DateTimeField(null=True, blank=True)
     user = models.ForeignKey(
         settings.AUTH_USER_MODEL,

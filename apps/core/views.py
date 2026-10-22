@@ -182,7 +182,9 @@ def dashboard(request):
     """
     from django.db.models import Count
     from apps.bus.models import Bus
-    from apps.bus.views import TERMINALS, bus_map_coords, estimate_arrival, route_endpoints
+    from apps.bus.views import (
+        _bus_status_context, bus_map_coords, estimate_arrival, route_endpoints,
+    )
 
     buses = list(
         Bus.objects.annotate(total_passengers=Count('passengers')).order_by('bus_number')
@@ -203,6 +205,7 @@ def dashboard(request):
         b.route_from, b.route_to = _frm, _to
         b.eta = estimate_arrival(lat, lng, dest['lat'], dest['lng'], b.movement_status) if dest else None
         b.eta_dest = dest['name'] if dest else ''
+        _trip, b.departure, b.reason = _bus_status_context(b)
 
     total_routes = len({(b.route or '').strip() for b in buses if (b.route or '').strip()})
 
@@ -212,7 +215,6 @@ def dashboard(request):
         'free_seats': free_seats,
         'total_routes': total_routes,
         'total_buses': len(buses),
-        'terminals': TERMINALS,
     })
 
 

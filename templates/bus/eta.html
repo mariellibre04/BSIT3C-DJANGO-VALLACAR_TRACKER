@@ -1,6 +1,8 @@
-{% extends "theme/base.html" %}
+﻿{% extends "theme/base.html" %}
+{% load static %}
 {% block content %}
 <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+<link rel="stylesheet" href="{% static 'libs/tom-select/dist/css/tom-select.bootstrap5.min.css' %}" />
 <style>
   .eta-card { background:#fff; border:1px solid var(--tblr-border-color); border-radius:14px; box-shadow:var(--tblr-shadow-card); overflow:hidden; }
   .eta-time { font-size:2rem; font-weight:800; letter-spacing:-.03em; line-height:1; color:#1c1e36; }
@@ -9,6 +11,80 @@
   #eta-map { height: 340px; z-index: 1; }
   .pulse-dot { display:inline-block; width:.6rem; height:.6rem; border-radius:50%; background:#22c55e; box-shadow:0 0 0 0 rgba(34,197,94,.6); animation:pulse 1.6s infinite; }
   @keyframes pulse { 0% { box-shadow:0 0 0 0 rgba(34,197,94,.55); } 70% { box-shadow:0 0 0 8px rgba(34,197,94,0); } 100% { box-shadow:0 0 0 0 rgba(34,197,94,0); } }
+  .eta-search-card {
+    max-width:56rem; margin-left:auto; margin-right:auto; padding:1.15rem;
+    background:
+      radial-gradient(circle at 100% 0%, rgba(244,161,0,.18), transparent 42%),
+      linear-gradient(135deg, #171a2e 0%, #20233d 58%, #14172a 100%);
+    border:1px solid rgba(255,255,255,.08); border-radius:18px;
+    box-shadow:0 22px 46px -26px rgba(15,23,42,.9);
+  }
+  .eta-search-label {
+    display:flex; align-items:center; gap:.4rem; margin-bottom:.45rem;
+    color:rgba(255,255,255,.72); font-size:.7rem; font-weight:800;
+    letter-spacing:.12em; text-transform:uppercase;
+  }
+  .eta-search-label i { color:#F4A100; font-size:.75rem; }
+  .eta-search-card .ts-wrapper.form-select {
+    background-color:rgba(255,255,255,.08) !important; background-image:none !important;
+    border:1px solid rgba(255,255,255,.17) !important; border-radius:12px !important;
+    min-height:3rem; padding:0 !important;
+    box-shadow:inset 0 1px 0 rgba(255,255,255,.05);
+    transition:border-color .15s ease, box-shadow .15s ease, background-color .15s ease;
+  }
+  .eta-search-card .ts-wrapper.form-select::after {
+    content:"\f078"; font-family:"Font Awesome 6 Free"; font-weight:900;
+    position:absolute; right:1rem; top:50%; transform:translateY(-50%);
+    color:rgba(255,255,255,.55); font-size:.65rem; pointer-events:none;
+  }
+  .eta-search-card .ts-wrapper.form-select.focus {
+    background-color:rgba(255,255,255,.11) !important;
+    border-color:#F4A100 !important; box-shadow:0 0 0 .2rem rgba(244,161,0,.16) !important;
+  }
+  .eta-search-card .ts-wrapper .ts-control,
+  .eta-search-card .ts-wrapper.single.input-active .ts-control,
+  .eta-search-card .ts-wrapper.form-select .ts-control {
+    display:flex; align-items:center; gap:.45rem;
+    min-height:3rem; padding:.7rem 2.1rem .7rem .9rem !important;
+    background:transparent !important; border:0 !important; box-shadow:none !important;
+    color:#fff !important;
+  }
+  .eta-search-card .ts-wrapper .ts-control::before {
+    content:"\f002"; font-family:"Font Awesome 6 Free"; font-weight:900;
+    color:#F4A100; margin-right:.1rem; font-size:.85rem; flex:0 0 auto;
+  }
+  .eta-search-card .ts-wrapper .ts-control .item { color:#fff !important; font-weight:600; }
+  .eta-search-card .ts-wrapper .ts-control input { color:#fff !important; }
+  .eta-search-card .ts-wrapper .ts-control input::placeholder { color:rgba(255,255,255,.45) !important; }
+  .eta-search-card .ts-wrapper .ts-control > input { min-width:4rem; }
+  .eta-ts-dropdown {
+    background:#fff !important; border:1px solid #e2e8f0 !important;
+    border-radius:12px !important; padding:.35rem !important; margin-top:6px;
+    box-shadow:0 20px 42px -22px rgba(15,23,42,.5) !important;
+  }
+  .eta-ts-dropdown .option { border-radius:8px; padding:.55rem .65rem; color:#334155; }
+  .eta-ts-dropdown .option.active { background:#C1121F; color:#fff; }
+  .eta-ts-dropdown .option:hover { background:#fef2f2; color:#991b1b; }
+  .eta-ts-dropdown .option.active:hover { background:#C1121F; color:#fff; }
+  .eta-ts-dropdown .no-results { color:#94a3b8; font-size:.82rem; padding:.55rem .65rem; }
+  .eta-search-actions { display:flex; flex-direction:column; gap:.65rem; margin-top:1rem; }
+  .eta-search-btn {
+    width:100%; padding:.72rem 1.1rem; border:0; border-radius:12px;
+    background:linear-gradient(135deg,#e11d2e 0%,#a50e1b 100%);
+    color:#fff; font-weight:800; letter-spacing:.01em;
+    box-shadow:0 12px 24px -14px rgba(225,29,46,.9);
+    transition:transform .12s ease, box-shadow .12s ease;
+  }
+  .eta-search-btn:hover, .eta-search-btn:focus {
+    color:#fff; transform:translateY(-1px);
+    box-shadow:0 16px 28px -14px rgba(225,29,46,.95);
+  }
+  .eta-search-note { color:rgba(255,255,255,.48); font-size:.74rem; line-height:1.45; text-align:center; }
+  @media (min-width:576px) {
+    .eta-search-actions { flex-direction:row; align-items:center; }
+    .eta-search-btn { width:auto; white-space:nowrap; }
+    .eta-search-note { text-align:left; }
+  }
 </style>
 
 <div class="container-xl">
@@ -16,33 +92,37 @@
     <div class="page-pretitle">Passenger ETA Board &bull; No login needed</div>
     <h2 class="mb-1 fw-bold" style="letter-spacing:-.02em;">When is my Ceres coming?</h2>
     <div class="text-muted">Waiting in <strong>{{ waiting_name }}</strong> for
-      <strong>{{ origin_name }}</strong> → <strong>{{ dest_name }}</strong>?
+      <strong>{{ origin_name }}</strong> â†’ <strong>{{ dest_name }}</strong>?
       Watch the bus approach on the map, and book your seat when it is within reach.</div>
   </div>
 
-  <div class="eta-card p-3 mb-3">
-    <form method="GET" class="d-flex flex-column flex-md-row align-items-stretch align-items-md-end justify-content-center gap-2">
-      <div class="flex-grow-1">
-        <label class="form-label">From</label>
-        <select name="from" class="form-select">
-          {% for t in terminals %}<option value="{{ t.name }}" {% if t.name == origin_name %}selected{% endif %}>{{ t.name }}</option>{% endfor %}
-        </select>
+  <div class="eta-search-card mb-3">
+    <form method="GET">
+      <div class="row g-3">
+        <div class="col-12 col-lg-4">
+          <label class="eta-search-label" for="eta-from"><i class="fa-solid fa-circle-dot"></i> From</label>
+          <select name="from" id="eta-from" class="form-select city-select" aria-label="Search origin city or municipality">
+            {% for t in terminals %}<option value="{{ t.label }}" {% if t.label == origin_name %}selected{% endif %}>{{ t.label }}</option>{% endfor %}
+          </select>
+        </div>
+        <div class="col-12 col-lg-4">
+          <label class="eta-search-label" for="eta-to"><i class="fa-solid fa-flag-checkered"></i> To</label>
+          <select name="to" id="eta-to" class="form-select city-select" aria-label="Search destination city or municipality">
+            {% for t in terminals %}<option value="{{ t.label }}" {% if t.label == dest_name %}selected{% endif %}>{{ t.label }}</option>{% endfor %}
+          </select>
+        </div>
+        <div class="col-12 col-lg-4">
+          <label class="eta-search-label" for="eta-waiting"><i class="fa-solid fa-person"></i> I am waiting in</label>
+          <select name="waiting" id="eta-waiting" class="form-select city-select" aria-label="Search waiting city or municipality">
+            {% for t in terminals %}<option value="{{ t.label }}" {% if t.label == waiting_name %}selected{% endif %}>{{ t.label }}</option>{% endfor %}
+          </select>
+        </div>
       </div>
-      <div class="flex-grow-1">
-        <label class="form-label">To</label>
-        <select name="to" class="form-select">
-          {% for t in terminals %}<option value="{{ t.name }}" {% if t.name == dest_name %}selected{% endif %}>{{ t.name }}</option>{% endfor %}
-        </select>
+      <div class="eta-search-actions">
+        <button type="submit" class="btn eta-search-btn"><i class="fa-solid fa-magnifying-glass me-1"></i> Check arrival</button>
+        <div class="eta-search-note">Estimates as of {{ now|date:"g:i A" }} &bull; auto-refreshes every minute &bull; based on live bus position and highway travel time.</div>
       </div>
-      <div class="flex-grow-1">
-        <label class="form-label">I am waiting in</label>
-        <select name="waiting" class="form-select">
-          {% for t in terminals %}<option value="{{ t.name }}" {% if t.name == waiting_name %}selected{% endif %}>{{ t.name }}</option>{% endfor %}
-        </select>
-      </div>
-      <button type="submit" class="btn vt-btn-red"><i class="fa-solid fa-magnifying-glass me-1"></i> Check arrival</button>
     </form>
-    <div class="text-muted small text-center mt-2">Estimates as of {{ now|date:"g:i A" }} &bull; auto-refreshes every minute &bull; based on live bus position and highway travel time.</div>
   </div>
 
   {% if error %}
@@ -53,7 +133,7 @@
   <div class="eta-card mb-3">
     <div class="px-3 py-2 d-flex align-items-center gap-2 flex-wrap" style="border-bottom:1px solid var(--tblr-border-color);">
       <span class="pulse-dot"></span>
-      <strong>Live map — buses heading to {{ waiting_name }}</strong>
+      <strong>Live map â€” buses heading to {{ waiting_name }}</strong>
       <span class="text-muted small ms-auto">Green pin is where you are waiting</span>
     </div>
     <div id="eta-map"></div>
@@ -78,21 +158,32 @@
             <span class="badge bg-success-lt text-success">{{ r.seats_free }} seats free</span>
             {% endif %}
             {% if r.nearby and r.seats_free > 0 %}
-            <span class="d-block mt-1"><span class="badge bg-success text-white"><span class="pulse-dot me-1" style="background:#fff;"></span>Bus nearby — book now</span></span>
+            <span class="d-block mt-1"><span class="badge bg-success text-white"><span class="pulse-dot me-1" style="background:#fff;"></span>Bus nearby â€” book now</span></span>
             {% endif %}
           </div>
         </div>
-        <div class="eta-time">{{ r.eta_wait.label|default:"—" }}</div>
+        <div class="eta-time">{{ r.eta_wait.label|default:"â€”" }}</div>
         {% if r.eta_wait %}
           {% if r.eta_wait.minutes > 0 %}
           <div class="text-muted">Reaches <strong class="text-dark">{{ waiting_name }}</strong> around <strong class="text-dark">{{ r.eta_wait.eta|date:"g:i A" }}</strong> &bull; {{ r.eta_wait.detail }}</div>
           {% else %}
-          <div class="text-success fw-semibold"><i class="fa-solid fa-circle-check me-1"></i>At your waiting place — head out now.</div>
+          <div class="text-success fw-semibold"><i class="fa-solid fa-circle-check me-1"></i>At your waiting place â€” head out now.</div>
           {% endif %}
         {% else %}
         <div class="text-muted">No position available for this bus yet.</div>
         {% endif %}
         <div class="text-muted small"><i class="fa-solid fa-location-dot me-1" style="color:#C1121F;"></i>{{ r.current_location }} &bull; {{ r.movement_display }}{% if r.is_approx %} (approx.){% endif %}</div>
+        {% if r.movement_status == 'at_terminal' %}
+          {% if r.departure %}
+          <div class="small fw-semibold" style="color:#b45309;"><i class="fa-regular fa-clock me-1"></i>Departs {{ r.departure.label }}</div>
+          {% else %}
+          <div class="text-muted small">Departure time to be announced</div>
+          {% endif %}
+        {% elif r.reason %}
+        <div class="small" style="color:#b91c1c;"><i class="fa-solid fa-circle-info me-1"></i>{{ r.reason }}</div>
+        {% elif r.movement_status == 'delayed' or r.movement_status == 'stopped' %}
+        <div class="text-muted small">Reason not provided by dispatch</div>
+        {% endif %}
         {% if r.eta_dest and r.eta_dest.minutes > 0 %}
         <div class="text-muted small">Final arrival {{ dest_name }}: {{ r.eta_dest.eta|date:"g:i A" }}</div>
         {% endif %}
@@ -115,7 +206,7 @@
     <div class="col-12">
       <div class="eta-card p-5 text-center">
         <div class="empty-icon mb-2"><i class="fa-solid fa-bus fa-2x text-muted"></i></div>
-        <p class="empty-title">No Ceres liner assigned to {{ origin_name }} → {{ dest_name }} right now</p>
+        <p class="empty-title">No Ceres liner assigned to {{ origin_name }} â†’ {{ dest_name }} right now</p>
         <p class="empty-subtitle text-muted">Try another terminal pair, or check the <a href="{% url 'bus:bus_map' %}">Live Tracking</a> map for all buses on the road.</p>
       </div>
     </div>
@@ -137,7 +228,7 @@
           <div class="col-12"><label class="form-label">Your name</label><input type="text" name="passenger_name" id="book_name" class="form-control" placeholder="e.g. Maria Santos" required></div>
           <div class="col-6"><label class="form-label">Contact number</label><input type="text" name="contact" id="book_contact" class="form-control" placeholder="e.g. 0917 123 4567" required></div>
           <div class="col-6"><label class="form-label">Seats</label><input type="number" name="seats" id="book_seats" class="form-control" min="1" value="1" required><div class="form-hint" id="bookSeatsHint"></div></div>
-          <div class="col-12 text-muted small">Boarding at <strong id="bookPickupLabel"></strong>. The driver / conductor will be notified of your booking. Free seat reservation — no payment needed.</div>
+          <div class="col-12 text-muted small">Boarding at <strong id="bookPickupLabel"></strong>. The driver / conductor will be notified of your booking. Free seat reservation â€” no payment needed.</div>
         </div>
       </div>
       <div class="modal-footer"><button type="button" class="btn btn-ghost-secondary" data-bs-dismiss="modal">Cancel</button><button type="submit" class="btn vt-btn-red" id="bookSubmitBtn">Confirm booking</button></div>
@@ -147,6 +238,20 @@
 {% endblock %}
 
 {% block extra_js %}
+<script src="{% static 'libs/tom-select/dist/js/tom-select.complete.min.js' %}"></script>
+<script>
+document.querySelectorAll('select.city-select').forEach(function (el) {
+  new TomSelect(el, {
+    create: false,
+    maxItems: 1,
+    maxOptions: 400,
+    dropdownClass: 'eta-ts-dropdown',
+    dropdownParent: 'body',
+    placeholder: 'Search city or municipality...',
+    sortField: { field: 'text', direction: 'asc' }
+  });
+});
+</script>
 <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
 <script id="eta-data" type="application/json">{{ map_json|safe }}</script>
 <script>
@@ -163,6 +268,12 @@
       const roadPaths = {};
       const roadPathRequests = {};
       const SIM_TIME_SCALE = 20;
+
+      function escapeHtml(value) {
+        return String(value == null ? '' : value).replace(/[&<>"']/g, function(c) {
+          return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c];
+        });
+      }
 
       function haversine(lat1, lon1, lat2, lon2) {
         const R = 6371;
@@ -208,9 +319,7 @@
       }
 
       function busSpeed(bus) {
-        if (bus.movement_status === 'stopped' || bus.movement_status === 'off_route') return 0;
-        if (bus.movement_status === 'delayed') return 22;
-        return 45;
+        return bus.movement_status === 'en_route' ? 45 : 0;
       }
 
       function loadRoadPath(track) {
@@ -245,8 +354,11 @@
       data.buses.forEach(function(b) {
         if (b.lat == null || b.lng == null) return;
         const icon = L.divIcon({ className: '', html: '<div style="background:#C1121F;color:#fff;border:2px solid #fff;border-radius:8px;min-width:30px;height:24px;padding:0 4px;display:flex;align-items:center;justify-content:center;font-size:.62rem;font-weight:800;box-shadow:0 4px 10px rgba(0,0,0,.35);">' + b.bus_number + '</div>', iconSize: [40, 24], iconAnchor: [20, 12] });
+        const statusNote = b.movement_status === 'at_terminal' && b.departure
+          ? '<br>Departs ' + escapeHtml(b.departure.label)
+          : (b.reason ? '<br>Reason: ' + escapeHtml(b.reason) : '');
         const m = L.marker([b.lat, b.lng], { icon: icon }).addTo(map)
-          .bindPopup('<b>' + b.bus_number + '</b><br>' + b.route + '<br>' + b.seats_free + ' seats free');
+          .bindPopup('<b>' + escapeHtml(b.bus_number) + '</b><br>' + escapeHtml(b.route) + '<br>' + escapeHtml(b.seats_free) + ' seats free' + statusNote);
         bounds.push([b.lat, b.lng]);
 
         let track = null;
@@ -328,7 +440,7 @@
         const d = res.d;
         let crew = 'The dispatcher has your booking on file.';
         if (d.crew && d.crew.length) {
-          crew = d.crew.map(c => c.role + ' ' + c.name + (c.contact && c.contact !== '—' ? ' (' + c.contact + ')' : '')).join(' and ') + ' ha(s/ve) been notified — they will expect you at ' + d.pickup + '.';
+          crew = d.crew.map(c => c.role + ' ' + c.name + (c.contact && c.contact !== 'â€”' ? ' (' + c.contact + ')' : '')).join(' and ') + ' ha(s/ve) been notified â€” they will expect you at ' + d.pickup + '.';
         }
         document.getElementById('bookFields').classList.add('d-none');
         document.getElementById('bookSubmitBtn').classList.add('d-none');
@@ -344,3 +456,4 @@
 })();
 </script>
 {% endblock %}
+

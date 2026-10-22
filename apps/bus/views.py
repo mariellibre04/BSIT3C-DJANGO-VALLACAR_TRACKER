@@ -1,5 +1,6 @@
 import json
 import math
+from datetime import timedelta
 from decimal import Decimal, InvalidOperation
 from pathlib import Path
 from urllib.error import URLError
@@ -204,7 +205,76 @@ def route_endpoints(route_text):
 def terminal_json(t):
     if not t:
         return None
-    return {'name': t['name'], 'lat': t['lat'], 'lng': t['lng']}
+    return {
+        'name': t['name'],
+        'label': t.get('label', t['name']),
+        'lat': t['lat'],
+        'lng': t['lng'],
+    }
+
+
+def _bus_status_context(bus, now=None, reference=None):
+    """Return the next departure and passenger-facing delay/stop reason.
+
+    Departure labels are only used for buses waiting at a terminal. Reasons
+    use the dispatcher-entered field first, then fall back to trip notes.
+    """
+    from apps.trips.models import Trip
+
+    now = now or timezone.now()
+    trips = Trip.objects.filter(bus=bus)
+    upcoming = (
+        trips.filter(scheduled_departure__gte=now)
+        .order_by('scheduled_departure')
+        .first()
+    )
+    latest = (
+        trips.filter(scheduled_departure__lte=now)
+        .order_by('-scheduled_departure')
+        .first()
+    )
+    source = reference or latest or upcoming
+
+    departure_source = upcoming
+    if departure_source is None and bus.movement_status == Bus.MOVE_AT_TERMINAL:
+        # A delayed bus can still be at the terminal after its scheduled slot.
+        departure_source = (
+            trips.filter(
+                actual_departure__isnull=True,
+                scheduled_departure__gte=now - timedelta(hours=12),
+            )
+            .order_by('-scheduled_departure')
+            .first()
+        )
+
+    departure = None
+    if departure_source:
+        departure_at = departure_source.scheduled_departure
+        if departure_source.delay_minutes:
+            departure_at += timedelta(minutes=departure_source.delay_minutes)
+        local = timezone.localtime(departure_at)
+        time_label = local.strftime('%I:%M %p').lstrip('0')
+        today = timezone.localdate()
+        if local.date() == today:
+            label = time_label
+        elif local.date() == today + timedelta(days=1):
+            label = f'Tomorrow, {time_label}'
+        else:
+            label = f'{local:%b} {local.day}, {time_label}'
+        departure = {
+            'time': time_label,
+            'label': label,
+            'iso': departure_at.isoformat(),
+            'is_delayed': bool(departure_source.delay_minutes),
+            'delay': departure_source.delay_minutes,
+        }
+
+    reason = (getattr(bus, 'movement_reason', '') or '').strip()
+    if not reason and source:
+        reason = (source.notes or '').strip()
+    if bus.movement_status not in (Bus.MOVE_DELAYED, Bus.MOVE_STOPPED):
+        reason = ''
+    return upcoming, departure, reason
 
 
 def first_terminal(text):
@@ -273,6 +343,7 @@ def _bus_gps_payload(bus, occupied=None, use_fallback=False):
         'is_approx': is_approx,
         'movement_status': bus.movement_status,
         'movement_display': bus.get_movement_status_display(),
+        'movement_reason': bus.movement_reason,
         'last_gps_update': bus.last_gps_update.isoformat() if bus.last_gps_update else None,
         'passengers_count': occupied,
         'available_seats': max(0, bus.capacity - occupied),
@@ -355,6 +426,7 @@ def bus_save_ajax(request):
     status = request.POST.get('status', Bus.STATUS_ACTIVE).strip()
     current_location = request.POST.get('current_location', '').strip()
     movement_status = request.POST.get('movement_status', Bus.MOVE_AT_TERMINAL).strip()
+    movement_reason = request.POST.get('movement_reason', '').strip()
     latitude, lat_error = _parse_coord(request.POST.get('latitude', ''), Decimal('-90'), Decimal('90'))
     longitude, lng_error = _parse_coord(request.POST.get('longitude', ''), Decimal('-180'), Decimal('180'))
 
@@ -404,6 +476,7 @@ def bus_save_ajax(request):
         or (bus.pk and (
             bus.current_location != current_location
             or bus.movement_status != movement_status
+            or bus.movement_reason != movement_reason
             or (str(bus.latitude) if bus.latitude is not None else None) != (str(latitude) if latitude is not None else None)
             or (str(bus.longitude) if bus.longitude is not None else None) != (str(longitude) if longitude is not None else None)
         ))
@@ -417,6 +490,7 @@ def bus_save_ajax(request):
     bus.latitude = latitude
     bus.longitude = longitude
     bus.movement_status = movement_status
+    bus.movement_reason = movement_reason
     if gps_changed:
         bus.last_gps_update = timezone.now()
     if not bus.pk:
@@ -483,6 +557,8 @@ def build_eta_results(buses, origin, dest, waiting, today, now):
             continue
         occupied = b.total_passengers or 0
         lat, lng, is_approx = bus_map_coords(b)
+        if not (8.4 <= lat <= 11.6 and 121.7 <= lng <= 124.3):
+            lat, lng, is_approx = bus_map_coords(b, ignore_gps=True)
         eta_wait = estimate_arrival(lat, lng, waiting['lat'], waiting['lng'], b.movement_status)
         eta_dest = estimate_arrival(lat, lng, dest['lat'], dest['lng'], b.movement_status)
         seats_free = max(0, b.capacity - occupied - active_holds(b.id))
@@ -499,12 +575,15 @@ def build_eta_results(buses, origin, dest, waiting, today, now):
                 'is_late': upcoming.status in (Trip.STATUS_DELAYED, Trip.STATUS_REROUTED, Trip.STATUS_UNEXPECTED_STOP),
                 'delay': upcoming.delay_minutes,
             }
+        _status_trip, departure, reason = _bus_status_context(b, now, reference=upcoming)
         nearby = bool(eta_wait and eta_wait['minutes'] <= 45)
         results.append({
             'bus_id': b.id, 'bus_number': b.bus_number, 'plate_number': b.plate_number,
             'route': b.route, 'current_location': b.current_location or b.route,
             'movement_status': b.movement_status,
             'movement_display': b.get_movement_status_display(),
+            'movement_reason': b.movement_reason,
+            'departure': departure, 'reason': reason,
             'is_approx': is_approx, 'lat': lat, 'lng': lng,
             'capacity': b.capacity, 'occupied': occupied, 'seats_free': seats_free,
             'eta_wait': eta_wait, 'eta_dest': eta_dest, 'nearby': nearby, 'trip': trip_info,
@@ -526,6 +605,8 @@ def eta_map_json(results, waiting):
             'seats_free': r['seats_free'],
             'is_approx': r['is_approx'],
             'movement_status': r.get('movement_status'),
+            'departure': r.get('departure'),
+            'reason': r.get('reason'),
             'route_from': terminal_json(frm),
             'route_to': terminal_json(to),
         })
@@ -539,6 +620,7 @@ def eta_map_json(results, waiting):
 def map_all_buses_json(buses, waiting):
     """Map payload listing every active bus with its movement status label."""
     items = []
+    now = timezone.now()
     for b in buses:
         occupied = getattr(b, 'total_passengers', None)
         if occupied is None:
@@ -554,6 +636,7 @@ def map_all_buses_json(buses, waiting):
             frm = terminal_by_name('Bacolod')
         if to is None:
             to = terminal_by_name('Dumaguete') if frm['name'] != 'Dumaguete' else terminal_by_name('Bacolod')
+        _status_trip, departure, reason = _bus_status_context(b, now)
         items.append({
             'bus_id': b.id,
             'bus_number': b.bus_number,
@@ -564,6 +647,9 @@ def map_all_buses_json(buses, waiting):
             'seats_free': max(0, b.capacity - occupied),
             'movement_status': b.movement_status,
             'movement_display': b.get_movement_status_display(),
+            'movement_reason': b.movement_reason,
+            'departure': departure,
+            'reason': reason,
             'bus_status': b.status,
             'route_from': terminal_json(frm),
             'route_to': terminal_json(to),
@@ -607,16 +693,16 @@ def bus_map_page(request):
     )
     if origin is None or dest is None or waiting is None:
         error = 'Please select a valid origin, destination, and waiting place.'
-    elif origin['name'] == dest['name']:
+    elif origin.get('label') == dest.get('label'):
         error = 'Origin and destination must be different terminals.'
     else:
         results = build_eta_results(active_buses, origin, dest, waiting, today, now)
 
     return render(request, 'bus/map.html', {
-        'terminals': TERMINALS,
-        'origin_name': origin['name'] if origin else origin_name,
-        'dest_name': dest['name'] if dest else dest_name,
-        'waiting_name': waiting['name'] if waiting else waiting_name,
+        'terminals': PLACES,
+        'origin_name': origin.get('label', origin['name']) if origin else origin_name,
+        'dest_name': dest.get('label', dest['name']) if dest else dest_name,
+        'waiting_name': waiting.get('label', waiting['name']) if waiting else waiting_name,
         'results': results, 'error': error,
         'today': today, 'now': timezone.localtime(now),
         'map_json': map_all_buses_json(active_buses, waiting),
@@ -723,6 +809,7 @@ def bus_gps_update_ajax(request, pk):
     bus = scoped_bus(request.user, pk)
     current_location = request.POST.get('current_location', '').strip()
     movement_status = request.POST.get('movement_status', '').strip() or bus.movement_status
+    movement_reason = request.POST.get('movement_reason')
     latitude, lat_error = _parse_coord(request.POST.get('latitude', ''), Decimal('-90'), Decimal('90'))
     longitude, lng_error = _parse_coord(request.POST.get('longitude', ''), Decimal('-180'), Decimal('180'))
     if movement_status not in dict(Bus.MOVEMENT_CHOICES):
@@ -739,8 +826,10 @@ def bus_gps_update_ajax(request, pk):
         bus.latitude = latitude
         bus.longitude = longitude
     bus.movement_status = movement_status
+    if movement_reason is not None:
+        bus.movement_reason = movement_reason.strip()
     bus.last_gps_update = timezone.now()
-    bus.save(update_fields=['current_location', 'latitude', 'longitude', 'movement_status', 'last_gps_update', 'updated_at'])
+    bus.save(update_fields=['current_location', 'latitude', 'longitude', 'movement_status', 'movement_reason', 'last_gps_update', 'updated_at'])
     messages.success(request, f'GPS for bus "{bus.bus_number}" updated.')
     payload = _bus_gps_payload(bus)
     payload['status'] = 'updated'
@@ -767,7 +856,7 @@ def passenger_eta_page(request):
     now = timezone.now()
     if origin is None or dest is None or waiting is None:
         error = 'Please select a valid origin, destination, and waiting place.'
-    elif origin['name'] == dest['name']:
+    elif origin.get('label') == dest.get('label'):
         error = 'Origin and destination must be different terminals.'
     else:
         buses = list(
@@ -778,9 +867,9 @@ def passenger_eta_page(request):
         results = build_eta_results(buses, origin, dest, waiting, today, now)
 
     return render(request, 'bus/eta.html', {
-        'terminals': TERMINALS, 'origin_name': origin['name'] if origin else origin_name,
-        'dest_name': dest['name'] if dest else dest_name,
-        'waiting_name': waiting['name'] if waiting else waiting_name,
+        'terminals': PLACES, 'origin_name': origin.get('label', origin['name']) if origin else origin_name,
+        'dest_name': dest.get('label', dest['name']) if dest else dest_name,
+        'waiting_name': waiting.get('label', waiting['name']) if waiting else waiting_name,
         'results': results, 'error': error, 'today': today, 'now': timezone.localtime(now),
         'map_json': eta_map_json(results, waiting),
     })

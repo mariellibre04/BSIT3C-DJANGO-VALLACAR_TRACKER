@@ -82,29 +82,15 @@
     {% endif %}
   </div>
 
-  <!-- Hero: passenger greeting + trip planner -->
+  <!-- Hero: passenger greeting -->
   <div class="vt-hero p-4 p-md-5 mb-3">
     <div class="position-relative" style="z-index:1;">
       <div class="text-uppercase small fw-bold" style="letter-spacing:.22em;color:#FFD666;">Welcome, Passenger!</div>
       <h2 class="fw-bold mb-1 mt-1" style="letter-spacing:-.02em;">Track your Ceres liner in real time</h2>
       <p class="mb-4" style="color:rgba(255,255,255,.82);max-width:38rem;">
-        We&rsquo;re glad to have you on board. Tell us where you&rsquo;re headed and we&rsquo;ll
-        estimate the arrival, shows the seats left, and let you book in a tap.
+        Stay ahead of every trip. See where each Ceres liner is right now, check the
+        seats left, and get an estimated arrival before you head to the terminal.
       </p>
-      <form method="GET" action="{% url 'bus:passenger_eta' %}" class="row g-2 align-items-end">
-        <div class="col-12 col-md-4">
-          <label class="form-label text-white-50 small mb-1">From</label>
-          <select name="from" class="form-select">
-            {% for t in terminals %}<option value="{{ t.name }}" {% if t.name == 'Kabankalan' %}selected{% endif %}>{{ t.name }}</option>{% endfor %}
-          </select>
-        </div>
-        <div class="col-12 col-md-4">
-          <label class="form-label text-white-50 small mb-1">To</label>
-          <select name="to" class="form-select">
-            {% for t in terminals %}<option value="{{ t.name }}" {% if t.name == 'Bacolod' %}selected{% endif %}>{{ t.name }}</option>{% endfor %}
-          </select>
-        </div>
-      </form>
       <div class="d-flex gap-2 flex-wrap mt-3">
         <a href="{% url 'bus:bus_map' %}" class="btn btn-sm btn-outline-light">
           <i class="fa-solid fa-satellite-dish me-1"></i> Live Tracking Map
@@ -197,6 +183,17 @@
                 {{ b.display_location|default:b.route }}
               </span>
               <div class="text-muted small">{{ b.get_movement_status_display }}</div>
+              {% if b.movement_status == 'at_terminal' %}
+                {% if b.departure %}
+                  <div class="small fw-semibold" style="color:#b45309;"><i class="fa-regular fa-clock me-1"></i>Departs {{ b.departure.label }}</div>
+                {% else %}
+                  <div class="text-muted small">Departure time to be announced</div>
+                {% endif %}
+              {% elif b.reason %}
+                <div class="small" style="color:#b91c1c;"><i class="fa-solid fa-circle-info me-1"></i>{{ b.reason }}</div>
+              {% elif b.movement_status == 'delayed' or b.movement_status == 'stopped' %}
+                <div class="text-muted small">Reason not provided by dispatch</div>
+              {% endif %}
             </td>
             <td>
               <div class="d-flex align-items-center gap-2">
