@@ -34,6 +34,11 @@
   .vt-stat-num { font-size: 1.9rem; font-weight: 800; letter-spacing: -.03em; line-height: 1; color: #1c1e36; }
   .vt-stat-label { font-weight: 700; font-size: .85rem; color: #1c1e36; }
   .vt-stat-sub { font-size: .75rem; color: var(--tblr-muted); }
+  a.vt-stat { color: inherit; text-decoration: none; transition: transform .12s ease, box-shadow .12s ease; }
+  a.vt-stat:hover, a.vt-stat:focus-visible { transform: translateY(-2px); box-shadow: 0 12px 24px -14px rgba(28,30,54,.5); color: inherit; text-decoration: none; }
+  a.vt-stat:hover .vt-stat-label { color: #C1121F; }
+  a.vt-stat::after { content: "\f054"; font-family: "Font Awesome 6 Free"; font-weight: 900; font-size: .7rem; color: #cbd5e1; margin-left: auto; transition: transform .12s ease, color .12s ease; }
+  a.vt-stat:hover::after { color: #C1121F; transform: translateX(3px); }
   .vt-table-card {
     background: #fff; border: 1px solid var(--tblr-border-color);
     border-radius: 14px; box-shadow: var(--tblr-shadow-card); overflow: hidden;
@@ -109,44 +114,44 @@
   <!-- 4 stat cards — same structure as screenshot -->
   <div class="row row-cards g-3 mb-3">
     <div class="col-sm-6 col-lg-3">
-      <div class="vt-stat p-3 d-flex gap-3 align-items-center" style="--vt-accent:#F4A100;">
+      <a href="{% url 'bus:bus_list' %}" class="vt-stat p-3 d-flex gap-3 align-items-center text-decoration-none" style="--vt-accent:#F4A100;">
         <span class="vt-stat-icon"><i class="fa-solid fa-bus"></i></span>
         <div class="min-w-0">
           <div class="vt-stat-num">{{ total_buses }}</div>
           <div class="vt-stat-label">Total Buses</div>
           <div class="vt-stat-sub">{{ active_buses }} active &bull; {{ maintenance_buses }} maintenance</div>
         </div>
-      </div>
+      </a>
     </div>
     <div class="col-sm-6 col-lg-3">
-      <div class="vt-stat p-3 d-flex gap-3 align-items-center" style="--vt-accent:#22c55e;">
+      <a href="{% url 'bus:bus_list' %}" class="vt-stat p-3 d-flex gap-3 align-items-center text-decoration-none" style="--vt-accent:#22c55e;">
         <span class="vt-stat-icon" style="background:#DCFCE7;border-color:#BBF7D0;color:#166534;"><i class="fa-solid fa-chair"></i></span>
         <div class="min-w-0">
           <div class="vt-stat-num">{{ available_seats }}</div>
           <div class="vt-stat-label">Available Seats</div>
           <div class="vt-stat-sub">{{ occupied_sum }} occupied of {{ capacity_sum }} total slots</div>
         </div>
-      </div>
+      </a>
     </div>
     <div class="col-sm-6 col-lg-3">
-      <div class="vt-stat p-3 d-flex gap-3 align-items-center" style="--vt-accent:#C1121F;">
+      <a href="{% url 'driver:driver_list' %}" class="vt-stat p-3 d-flex gap-3 align-items-center text-decoration-none" style="--vt-accent:#C1121F;">
         <span class="vt-stat-icon" style="background:#FEE2E2;border-color:#FECACA;color:#991B1B;"><i class="fa-solid fa-id-card"></i></span>
         <div class="min-w-0">
           <div class="vt-stat-num">{{ total_drivers }}</div>
           <div class="vt-stat-label">Active Drivers</div>
           <div class="vt-stat-sub">{{ available_buses }} buses ready for dispatch</div>
         </div>
-      </div>
+      </a>
     </div>
     <div class="col-sm-6 col-lg-3">
-      <div class="vt-stat p-3 d-flex gap-3 align-items-center" style="--vt-accent:#6366f1;">
+      <a href="{% url 'trips:trip_list' %}" class="vt-stat p-3 d-flex gap-3 align-items-center text-decoration-none" style="--vt-accent:#6366f1;">
         <span class="vt-stat-icon" style="background:#E0E7FF;border-color:#C7D2FE;color:#3730A3;"><i class="fa-solid fa-route"></i></span>
         <div class="min-w-0">
           <div class="vt-stat-num">{{ total_routes }}</div>
           <div class="vt-stat-label">Total Routes</div>
           <div class="vt-stat-sub">Live corridors being tracked</div>
         </div>
-      </div>
+      </a>
     </div>
   </div>
 

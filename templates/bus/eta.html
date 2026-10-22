@@ -231,7 +231,7 @@
           <div class="col-12 text-muted small">Boarding at <strong id="bookPickupLabel"></strong>. The driver / conductor will be notified of your booking. Free seat reservation â€” no payment needed.</div>
         </div>
       </div>
-      <div class="modal-footer"><button type="button" class="btn btn-ghost-secondary" data-bs-dismiss="modal">Cancel</button><button type="submit" class="btn vt-btn-red" id="bookSubmitBtn">Confirm booking</button></div>
+      <div class="modal-footer"><button type="button" class="btn btn-ghost-secondary" data-bs-dismiss="modal">Cancel</button><button type="submit" class="btn vt-btn-red" id="bookSubmitBtn">Confirm booking</button><button type="button" class="btn vt-btn-red d-none" id="bookConfirmBtn"><i class="fa-solid fa-circle-check me-1"></i>Confirm</button></div>
     </form>
   </div></div>
 </div>
@@ -245,7 +245,7 @@ document.querySelectorAll('select.city-select').forEach(function (el) {
     create: false,
     maxItems: 1,
     maxOptions: 400,
-    dropdownClass: 'eta-ts-dropdown',
+    dropdownClass: 'ts-dropdown eta-ts-dropdown',
     dropdownParent: 'body',
     placeholder: 'Search city or municipality...',
     sortField: { field: 'text', direction: 'asc' }
@@ -429,6 +429,7 @@ document.querySelectorAll('select.city-select').forEach(function (el) {
       errBox.classList.add('d-none'); okBox.classList.add('d-none');
       document.getElementById('bookFields').classList.remove('d-none');
       document.getElementById('bookSubmitBtn').classList.remove('d-none');
+      document.getElementById('bookConfirmBtn').classList.add('d-none');
       bookModal.show();
     });
   });
@@ -444,13 +445,16 @@ document.querySelectorAll('select.city-select').forEach(function (el) {
         }
         document.getElementById('bookFields').classList.add('d-none');
         document.getElementById('bookSubmitBtn').classList.add('d-none');
+        document.getElementById('bookConfirmBtn').classList.remove('d-none');
         okBox.innerHTML = '<strong>Booked! Reference: ' + d.reference + '</strong><br>' +
           d.seats + ' seat(s) on bus ' + d.bus_number + ', boarding at ' + d.pickup + '.<br>' + crew;
         okBox.classList.remove('d-none');
         const alert = document.getElementById('bookAlert');
         if (alert) { alert.innerHTML = ''; }
-        setTimeout(function() { window.location.reload(); }, 6000);
       }).catch(() => { errBox.textContent = 'Something went wrong. Please try again.'; errBox.classList.remove('d-none'); });
+  });
+  document.getElementById('bookConfirmBtn').addEventListener('click', function() {
+    window.location.reload();
   });
   setTimeout(function() { window.location.reload(); }, 60000);
 })();

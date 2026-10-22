@@ -48,6 +48,10 @@
   .live-track-bus-info { flex:1; min-width:0; }
   .live-track-bus-number { font-weight:800; font-size:1.05rem; color:#1c1e36; line-height:1.1; }
   .live-track-bus-plate { font-size:.75rem; color:#6c757d; text-transform:uppercase; letter-spacing:.03em; }
+  .live-track-bus-seats { margin-top:.25rem; }
+  .live-track-seats-badge { display:inline-flex; align-items:center; gap:.25rem; font-size:.72rem; font-weight:700; padding:.12rem .5rem; border-radius:999px; }
+  .live-track-seats-badge.seats-available { background:#d1fae5; color:#065f46; }
+  .live-track-seats-badge.seats-full { background:#fee2e2; color:#991b1b; }
   .live-track-bus-eta {
     display:flex; align-items:center; gap:.5rem; margin-top:.25rem; font-size:.8rem;
   }
@@ -160,6 +164,13 @@
                 <span class="badge bg-secondary-lt text-secondary">{{ r.movement_display }}</span>
               </div>
               <div class="live-track-bus-plate">{{ r.plate_number }} &bull; {{ r.route }}</div>
+              <div class="live-track-bus-seats" id="seats-{{ r.bus_id }}">
+                {% if r.seats_free > 0 %}
+                <span class="live-track-seats-badge seats-available"><i class="fa-solid fa-chair" aria-hidden="true"></i>{{ r.seats_free }} seat{{ r.seats_free|pluralize }} free</span>
+                {% else %}
+                <span class="live-track-seats-badge seats-full"><i class="fa-solid fa-chair" aria-hidden="true"></i>Full</span>
+                {% endif %}
+              </div>
               {% if r.eta_wait %}
               <div class="live-track-bus-eta">
                 <span class="live-track-eta-time" id="eta-time-{{ r.bus_id }}">
@@ -618,6 +629,12 @@
 
         bus.seats = b.available_seats != null ? b.available_seats : b.seats_free;
         bus.route = b.route || bus.route;
+        const seatsEl = document.getElementById('seats-' + b.bus_id);
+        if (seatsEl) {
+          seatsEl.innerHTML = bus.seats > 0
+            ? '<span class="live-track-seats-badge seats-available"><i class="fa-solid fa-chair" aria-hidden="true"></i>' + bus.seats + ' seat' + (bus.seats === 1 ? '' : 's') + ' free</span>'
+            : '<span class="live-track-seats-badge seats-full"><i class="fa-solid fa-chair" aria-hidden="true"></i>Full</span>';
+        }
         const prevStatus = bus.movement_status;
         bus.movement_status = b.movement_status || bus.movement_status;
         bus.movement_display = b.movement_display || bus.movement_display;
