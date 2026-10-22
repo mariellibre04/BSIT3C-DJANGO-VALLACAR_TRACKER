@@ -1,6 +1,7 @@
 import json
 import math
 from decimal import Decimal, InvalidOperation
+from pathlib import Path
 from urllib.error import URLError
 from urllib.parse import urlencode
 from urllib.request import Request, urlopen
@@ -68,6 +69,37 @@ TERMINALS = [
     {'name': 'Guihulngan', 'keywords': ('guihulngan',), 'lat': 10.1167, 'lng': 123.2667},
     {'name': 'Cebu', 'keywords': ('cebu',), 'lat': 10.3157, 'lng': 123.8854},
 ]
+
+for _terminal in TERMINALS:
+    _terminal.setdefault('label', _terminal['name'])
+
+
+def _load_city_places():
+    """Load every Philippine city/municipality for the passenger city picker."""
+    path = Path(__file__).with_name('data') / 'ph_cities.json'
+    try:
+        rows = json.loads(path.read_text(encoding='utf-8'))
+    except (OSError, ValueError):
+        return []
+    places = []
+    for row in rows:
+        name = (row.get('name') or '').strip()
+        province = (row.get('province') or '').strip()
+        if not name:
+            continue
+        places.append({
+            'name': name,
+            'province': province,
+            'label': row.get('label') or (f'{name}, {province}' if province else name),
+            'keywords': (name.lower(),),
+            'lat': row['lat'],
+            'lng': row['lng'],
+        })
+    return places
+
+
+CITY_PLACES = _load_city_places()
+PLACES = TERMINALS + CITY_PLACES
 
 # Each entry: (place keywords, lat, lng).
 ROUTE_TERMINAL_GPS = [(t['keywords'], t['lat'], t['lng']) for t in TERMINALS]
@@ -142,8 +174,10 @@ def estimate_arrival(bus_lat, bus_lng, dest_lat, dest_lng, movement_status=''):
 
 def terminal_by_name(name):
     name = (name or '').strip().lower()
-    for t in TERMINALS:
-        if t['name'].lower() == name:
+    if not name:
+        return None
+    for t in PLACES:
+        if t['name'].lower() == name or t.get('label', '').lower() == name:
             return t
     return None
 
