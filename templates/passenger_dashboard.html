@@ -71,9 +71,15 @@
     <span class="badge bg-warning-lt text-warning d-none d-md-inline-flex align-items-center gap-1">
       <i class="fa-solid fa-user"></i> Passenger view
     </span>
+    {% if user.is_authenticated %}
+    <a href="{% url 'logout' %}" class="btn btn-sm vt-btn-red">
+      <i class="fa-solid fa-right-from-bracket me-1"></i> Sign out
+    </a>
+    {% else %}
     <a href="{% url 'login' %}" class="btn btn-sm vt-btn-red">
       <i class="fa-solid fa-user-shield me-1"></i> Staff Sign in
     </a>
+    {% endif %}
   </div>
 
   <!-- Hero: passenger greeting + trip planner -->

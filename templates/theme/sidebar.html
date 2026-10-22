@@ -27,7 +27,7 @@
     <div class="collapse navbar-collapse" id="sidebar-menu">
       <ul class="navbar-nav pt-lg-2 py-lg-2">
 
-        {% if user.is_authenticated %}
+        {% if user.is_authenticated and user.is_staff and request.resolver_match.url_name != 'dashboard' %}
         <li class="nav-item">
           <span class="dh-nav-section">
             Fleet Overview

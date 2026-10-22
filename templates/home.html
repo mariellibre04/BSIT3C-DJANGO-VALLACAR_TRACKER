@@ -66,6 +66,9 @@
         {{ user.username|first|upper|default:"A" }}
       </span>
       <span class="small fw-semibold text-dark d-none d-lg-inline">Operations Admin <i class="fa-solid fa-chevron-down ms-1 text-muted"></i></span>
+      <a href="{% url 'logout' %}" class="btn btn-sm btn-outline-danger">
+        <i class="fa-solid fa-right-from-bracket me-1"></i> Sign out
+      </a>
     </div>
     {% else %}
     <div class="d-flex align-items-center gap-2">
