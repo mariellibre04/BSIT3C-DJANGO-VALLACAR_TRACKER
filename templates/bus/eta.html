@@ -154,17 +154,119 @@
   // Live mini-map: bus pins + green waiting-place pin.
   try {
     const data = JSON.parse(document.getElementById('eta-data').textContent);
-    if (document.getElementById('eta-map') && (data.buses.length || data.waiting)) {
+    const mapEl = document.getElementById('eta-map');
+    if (mapEl && (data.buses.length || data.waiting)) {
       const map = L.map('eta-map', { minZoom: 5 }).setView([12.8797, 121.7740], 6);
       L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Street_Map/MapServer/tile/{z}/{y}/{x}', { maxZoom: 19, attribution: 'Tiles &copy; Esri' }).addTo(map);
       const bounds = [];
+      const busLayers = [];
+      const roadPaths = {};
+      const roadPathRequests = {};
+      const SIM_TIME_SCALE = 20;
+
+      function haversine(lat1, lon1, lat2, lon2) {
+        const R = 6371;
+        const dLat = (lat2 - lat1) * Math.PI / 180;
+        const dLon = (lon2 - lon1) * Math.PI / 180;
+        const a = Math.sin(dLat / 2) ** 2 + Math.cos(lat1 * Math.PI / 180) * Math.cos(lat2 * Math.PI / 180) * Math.sin(dLon / 2) ** 2;
+        return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+      }
+
+      function buildTrack(from, to, key, path) {
+        const pts = (path && path.length >= 2)
+          ? path.map(function(p) { return { lat: p.lat, lng: p.lng }; })
+          : [{ lat: from.lat, lng: from.lng }, { lat: to.lat, lng: to.lng }];
+        const cum = [0];
+        let total = 0;
+        for (let i = 1; i < pts.length; i++) {
+          total += haversine(pts[i - 1].lat, pts[i - 1].lng, pts[i].lat, pts[i].lng);
+          cum.push(total);
+        }
+        return { from: from, to: to, key: key, pathPts: pts, cum: cum, total: total };
+      }
+
+      function pointOnTrack(track, progress) {
+        const pts = track.pathPts;
+        if (!pts || pts.length === 0) return { lat: track.from.lat, lng: track.from.lng };
+        if (pts.length === 1 || !track.total) return { lat: pts[0].lat, lng: pts[0].lng };
+        const target = Math.max(0, Math.min(1, progress)) * track.total;
+        for (let i = 1; i < pts.length; i++) {
+          if (track.cum[i] >= target) {
+            const segLen = (track.cum[i] - track.cum[i - 1]) || 1;
+            const f = (target - track.cum[i - 1]) / segLen;
+            return {
+              lat: pts[i - 1].lat + (pts[i].lat - pts[i - 1].lat) * f,
+              lng: pts[i - 1].lng + (pts[i].lng - pts[i - 1].lng) * f
+            };
+          }
+        }
+        return { lat: pts[pts.length - 1].lat, lng: pts[pts.length - 1].lng };
+      }
+
+      function makeTrack(from, to, key) {
+        return buildTrack(from, to, key, roadPaths[key]);
+      }
+
+      function busSpeed(bus) {
+        if (bus.movement_status === 'stopped' || bus.movement_status === 'off_route') return 0;
+        if (bus.movement_status === 'delayed') return 22;
+        return 45;
+      }
+
+      function loadRoadPath(track) {
+        if (!track || !track.from || !track.to) return;
+        const key = track.key;
+        if (roadPaths[key] || roadPathRequests[key]) return;
+        roadPathRequests[key] = true;
+        const url = 'https://router.project-osrm.org/route/v1/driving/' +
+          track.from.lng + ',' + track.from.lat + ';' +
+          track.to.lng + ',' + track.to.lat +
+          '?overview=full&geometries=geojson';
+        fetch(url)
+          .then(function(r) { return r.json(); })
+          .then(function(json) {
+            const route = json && json.routes && json.routes[0];
+            const coords = route && route.geometry && route.geometry.coordinates;
+            if (!coords || coords.length < 2) return;
+            roadPaths[key] = coords.map(function(c) { return { lat: c[1], lng: c[0] }; });
+            busLayers.forEach(function(item) {
+              const bus = item.bus;
+              if (!bus.track || bus.track.key !== key) return;
+              bus.track = buildTrack(track.from, track.to, key, roadPaths[key]);
+              const pos = pointOnTrack(bus.track, bus.progress);
+              bus.lat = pos.lat;
+              bus.lng = pos.lng;
+              bus.marker.setLatLng([pos.lat, pos.lng]);
+            });
+          })
+          .catch(function() { /* keep straight-line fallback */ });
+      }
+
       data.buses.forEach(function(b) {
         if (b.lat == null || b.lng == null) return;
         const icon = L.divIcon({ className: '', html: '<div style="background:#C1121F;color:#fff;border:2px solid #fff;border-radius:8px;min-width:30px;height:24px;padding:0 4px;display:flex;align-items:center;justify-content:center;font-size:.62rem;font-weight:800;box-shadow:0 4px 10px rgba(0,0,0,.35);">' + b.bus_number + '</div>', iconSize: [40, 24], iconAnchor: [20, 12] });
-        L.marker([b.lat, b.lng], { icon: icon }).addTo(map)
+        const m = L.marker([b.lat, b.lng], { icon: icon }).addTo(map)
           .bindPopup('<b>' + b.bus_number + '</b><br>' + b.route + '<br>' + b.seats_free + ' seats free');
         bounds.push([b.lat, b.lng]);
+
+        let track = null;
+        if (b.route_from && b.route_to && b.route_from.lat != null && b.route_to.lat != null) {
+          const from = { lat: b.route_from.lat, lng: b.route_from.lng };
+          const to = { lat: b.route_to.lat, lng: b.route_to.lng };
+          track = makeTrack(from, to, b.route_from.name + '>' + b.route_to.name);
+          loadRoadPath(track);
+        }
+        busLayers.push({
+          marker: m,
+          bus: {
+            marker: m, track: track, dir: 1,
+            movement_status: b.movement_status,
+            progress: track ? 0.05 : 0,
+            lat: b.lat, lng: b.lng
+          }
+        });
       });
+
       if (data.waiting) {
         const w = data.waiting;
         const wicon = L.divIcon({ className: '', html: '<div style="background:#22c55e;color:#fff;border:2px solid #fff;border-radius:50%;width:30px;height:30px;display:flex;align-items:center;justify-content:center;box-shadow:0 4px 10px rgba(0,0,0,.35);"><i class="fa-solid fa-person"></i></div>', iconSize: [30, 30], iconAnchor: [15, 15] });
@@ -172,6 +274,28 @@
         bounds.push([w.lat, w.lng]);
       }
       if (bounds.length) map.fitBounds(bounds, { padding: [40, 40], maxZoom: 12 });
+
+      let lastFrame = performance.now();
+      function animateBuses(now) {
+        const dt = Math.min((now - lastFrame) / 1000, 5);
+        lastFrame = now;
+        busLayers.forEach(function(item) {
+          const bus = item.bus;
+          if (!bus.track) return;
+          const speed = busSpeed(bus);
+          if (speed <= 0) return;
+          const lengthKm = Math.max(bus.track.total, 0.2);
+          bus.progress += ((speed * SIM_TIME_SCALE * dt) / 3600) / lengthKm * bus.dir;
+          if (bus.progress >= 1) { bus.progress = 1; bus.dir = -1; }
+          else if (bus.progress <= 0) { bus.progress = 0; bus.dir = 1; }
+          const pos = pointOnTrack(bus.track, bus.progress);
+          bus.lat = pos.lat;
+          bus.lng = pos.lng;
+          bus.marker.setLatLng([pos.lat, pos.lng]);
+        });
+        requestAnimationFrame(animateBuses);
+      }
+      requestAnimationFrame(animateBuses);
     }
   } catch (e) { /* map optional if data missing */ }
 

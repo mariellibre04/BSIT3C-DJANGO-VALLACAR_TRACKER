@@ -1,4 +1,5 @@
 import json
+import math
 from decimal import Decimal, InvalidOperation
 from urllib.error import URLError
 from urllib.parse import urlencode
@@ -88,6 +89,32 @@ def haversine_km(lat1, lng1, lat2, lng2):
     dl = math.radians(lng2 - lng1)
     a = math.sin(dp / 2) ** 2 + math.cos(p1) * math.cos(p2) * math.sin(dl / 2) ** 2
     return 2 * r * math.asin(math.sqrt(a))
+
+
+def _project_on_segment(lat, lng, a, b):
+    """Project a point onto the a→b segment; return (fraction, distance_km)."""
+    scale = math.cos(math.radians((a['lat'] + b['lat']) / 2))
+    ax, ay = a['lng'] * scale, a['lat']
+    bx, by = b['lng'] * scale, b['lat']
+    px, py = lng * scale, lat
+    dx, dy = bx - ax, by - ay
+    len2 = dx * dx + dy * dy
+    if not len2:
+        return 0.0, haversine_km(lat, lng, a['lat'], a['lng'])
+    t = max(0.0, min(1.0, ((px - ax) * dx + (py - ay) * dy) / len2))
+    plat = a['lat'] + t * (b['lat'] - a['lat'])
+    plng = a['lng'] + t * (b['lng'] - a['lng'])
+    return t, haversine_km(lat, lng, plat, plng)
+
+
+def terminal_on_corridor(origin, dest, waiting, max_km=45.0):
+    """True when the waiting terminal sits between origin and destination."""
+    if not (origin and dest and waiting):
+        return False
+    t, distance = _project_on_segment(
+        waiting['lat'], waiting['lng'], origin, dest
+    )
+    return 0.02 <= t <= 0.98 and distance <= max_km
 
 
 def estimate_arrival(bus_lat, bus_lng, dest_lat, dest_lng, movement_status=''):
@@ -400,14 +427,25 @@ def build_eta_results(buses, origin, dest, waiting, today, now):
     from apps.trips.models import Trip
 
     results = []
+    corridor_match = terminal_on_corridor(origin, dest, waiting)
     for b in buses:
         text = f'{b.route or ""}'.lower()
-        # A bus is relevant when its route passes through the place the
-        # passenger is waiting — that is what "buses heading to X" means.
-        if not any(k in text for k in waiting['keywords']):
+        frm, to = route_endpoints(b.route)
+        endpoints_match = bool(
+            frm and to
+            and {frm['name'], to['name']} == {origin['name'], dest['name']}
+        )
+        text_match = (
+            any(k in text for k in origin['keywords'])
+            or any(k in text for k in dest['keywords'])
+        )
+        route_has_waiting = any(k in text for k in waiting['keywords'])
+        # Relevant when the bus serves the requested corridor and the waiting
+        # place is either named on the route or lies between the endpoints
+        # (e.g. Himamaylan is on the Bacolod → Dumaguete highway).
+        if not (endpoints_match or text_match):
             continue
-        if origin is not dest and not (any(k in text for k in origin['keywords'])
-                                       or any(k in text for k in dest['keywords'])):
+        if not (route_has_waiting or corridor_match):
             continue
         occupied = b.total_passengers or 0
         lat, lng, is_approx = bus_map_coords(b)

@@ -264,6 +264,8 @@
   // --- State ---
   const busMarkers = {};
   const routeLines = {};
+  const roadPaths = {};
+  const roadPathRequests = {};
   let waitingMarker = null;
   let searchMarker = null;
   let animationFrameId = null;
@@ -288,12 +290,44 @@
     return (Math.atan2(y, x) * 180 / Math.PI + 360) % 360;
   }
 
-  // Interpolate position along the route track
+  // Build a route track, optionally following a road geometry from OSRM.
+  function buildTrack(from, to, key, path) {
+    const pts = (path && path.length >= 2)
+      ? path.map(function(p) { return { lat: p.lat, lng: p.lng }; })
+      : [{ lat: from.lat, lng: from.lng }, { lat: to.lat, lng: to.lng }];
+    const cum = [0];
+    let total = 0;
+    for (let i = 1; i < pts.length; i++) {
+      total += haversine(pts[i - 1].lat, pts[i - 1].lng, pts[i].lat, pts[i].lng);
+      cum.push(total);
+    }
+    return { from: from, to: to, key: key, pathPts: pts, cum: cum, total: total };
+  }
+
+  // Interpolate position along the route track (road path when available).
   function pointOnTrack(track, progress) {
-    return {
-      lat: track.from.lat + (track.to.lat - track.from.lat) * progress,
-      lng: track.from.lng + (track.to.lng - track.from.lng) * progress
-    };
+    const pts = track.pathPts;
+    if (!pts || pts.length === 0) {
+      return {
+        lat: track.from.lat + (track.to.lat - track.from.lat) * progress,
+        lng: track.from.lng + (track.to.lng - track.from.lng) * progress
+      };
+    }
+    if (pts.length === 1 || !track.total) {
+      return { lat: pts[0].lat, lng: pts[0].lng };
+    }
+    const target = Math.max(0, Math.min(1, progress)) * track.total;
+    for (let i = 1; i < pts.length; i++) {
+      if (track.cum[i] >= target) {
+        const segLen = (track.cum[i] - track.cum[i - 1]) || 1;
+        const f = (target - track.cum[i - 1]) / segLen;
+        return {
+          lat: pts[i - 1].lat + (pts[i].lat - pts[i - 1].lat) * f,
+          lng: pts[i - 1].lng + (pts[i].lng - pts[i - 1].lng) * f
+        };
+      }
+    }
+    return { lat: pts[pts.length - 1].lat, lng: pts[pts.length - 1].lng };
   }
 
   // Project a live GPS fix onto the route segment (0 = origin, 1 = destination)
@@ -306,6 +340,34 @@
     const len2 = dx * dx + dy * dy;
     if (!len2) return 0;
     return Math.max(0, Math.min(1, ((px - ax) * dx + (py - ay) * dy) / len2));
+  }
+
+  // Project a GPS fix onto a multi-point road path; returns route progress.
+  function projectOnPath(lat, lng, track) {
+    const pts = track.pathPts;
+    if (!pts || pts.length < 2 || !track.total) {
+      return projectOnSegment(lat, lng, track.from, track.to);
+    }
+    let bestDist = Infinity, bestProgress = 0;
+    for (let i = 1; i < pts.length; i++) {
+      const a = pts[i - 1], b = pts[i];
+      const scale = Math.cos((a.lat + b.lat) / 2 * Math.PI / 180);
+      const ax = a.lng * scale, ay = a.lat;
+      const bx = b.lng * scale, by = b.lat;
+      const px = lng * scale, py = lat;
+      const dx = bx - ax, dy = by - ay;
+      const len2 = dx * dx + dy * dy;
+      const t = len2 ? Math.max(0, Math.min(1, ((px - ax) * dx + (py - ay) * dy) / len2)) : 0;
+      const plat = a.lat + (b.lat - a.lat) * t;
+      const plng = a.lng + (b.lng - a.lng) * t;
+      const d = haversine(lat, lng, plat, plng);
+      if (d < bestDist) {
+        bestDist = d;
+        const segLen = (track.cum[i] - track.cum[i - 1]) || 0;
+        bestProgress = (track.cum[i - 1] + segLen * t) / (track.total || 1);
+      }
+    }
+    return bestProgress;
   }
 
   function escapeHtml(value) {
@@ -324,14 +386,13 @@
     return lat >= 8.4 && lat <= 11.6 && lng >= 121.7 && lng <= 124.3;
   }
 
-  // Simulated cruising speed (km/h) by movement status. Only operational
-  // buses that are en route (or moving slowly because they are delayed) move;
-  // stopped, at-terminal and off-route buses stay parked.
+  // Simulated cruising speed (km/h) by movement status. Active buses keep
+  // moving along their route; only explicitly stopped/off-route buses park.
   function busSpeed(bus) {
     if (bus.bus_status && bus.bus_status !== 'active') return 0;
-    if (bus.movement_status === 'en_route') return 45;
+    if (bus.movement_status === 'stopped' || bus.movement_status === 'off_route') return 0;
     if (bus.movement_status === 'delayed') return 22;
-    return 0;
+    return 45;
   }
 
   const STATUS_COLORS = {
@@ -371,8 +432,11 @@
   // Draw one line per route so movement is easy to follow.
   function ensureRouteLine(track) {
     if (routeLines[track.key]) return routeLines[track.key];
+    const latlngs = (track.pathPts || [track.from, track.to]).map(function(p) {
+      return [p.lat, p.lng];
+    });
     const line = L.polyline(
-      [[track.from.lat, track.from.lng], [track.to.lat, track.to.lng]],
+      latlngs,
       {
         color: routeColor(track.key), weight: 3, opacity: .55,
         dashArray: '7 9', className: 'route-line', interactive: false
@@ -382,17 +446,55 @@
     return line;
   }
 
+  function makeTrack(from, to, key) {
+    return buildTrack(from, to, key, roadPaths[key]);
+  }
+
+  // Fetch real road geometry (OSRM) so route lines stay on land/roads.
+  // If routing fails (e.g. a sea crossing with no road), keep the straight line.
+  function loadRoadPath(track) {
+    if (!track || !track.from || !track.to) return;
+    const key = track.key;
+    if (roadPaths[key] || roadPathRequests[key]) return;
+    roadPathRequests[key] = true;
+    const url = 'https://router.project-osrm.org/route/v1/driving/' +
+      track.from.lng + ',' + track.from.lat + ';' +
+      track.to.lng + ',' + track.to.lat +
+      '?overview=full&geometries=geojson';
+    fetch(url)
+      .then(function(r) { return r.json(); })
+      .then(function(json) {
+        const route = json && json.routes && json.routes[0];
+        const coords = route && route.geometry && route.geometry.coordinates;
+        if (!coords || coords.length < 2) return;
+        roadPaths[key] = coords.map(function(c) { return { lat: c[1], lng: c[0] }; });
+        Object.values(busMarkers).forEach(function(bus) {
+          if (!bus.track || bus.track.key !== key) return;
+          const prev = { lat: bus.lat, lng: bus.lng };
+          bus.track = buildTrack(track.from, track.to, key, roadPaths[key]);
+          bus.progress = projectOnPath(prev.lat, prev.lng, bus.track);
+          const pos = pointOnTrack(bus.track, bus.progress);
+          bus.lat = pos.lat;
+          bus.lng = pos.lng;
+          bus.marker.setLatLng([pos.lat, pos.lng]);
+        });
+        if (routeLines[key]) {
+          routeLines[key].setLatLngs(roadPaths[key].map(function(p) { return [p.lat, p.lng]; }));
+        }
+      })
+      .catch(function() { /* keep straight-line fallback */ });
+  }
+
   // Initialize bus markers, placing each one along its route.
   data.buses.forEach(function(b, index) {
     if (b.lat == null || b.lng == null) return;
     let track = null;
     if (b.route_from && b.route_to && b.route_from.lat != null && b.route_to.lat != null) {
-      track = {
-        from: { lat: b.route_from.lat, lng: b.route_from.lng },
-        to: { lat: b.route_to.lat, lng: b.route_to.lng },
-        key: b.route_from.name + '>' + b.route_to.name
-      };
+      const from = { lat: b.route_from.lat, lng: b.route_from.lng };
+      const to = { lat: b.route_to.lat, lng: b.route_to.lng };
+      track = makeTrack(from, to, b.route_from.name + '>' + b.route_to.name);
       ensureRouteLine(track);
+      loadRoadPath(track);
     }
 
     // Skip bogus/out-of-region fixes that would otherwise zoom the map away.
@@ -523,13 +625,12 @@
         if (b.route_from && b.route_to && b.route_from.lat != null && b.route_to.lat != null) {
           const key = b.route_from.name + '>' + b.route_to.name;
           if (!bus.track || bus.track.key !== key) {
-            bus.track = {
-              from: { lat: b.route_from.lat, lng: b.route_from.lng },
-              to: { lat: b.route_to.lat, lng: b.route_to.lng },
-              key: key
-            };
+            const from = { lat: b.route_from.lat, lng: b.route_from.lng };
+            const to = { lat: b.route_to.lat, lng: b.route_to.lng };
+            bus.track = makeTrack(from, to, key);
             ensureRouteLine(bus.track);
-            bus.progress = projectOnSegment(bus.lat, bus.lng, bus.track.from, bus.track.to);
+            loadRoadPath(bus.track);
+            bus.progress = projectOnPath(bus.lat, bus.lng, bus.track);
           }
         }
 
@@ -537,7 +638,7 @@
         // fallback pins stay on the simulated track.
         if (!b.is_approx && b.latitude != null && b.longitude != null && bus.track
             && inNegros(b.latitude, b.longitude)) {
-          bus.progress = projectOnSegment(b.latitude, b.longitude, bus.track.from, bus.track.to);
+          bus.progress = projectOnPath(b.latitude, b.longitude, bus.track);
           const pos = pointOnTrack(bus.track, bus.progress);
           bus.lat = pos.lat;
           bus.lng = pos.lng;
