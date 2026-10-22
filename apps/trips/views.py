@@ -282,7 +282,10 @@ def reports_page(request):
         return resp
 
     # Chart payloads (used by ApexCharts in template)
+    status_labels = dict(Trip.STATUS_CHOICES)
     status_breakdown = list(trips_qs.values('status').annotate(n=C('id')).order_by('-n'))
+    for row in status_breakdown:
+        row['label'] = status_labels.get(row['status'], row['status'].replace('_', ' ').title())
     return render(request, 'trips/reports.html', {
         'total_trips': total_trips, 'completed': completed, 'delayed': delayed,
         'rerouted': rerouted, 'unexpected': unexpected,

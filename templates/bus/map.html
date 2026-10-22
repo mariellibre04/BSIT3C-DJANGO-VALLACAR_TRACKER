@@ -324,22 +324,39 @@
     return lat >= 8.4 && lat <= 11.6 && lng >= 121.7 && lng <= 124.3;
   }
 
-  // Simulated cruising speed (km/h) by movement status.
+  // Simulated cruising speed (km/h) by movement status. Only operational
+  // buses that are en route (or moving slowly because they are delayed) move;
+  // stopped, at-terminal and off-route buses stay parked.
   function busSpeed(bus) {
-    if (bus.movement_status === 'stopped' || bus.movement_status === 'off_route') return 0;
+    if (bus.bus_status && bus.bus_status !== 'active') return 0;
+    if (bus.movement_status === 'en_route') return 45;
     if (bus.movement_status === 'delayed') return 22;
-    if (bus.movement_status === 'at_terminal') return 30;
-    return 45;
+    return 0;
   }
 
-  // Create bus marker icon with a direction arrow.
-  function createBusIcon(busNumber, rotation = 0) {
+  const STATUS_COLORS = {
+    delayed: '#f59e0b',
+    stopped: '#ef4444',
+    en_route: '#16a34a',
+    at_terminal: '#2563eb',
+    off_route: '#6b7280'
+  };
+
+  function statusColor(key) {
+    return STATUS_COLORS[key] || '#C1121F';
+  }
+
+  // Create bus marker icon with a direction arrow and a status label.
+  function createBusIcon(bus, rotation = 0) {
+    const color = statusColor(bus.movement_status);
+    const label = bus.movement_display || 'At Terminal';
     return L.divIcon({
       className: 'bus-marker',
       html:
         '<div style="position:relative;width:40px;height:24px;">' +
-          `<div class="bus-arrow" style="position:absolute;left:50%;top:50%;width:0;height:0;margin-left:-5px;margin-top:-17px;border-left:5px solid transparent;border-right:5px solid transparent;border-bottom:10px solid rgba(193,18,31,.85);transform-origin:5px 17px;transform:rotate(${rotation}deg);pointer-events:none;"></div>` +
-          `<div style="position:absolute;left:0;top:0;right:0;bottom:0;background:#C1121F;color:#fff;border:2px solid #fff;border-radius:8px;display:flex;align-items:center;justify-content:center;font-size:.62rem;font-weight:800;box-shadow:0 4px 10px rgba(0,0,0,.35);">${escapeHtml(busNumber)}</div>` +
+          `<div class="bus-arrow" style="position:absolute;left:50%;top:50%;width:0;height:0;margin-left:-5px;margin-top:-17px;border-left:5px solid transparent;border-right:5px solid transparent;border-bottom:10px solid rgba(15,23,42,.8);transform-origin:5px 17px;transform:rotate(${rotation}deg);pointer-events:none;"></div>` +
+          `<div style="position:absolute;left:0;top:0;right:0;bottom:0;background:${color};color:#fff;border:2px solid #fff;border-radius:8px;display:flex;align-items:center;justify-content:center;font-size:.62rem;font-weight:800;box-shadow:0 4px 10px rgba(0,0,0,.35);">${escapeHtml(bus.bus_number)}</div>` +
+          `<div style="position:absolute;left:50%;top:calc(100% + 3px);transform:translateX(-50%);background:#fff;color:${color};border:1px solid ${color};border-radius:999px;padding:0 5px;font-size:9px;font-weight:800;line-height:14px;white-space:nowrap;box-shadow:0 2px 6px rgba(0,0,0,.2);pointer-events:none;">${escapeHtml(label)}</div>` +
         '</div>',
       iconSize: [40, 24], iconAnchor: [20, 12]
     });
@@ -383,7 +400,10 @@
 
     let progress = 0.5;
     if (track) {
-      if (b.is_approx) {
+      if (b.movement_status === 'at_terminal') {
+        // Park terminal buses at the start of their corridor.
+        progress = 0.02;
+      } else if (b.is_approx) {
         // No GPS fix: spread buses along the corridor so they do not stack.
         const seed = b.bus_id != null ? Number(b.bus_id) : index;
         progress = 0.12 + ((seed * 37) % 76) / 100;
@@ -394,9 +414,9 @@
 
     const start = track ? pointOnTrack(track, progress) : { lat: b.lat, lng: b.lng };
     const rotation = track ? bearing(track.from.lat, track.from.lng, track.to.lat, track.to.lng) : 0;
-    const icon = createBusIcon(b.bus_number, rotation);
+    const icon = createBusIcon(b, rotation);
     const m = L.marker([start.lat, start.lng], { icon: icon }).addTo(map);
-    m.bindPopup(`<b>${escapeHtml(b.bus_number)}</b><br>${escapeHtml(b.route)}<br>${escapeHtml(b.seats_free)} seats free`);
+    m.bindPopup(`<b>${escapeHtml(b.bus_number)}</b><br>${escapeHtml(b.route)}<br>Status: ${escapeHtml(b.movement_display || 'At Terminal')}<br>${escapeHtml(b.seats_free)} seats free`);
 
     busMarkers[b.bus_number] = {
       id: b.bus_id,
@@ -405,6 +425,8 @@
       route: b.route,
       seats: b.seats_free,
       movement_status: b.movement_status,
+      movement_display: b.movement_display,
+      bus_status: b.bus_status,
       lat: start.lat,
       lng: start.lng,
       track: track,
@@ -486,7 +508,17 @@
 
         bus.seats = b.available_seats != null ? b.available_seats : b.seats_free;
         bus.route = b.route || bus.route;
+        const prevStatus = bus.movement_status;
         bus.movement_status = b.movement_status || bus.movement_status;
+        bus.movement_display = b.movement_display || bus.movement_display;
+        bus.bus_status = b.bus_status || b.status || bus.bus_status;
+        if (b.movement_status && b.movement_status !== prevStatus) {
+          bus.marker.setIcon(createBusIcon({
+            bus_number: bus.number,
+            movement_status: bus.movement_status,
+            movement_display: bus.movement_display
+          }, bus.rotation));
+        }
 
         if (b.route_from && b.route_to && b.route_from.lat != null && b.route_to.lat != null) {
           const key = b.route_from.name + '>' + b.route_to.name;

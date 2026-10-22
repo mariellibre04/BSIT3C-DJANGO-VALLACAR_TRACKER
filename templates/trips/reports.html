@@ -21,7 +21,19 @@
     <div class="col-lg-6">
       <div class="card">
         <div class="card-header"><div class="card-title">Trips by status</div></div>
-        <div class="card-body"><div id="chart-trip-status"></div></div>
+        <div class="card-body">
+          {% if status_breakdown %}
+          <div id="chart-trip-status"></div>
+          <div class="d-flex flex-wrap gap-2 mt-2">
+            {% for s in status_breakdown %}<span class="badge bg-secondary-lt">{{ s.label }}: {{ s.n }}</span>{% endfor %}
+          </div>
+          {% else %}
+          <div class="empty py-4">
+            <p class="empty-title">No trip data yet</p>
+            <p class="empty-subtitle text-muted">The status breakdown appears once trips are recorded.</p>
+          </div>
+          {% endif %}
+        </div>
       </div>
     </div>
     <div class="col-lg-6">
@@ -60,11 +72,13 @@
 {% block extra_js %}
 <script>
 document.addEventListener('DOMContentLoaded', function () {
-  if (!window.ApexCharts) return;
+  const el = document.getElementById('chart-trip-status');
+  if (!el || !window.ApexCharts) return;
   const data = [
-    {% for s in status_breakdown %}{ x: '{{ s.status }}', y: {{ s.n }} },{% endfor %}
+    {% for s in status_breakdown %}{ x: '{{ s.label|escapejs }}', y: {{ s.n }} },{% endfor %}
   ];
-  new ApexCharts(document.getElementById('chart-trip-status'), {
+  if (!data.length) return;
+  new ApexCharts(el, {
     chart: { type: 'donut', height: 260, fontFamily: 'inherit' },
     series: data.map(d => d.y),
     labels: data.map(d => d.x),

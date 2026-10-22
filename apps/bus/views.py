@@ -145,17 +145,31 @@ def terminal_json(t):
         return None
     return {'name': t['name'], 'lat': t['lat'], 'lng': t['lng']}
 
+
+def first_terminal(text):
+    """Return the first known terminal mentioned in a route/location string."""
+    text = (text or '').lower()
+    best = None
+    for t in TERMINALS:
+        for k in t['keywords']:
+            idx = text.find(k)
+            if idx >= 0:
+                if best is None or idx < best[0]:
+                    best = (idx, t)
+                break
+    return best[1] if best else None
+
 # Vallacar Bacolod hub — last-resort pin when the route matches no known terminal.
 HUB_LAT, HUB_LNG = 10.6765, 122.9509
 
 
-def bus_map_coords(bus):
+def bus_map_coords(bus, ignore_gps=False):
     """Return (lat, lng, is_approx) so every bus can be located on the map.
 
     Live GPS fix when present; otherwise an approximate pin at the route's
     terminal (jittered per bus so stacked buses spread out).
     """
-    if bus.latitude is not None and bus.longitude is not None:
+    if not ignore_gps and bus.latitude is not None and bus.longitude is not None:
         return float(bus.latitude), float(bus.longitude), False
     text = f'{bus.current_location or ""} {bus.route or ""}'.lower()
     base = None
@@ -450,6 +464,45 @@ def eta_map_json(results, waiting):
     })
 
 
+def map_all_buses_json(buses, waiting):
+    """Map payload listing every active bus with its movement status label."""
+    items = []
+    for b in buses:
+        occupied = getattr(b, 'total_passengers', None)
+        if occupied is None:
+            occupied = b.passengers.count()
+        lat, lng, is_approx = bus_map_coords(b)
+        # Keep every bus on-screen: ignore GPS fixes outside the Negros region.
+        if not (8.4 <= lat <= 11.6 and 121.7 <= lng <= 124.3):
+            lat, lng, is_approx = bus_map_coords(b, ignore_gps=True)
+        frm, to = route_endpoints(b.route)
+        if frm is None:
+            frm = first_terminal(f'{b.current_location or ""} {b.route or ""}')
+        if frm is None:
+            frm = terminal_by_name('Bacolod')
+        if to is None:
+            to = terminal_by_name('Dumaguete') if frm['name'] != 'Dumaguete' else terminal_by_name('Bacolod')
+        items.append({
+            'bus_id': b.id,
+            'bus_number': b.bus_number,
+            'route': b.route,
+            'lat': lat,
+            'lng': lng,
+            'is_approx': is_approx,
+            'seats_free': max(0, b.capacity - occupied),
+            'movement_status': b.movement_status,
+            'movement_display': b.get_movement_status_display(),
+            'bus_status': b.status,
+            'route_from': terminal_json(frm),
+            'route_to': terminal_json(to),
+        })
+    return json.dumps({
+        'waiting': {'name': waiting['name'], 'lat': waiting['lat'], 'lng': waiting['lng']} if waiting else None,
+        'buses': items,
+        'terminals': [terminal_json(t) for t in TERMINALS],
+    })
+
+
 def _resolve_trip_params(request):
     origin_name = request.GET.get('from', '').strip() or 'Kabankalan'
     dest_name = request.GET.get('to', '').strip() or 'Bacolod'
@@ -474,18 +527,18 @@ def bus_map_page(request):
     results, error = [], None
     today = timezone.localdate()
     now = timezone.now()
+    buses_qs = scoped_buses(request.user) if is_admin else Bus.objects.all()
+    active_buses = list(
+        buses_qs.annotate(total_passengers=Count('passengers'))
+        .filter(status=Bus.STATUS_ACTIVE)
+        .order_by('bus_number')
+    )
     if origin is None or dest is None or waiting is None:
         error = 'Please select a valid origin, destination, and waiting place.'
     elif origin['name'] == dest['name']:
         error = 'Origin and destination must be different terminals.'
     else:
-        buses_qs = scoped_buses(request.user) if is_admin else Bus.objects.all()
-        buses = list(
-            buses_qs.annotate(total_passengers=Count('passengers'))
-            .filter(status=Bus.STATUS_ACTIVE)
-            .order_by('bus_number')
-        )
-        results = build_eta_results(buses, origin, dest, waiting, today, now)
+        results = build_eta_results(active_buses, origin, dest, waiting, today, now)
 
     return render(request, 'bus/map.html', {
         'terminals': TERMINALS,
@@ -494,7 +547,7 @@ def bus_map_page(request):
         'waiting_name': waiting['name'] if waiting else waiting_name,
         'results': results, 'error': error,
         'today': today, 'now': timezone.localtime(now),
-        'map_json': eta_map_json(results, waiting),
+        'map_json': map_all_buses_json(active_buses, waiting),
         'movement_choices': Bus.MOVEMENT_CHOICES,
         'is_admin': is_admin,
         'default_lat': 12.8797, 'default_lng': 121.7740,

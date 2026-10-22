@@ -35,13 +35,6 @@
         <form method="post">
           {% csrf_token %}
 
-          {% if user.is_authenticated %}
-          <div class="alert alert-info">
-            Currently signed in as <strong>{{ user.username }}</strong>.
-            <a href="{% url 'logout' %}" class="alert-link">Sign out</a> to use a different account.
-          </div>
-          {% endif %}
-
           {% for message in messages %}
           {% if message.tags != 'success' %}
           <div id="error-message" class="alert alert-danger">
@@ -74,11 +67,6 @@
    Don't have an account?
    <a href="{% url 'register' %}" class="text-primary fw-bold">Register</a>
   </div> -->
-  <div class="text-center mt-3">
-    <a href="{% url 'bus:passenger_eta' %}" class="btn btn-outline-danger w-100">
-      <i class="fa-solid fa-clock me-1"></i> Riding soon? Check Ceres arrival times — no login needed
-    </a>
-  </div>
 </div>
 
 {% include 'theme/settings.html' %}

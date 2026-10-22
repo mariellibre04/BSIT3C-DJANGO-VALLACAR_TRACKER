@@ -98,11 +98,6 @@
             {% for t in terminals %}<option value="{{ t.name }}" {% if t.name == 'Bacolod' %}selected{% endif %}>{{ t.name }}</option>{% endfor %}
           </select>
         </div>
-        <div class="col-12 col-md-4">
-          <button type="submit" class="btn w-100 fw-bold" style="background:#FFC53D;border:1px solid #d98a00;color:#6e2b00;">
-            <i class="fa-solid fa-clock me-1"></i> Check arrival
-          </button>
-        </div>
       </form>
       <div class="d-flex gap-2 flex-wrap mt-3">
         <a href="{% url 'bus:bus_map' %}" class="btn btn-sm btn-outline-light">
