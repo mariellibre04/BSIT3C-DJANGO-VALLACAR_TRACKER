@@ -43,13 +43,14 @@
         </li>
 
         <li class="nav-item">
-          <a class="nav-link {% if request.resolver_match.app_name == 'bus' %}active{% endif %}" href="{% url 'bus:bus_list' %}">
+          <a class="nav-link {% if request.resolver_match.url_name == 'passenger_eta' %}active{% endif %}" href="{% url 'bus:passenger_eta' %}">
             <span class="nav-link-icon d-md-none d-lg-inline-block">
-              <i class="nav-icon fas fa-bus"></i>
+              <i class="nav-icon fas fa-clock"></i>
             </span>
-            <span class="nav-link-title">Buses</span>
+            <span class="nav-link-title">Passenger ETA</span>
           </a>
         </li>
+
 
         <li class="nav-item">
           <a class="nav-link {% if request.resolver_match.app_name == 'driver' %}active{% endif %}" href="{% url 'driver:driver_list' %}">
@@ -90,6 +91,15 @@
               <i class="nav-icon fas fa-satellite-dish"></i>
             </span>
             <span class="nav-link-title">Live Tracking</span>
+          </a>
+        </li>
+
+        <li class="nav-item">
+          <a class="nav-link {% if request.resolver_match.url_name == 'bus_kiosk' %}active{% endif %}" href="{% url 'bus:bus_kiosk' %}">
+            <span class="nav-link-icon d-md-none d-lg-inline-block">
+              <i class="nav-icon fas fa-tv"></i>
+            </span>
+            <span class="nav-link-title">Terminal Monitor</span>
           </a>
         </li>
 
@@ -208,6 +218,14 @@
               <i class="nav-icon fas fa-satellite-dish"></i>
             </span>
             <span class="nav-link-title">Live Tracking</span>
+          </a>
+        </li>
+        <li class="nav-item">
+          <a class="nav-link {% if request.resolver_match.url_name == 'bus_kiosk' %}active{% endif %}" href="{% url 'bus:bus_kiosk' %}">
+            <span class="nav-link-icon d-md-none d-lg-inline-block">
+              <i class="nav-icon fas fa-tv"></i>
+            </span>
+            <span class="nav-link-title">Terminal Monitor</span>
           </a>
         </li>
         <li class="nav-item mt-2">

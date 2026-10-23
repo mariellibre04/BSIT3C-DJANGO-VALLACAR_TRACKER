@@ -1,0 +1,379 @@
+{% load static %}
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta name="description" content="Vallacar Tracker terminal monitor — see which terminal each bus is at and when it leaves.">
+  <title>Terminal Monitor — Vallacar Tracker</title>
+  <link rel="icon" href="{% static 'favicon-dev.ico' %}" type="image/x-icon">
+  <link rel="shortcut icon" href="{% static 'favicon-dev.ico' %}" type="image/x-icon">
+  <link href="{% static 'css/tabler.css' %}" rel="stylesheet">
+  <link href="{% static 'css/app-theme.css' %}" rel="stylesheet">
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
+  <link href="{% static 'css/terminal-monitor.css' %}" rel="stylesheet">
+  <style>@import url("https://rsms.me/inter/inter.css");</style>
+</head>
+<body class="kiosk-body">
+  <div class="kiosk">
+
+    <!-- Top bar -->
+    <header class="k-topbar">
+      <div class="k-brand">
+        <span class="k-brand-mark"><i class="fa-solid fa-bus"></i></span>
+        <span>
+          <span class="k-brand-name">VALLACAR <span>TRACKER</span></span>
+          <span class="k-brand-sub">Vallacar Transit Inc. &middot; Terminal Operations</span>
+        </span>
+      </div>
+      <div class="k-topbar-right">
+        <span class="k-live"><span class="k-live-dot"></span> Live board</span>
+        <span class="k-clock" aria-live="polite">
+          <span id="kioskTime">6:42 PM</span>
+          <span id="kioskDate">Friday, October 23, 2026</span>
+        </span>
+        <a class="k-icon-btn" href="{% url 'bus:bus_map' %}" title="Open live map" aria-label="Open live map">
+          <i class="fa-solid fa-map-location-dot"></i>
+        </a>
+        <button class="k-icon-btn" id="kioskFullscreen" type="button" title="Toggle fullscreen" aria-label="Toggle fullscreen">
+          <i class="fa-solid fa-expand"></i>
+        </button>
+      </div>
+    </header>
+
+    <!-- Hero -->
+    <section class="k-hero">
+      <div>
+        <div class="k-eyebrow">Live terminal status</div>
+        <h1>Terminal <span>Monitor</span></h1>
+        <p>See which terminal your bus is at, which bay it leaves from, and when it departs.</p>
+      </div>
+      <div class="k-hero-badge">
+        <i class="fa-solid fa-location-dot"></i>
+        <div>
+          <strong>6 terminals</strong>
+          <span>monitored across Negros</span>
+        </div>
+      </div>
+    </section>
+
+    <!-- Terminal summary -->
+    <section class="k-terminal-strip" aria-label="Terminal summary">
+      <article class="k-terminal active">
+        <div class="k-terminal-head">
+          <span class="k-terminal-dot"></span> Bacolod
+          <span class="k-hub">HUB</span>
+        </div>
+        <div class="k-terminal-stats">
+          <span><strong>1</strong> at terminal</span>
+          <span class="k-sep"></span>
+          <span><strong>4</strong> inbound</span>
+        </div>
+      </article>
+      <article class="k-terminal">
+        <div class="k-terminal-head"><span class="k-terminal-dot"></span> Kabankalan</div>
+        <div class="k-terminal-stats">
+          <span><strong>1</strong> at terminal</span>
+          <span class="k-sep"></span>
+          <span><strong>0</strong> inbound</span>
+        </div>
+      </article>
+      <article class="k-terminal">
+        <div class="k-terminal-head"><span class="k-terminal-dot"></span> Dumaguete</div>
+        <div class="k-terminal-stats">
+          <span><strong>1</strong> at terminal</span>
+          <span class="k-sep"></span>
+          <span><strong>0</strong> inbound</span>
+        </div>
+      </article>
+      <article class="k-terminal">
+        <div class="k-terminal-head"><span class="k-terminal-dot"></span> Sipalay</div>
+        <div class="k-terminal-stats">
+          <span><strong>1</strong> at terminal</span>
+          <span class="k-sep"></span>
+          <span><strong>0</strong> inbound</span>
+        </div>
+      </article>
+      <article class="k-terminal">
+        <div class="k-terminal-head"><span class="k-terminal-dot"></span> San Carlos</div>
+        <div class="k-terminal-stats">
+          <span><strong>1</strong> at terminal</span>
+          <span class="k-sep"></span>
+          <span><strong>0</strong> inbound</span>
+        </div>
+      </article>
+      <article class="k-terminal">
+        <div class="k-terminal-head"><span class="k-terminal-dot"></span> Hinigaran</div>
+        <div class="k-terminal-stats">
+          <span><strong>1</strong> at terminal</span>
+          <span class="k-sep"></span>
+          <span><strong>0</strong> inbound</span>
+        </div>
+      </article>
+    </section>
+
+    <!-- Status board -->
+    <section class="k-board" aria-label="Bus status board">
+      <div class="k-board-head">
+        <div>
+          <div class="k-board-kicker">All terminals &middot; Negros operations</div>
+          <h2>Bus status board</h2>
+        </div>
+        <div class="k-board-meta">
+          <span class="k-live"><span class="k-live-dot"></span> Live</span>
+          <span><i class="fa-regular fa-clock"></i> Updated just now</span>
+        </div>
+      </div>
+
+      <div class="k-table-wrap">
+        <table class="k-table">
+          <thead>
+            <tr>
+              <th scope="col">Bus</th>
+              <th scope="col">Route</th>
+              <th scope="col">Terminal</th>
+              <th scope="col">Bay</th>
+              <th scope="col">Time</th>
+              <th scope="col">Status</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr class="k-section">
+              <td colspan="6"><span>Now at terminal</span><span class="k-section-count">6 buses</span></td>
+            </tr>
+
+            <tr class="k-bus-row">
+              <td>
+                <div class="k-bus">
+                  <span class="k-bus-icon"><i class="fa-solid fa-bus"></i></span>
+                  <span><span class="k-bus-no">53</span><span class="k-bus-plate">Plate 78</span></span>
+                </div>
+              </td>
+              <td>
+                <span class="k-route">Bacolod <i class="fa-solid fa-arrow-right-long"></i> Dumaguete</span>
+                <span class="k-route-sub">Ceres Liner &middot; Aircon</span>
+              </td>
+              <td><span class="k-terminal-pill hub"><span class="k-dot"></span> Bacolod</span></td>
+              <td><span class="k-bay">Bay 1</span></td>
+              <td><span class="k-time">6:45 PM</span></td>
+              <td><span class="k-status is-boarding"><span class="k-status-dot"></span> Boarding</span></td>
+            </tr>
+
+            <tr class="k-bus-row">
+              <td>
+                <div class="k-bus">
+                  <span class="k-bus-icon"><i class="fa-solid fa-bus"></i></span>
+                  <span><span class="k-bus-no">364</span><span class="k-bus-plate">Plate 84</span></span>
+                </div>
+              </td>
+              <td>
+                <span class="k-route">Sipalay <i class="fa-solid fa-arrow-right-long"></i> Kabankalan</span>
+                <span class="k-route-sub">Ceres Liner &middot; Ordinary</span>
+              </td>
+              <td><span class="k-terminal-pill"><span class="k-dot"></span> Kabankalan</span></td>
+              <td><span class="k-bay">Bay 2</span></td>
+              <td><span class="k-time">6:30 PM</span></td>
+              <td><span class="k-status is-at"><span class="k-status-dot"></span> At Terminal</span></td>
+            </tr>
+
+            <tr class="k-bus-row">
+              <td>
+                <div class="k-bus">
+                  <span class="k-bus-icon"><i class="fa-solid fa-bus"></i></span>
+                  <span><span class="k-bus-no">117</span><span class="k-bus-plate">Plate 112</span></span>
+                </div>
+              </td>
+              <td>
+                <span class="k-route">Dumaguete <i class="fa-solid fa-arrow-right-long"></i> Bais</span>
+                <span class="k-route-sub">Ceres Liner &middot; Ordinary</span>
+              </td>
+              <td><span class="k-terminal-pill"><span class="k-dot"></span> Dumaguete</span></td>
+              <td><span class="k-bay">Bay 4</span></td>
+              <td><span class="k-time">6:50 PM</span></td>
+              <td><span class="k-status is-at"><span class="k-status-dot"></span> At Terminal</span></td>
+            </tr>
+
+            <tr class="k-bus-row">
+              <td>
+                <div class="k-bus">
+                  <span class="k-bus-icon"><i class="fa-solid fa-bus"></i></span>
+                  <span><span class="k-bus-no">509</span><span class="k-bus-plate">Plate 56</span></span>
+                </div>
+              </td>
+              <td>
+                <span class="k-route">Sipalay <i class="fa-solid fa-arrow-right-long"></i> Bacolod</span>
+                <span class="k-route-sub">Ceres Liner &middot; Aircon</span>
+              </td>
+              <td><span class="k-terminal-pill"><span class="k-dot"></span> Sipalay</span></td>
+              <td><span class="k-bay">Bay 1</span></td>
+              <td><span class="k-time">7:05 PM</span></td>
+              <td><span class="k-status is-at"><span class="k-status-dot"></span> At Terminal</span></td>
+            </tr>
+
+            <tr class="k-bus-row">
+              <td>
+                <div class="k-bus">
+                  <span class="k-bus-icon"><i class="fa-solid fa-bus"></i></span>
+                  <span><span class="k-bus-no">77</span><span class="k-bus-plate">Plate 91</span></span>
+                </div>
+              </td>
+              <td>
+                <span class="k-route">San Carlos <i class="fa-solid fa-arrow-right-long"></i> Bacolod</span>
+                <span class="k-route-sub">Ceres Liner &middot; Ordinary</span>
+              </td>
+              <td><span class="k-terminal-pill"><span class="k-dot"></span> San Carlos</span></td>
+              <td><span class="k-bay">Bay 2</span></td>
+              <td><span class="k-time">7:15 PM</span></td>
+              <td><span class="k-status is-at"><span class="k-status-dot"></span> At Terminal</span></td>
+            </tr>
+
+            <tr class="k-bus-row">
+              <td>
+                <div class="k-bus">
+                  <span class="k-bus-icon"><i class="fa-solid fa-bus"></i></span>
+                  <span><span class="k-bus-no">55</span><span class="k-bus-plate">Plate 203</span></span>
+                </div>
+              </td>
+              <td>
+                <span class="k-route">Hinigaran <i class="fa-solid fa-arrow-right-long"></i> Bacolod</span>
+                <span class="k-route-sub">Ceres Liner &middot; Ordinary</span>
+              </td>
+              <td><span class="k-terminal-pill"><span class="k-dot"></span> Hinigaran</span></td>
+              <td><span class="k-bay">Bay 1</span></td>
+              <td><span class="k-time">7:18 PM</span></td>
+              <td><span class="k-status is-at"><span class="k-status-dot"></span> At Terminal</span></td>
+            </tr>
+
+            <tr class="k-section inbound">
+              <td colspan="6"><span>Arriving / en route</span><span class="k-section-count">4 buses</span></td>
+            </tr>
+
+            <tr class="k-bus-row">
+              <td>
+                <div class="k-bus">
+                  <span class="k-bus-icon"><i class="fa-solid fa-bus"></i></span>
+                  <span><span class="k-bus-no">208</span><span class="k-bus-plate">Plate 147</span></span>
+                </div>
+              </td>
+              <td>
+                <span class="k-route">Kabankalan <i class="fa-solid fa-arrow-right-long"></i> Bacolod</span>
+                <span class="k-route-sub">Ceres Liner &middot; Aircon</span>
+              </td>
+              <td><span class="k-terminal-pill hub"><span class="k-dot"></span> Bacolod</span></td>
+              <td><span class="k-bay">Bay 2</span></td>
+              <td><span class="k-time">6:38 PM</span></td>
+              <td><span class="k-status is-arriving"><span class="k-status-dot"></span> Arriving</span></td>
+            </tr>
+
+            <tr class="k-bus-row">
+              <td>
+                <div class="k-bus">
+                  <span class="k-bus-icon"><i class="fa-solid fa-bus"></i></span>
+                  <span><span class="k-bus-no">305</span><span class="k-bus-plate">Plate 88</span></span>
+                </div>
+              </td>
+              <td>
+                <span class="k-route">Dumaguete <i class="fa-solid fa-arrow-right-long"></i> Bacolod</span>
+                <span class="k-route-sub">Ceres Liner &middot; Aircon</span>
+              </td>
+              <td><span class="k-terminal-pill hub"><span class="k-dot"></span> Bacolod</span></td>
+              <td><span class="k-bay">Bay 4</span></td>
+              <td><span class="k-time">6:52 PM</span></td>
+              <td><span class="k-status is-enroute"><span class="k-status-dot"></span> En Route</span></td>
+            </tr>
+
+            <tr class="k-bus-row">
+              <td>
+                <div class="k-bus">
+                  <span class="k-bus-icon"><i class="fa-solid fa-bus"></i></span>
+                  <span><span class="k-bus-no">330</span><span class="k-bus-plate">Plate 64</span></span>
+                </div>
+              </td>
+              <td>
+                <span class="k-route">San Carlos <i class="fa-solid fa-arrow-right-long"></i> Bacolod</span>
+                <span class="k-route-sub">Ceres Liner &middot; Ordinary</span>
+              </td>
+              <td><span class="k-terminal-pill hub"><span class="k-dot"></span> Bacolod</span></td>
+              <td><span class="k-bay">Bay 5</span></td>
+              <td><span class="k-time">7:05 PM</span></td>
+              <td><span class="k-status is-delayed"><span class="k-status-dot"></span> Delayed</span></td>
+            </tr>
+
+            <tr class="k-bus-row">
+              <td>
+                <div class="k-bus">
+                  <span class="k-bus-icon"><i class="fa-solid fa-bus"></i></span>
+                  <span><span class="k-bus-no">44</span><span class="k-bus-plate">Plate 119</span></span>
+                </div>
+              </td>
+              <td>
+                <span class="k-route">San Carlos <i class="fa-solid fa-arrow-right-long"></i> Bacolod</span>
+                <span class="k-route-sub">Ceres Liner &middot; Ordinary</span>
+              </td>
+              <td><span class="k-terminal-pill hub"><span class="k-dot"></span> Bacolod</span></td>
+              <td><span class="k-bay">Bay 3</span></td>
+              <td><span class="k-time">7:20 PM</span></td>
+              <td><span class="k-status is-enroute"><span class="k-status-dot"></span> En Route</span></td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+    </section>
+
+    <!-- Footer -->
+    <footer class="k-footer">
+      <div class="k-legend" aria-label="Status legend">
+        <span><i class="legend-at"></i> At Terminal</span>
+        <span><i class="legend-boarding"></i> Boarding</span>
+        <span><i class="legend-arriving"></i> Arriving</span>
+        <span><i class="legend-enroute"></i> En Route</span>
+        <span><i class="legend-delayed"></i> Delayed</span>
+      </div>
+      <div class="k-ticker" aria-label="Terminal announcements">
+        <div class="k-ticker-track">
+          <span><b>NOW BOARDING</b> &middot; Bus 53 &middot; Bacolod &middot; Bay 1</span>
+          <span><b>ARRIVING</b> &middot; Bus 208 &middot; Bacolod &middot; Bay 2</span>
+          <span><b>DELAYED</b> &middot; Bus 330 &middot; from San Carlos</span>
+          <span><b>NEXT DEPARTURE</b> &middot; Bus 364 &middot; Kabankalan &middot; 6:30 PM</span>
+          <span><b>REMINDER</b> &middot; Keep your ticket ready and listen for boarding calls</span>
+          <span><b>NOW BOARDING</b> &middot; Bus 53 &middot; Bacolod &middot; Bay 1</span>
+          <span><b>ARRIVING</b> &middot; Bus 208 &middot; Bacolod &middot; Bay 2</span>
+          <span><b>DELAYED</b> &middot; Bus 330 &middot; from San Carlos</span>
+          <span><b>NEXT DEPARTURE</b> &middot; Bus 364 &middot; Kabankalan &middot; 6:30 PM</span>
+          <span><b>REMINDER</b> &middot; Keep your ticket ready and listen for boarding calls</span>
+        </div>
+      </div>
+    </footer>
+  </div>
+
+  <script>
+    (function () {
+      var timeEl = document.getElementById('kioskTime');
+      var dateEl = document.getElementById('kioskDate');
+      function tick() {
+        var now = new Date();
+        timeEl.textContent = now.toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' });
+        dateEl.textContent = now.toLocaleDateString([], { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' });
+      }
+      tick();
+      window.setInterval(tick, 1000);
+
+      var btn = document.getElementById('kioskFullscreen');
+      btn.addEventListener('click', function () {
+        if (!document.fullscreenElement) {
+          if (document.documentElement.requestFullscreen) {
+            document.documentElement.requestFullscreen();
+          }
+        } else if (document.exitFullscreen) {
+          document.exitFullscreen();
+        }
+      });
+      document.addEventListener('fullscreenchange', function () {
+        btn.innerHTML = document.fullscreenElement
+          ? '<i class="fa-solid fa-compress"></i>'
+          : '<i class="fa-solid fa-expand"></i>';
+      });
+    })();
+  </script>
+</body>
+</html>

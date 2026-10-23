@@ -449,6 +449,11 @@ def bus_get_ajax(request, pk):
     return JsonResponse(_bus_gps_payload(bus))
 
 
+def bus_kiosk_page(request):
+    """Airport-style terminal monitor board for passengers (static design)."""
+    return render(request, 'bus/terminal_monitor.html')
+
+
 @never_cache
 def bus_tap_page(request, token):
     """Conductor check-in: the bus QR opens this page, the conductor picks the
