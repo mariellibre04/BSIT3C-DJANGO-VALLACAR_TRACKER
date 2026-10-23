@@ -220,7 +220,6 @@
     <div class="modal-header"><h5 class="modal-title" id="bookModalTitle">Book seats</h5><button type="button" class="btn-close" data-bs-dismiss="modal"></button></div>
     <form id="bookForm">{% csrf_token %}
       <input type="hidden" name="bus" id="book_bus_id">
-      <input type="hidden" name="pickup" id="book_pickup">
       <div class="modal-body">
         <div id="bookFormError" class="alert alert-danger d-none"></div>
         <div id="bookSuccess" class="alert alert-success d-none"></div>
@@ -228,7 +227,8 @@
           <div class="col-12"><label class="form-label">Your name</label><input type="text" name="passenger_name" id="book_name" class="form-control" placeholder="e.g. Maria Santos" required></div>
           <div class="col-6"><label class="form-label">Contact number</label><input type="text" name="contact" id="book_contact" class="form-control" placeholder="e.g. 0917 123 4567" required></div>
           <div class="col-6"><label class="form-label">Seats</label><input type="number" name="seats" id="book_seats" class="form-control" min="1" value="1" required><div class="form-hint" id="bookSeatsHint"></div></div>
-          <div class="col-12 text-muted small">Boarding at <strong id="bookPickupLabel"></strong>. The driver / conductor will be notified of your booking. Free seat reservation â€” no payment needed.</div>
+          <div class="col-12"><label class="form-label" for="book_pickup">Pickup place</label><input type="text" name="pickup" id="book_pickup" class="form-control" placeholder="e.g. Kabankalan Terminal" required><div class="form-hint">Type where you will be picked up.</div></div>
+          <div class="col-12 text-muted small">The driver / conductor will be notified of your booking. Free seat reservation â€” no payment needed.</div>
         </div>
       </div>
       <div class="modal-footer"><button type="button" class="btn btn-ghost-secondary" data-bs-dismiss="modal">Cancel</button><button type="submit" class="btn vt-btn-red" id="bookSubmitBtn">Confirm booking</button><button type="button" class="btn vt-btn-red d-none" id="bookConfirmBtn"><i class="fa-solid fa-circle-check me-1"></i>Confirm</button></div>
@@ -420,7 +420,6 @@ document.querySelectorAll('select.city-select').forEach(function (el) {
     btn.addEventListener('click', function() {
       document.getElementById('book_bus_id').value = btn.getAttribute('data-bus-id');
       document.getElementById('book_pickup').value = btn.getAttribute('data-pickup');
-      document.getElementById('bookPickupLabel').textContent = btn.getAttribute('data-pickup');
       document.getElementById('bookModalTitle').textContent = 'Book seats on ' + btn.getAttribute('data-bus-number');
       const max = parseInt(btn.getAttribute('data-max'), 10) || 1;
       const seats = document.getElementById('book_seats');

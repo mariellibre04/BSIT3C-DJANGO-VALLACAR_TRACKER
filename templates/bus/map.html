@@ -74,25 +74,36 @@
   .dist-10 { background:#a855f7; }
   .dist-30 { background:#ef4444; }
 
-  #live-map { height: calc(100vh - 220px); min-height: 520px; z-index:1; }
+  #live-map { flex:1 1 auto; height:auto; min-height:520px; z-index:0; }
   @media (max-width: 992px) {
     .live-track-main { flex-direction:column; }
     .live-track-left { flex:none; width:100%; max-height:420px; overflow-y:auto; }
     .live-track-hamburger { display:block; }
     .live-track-title { font-size:1.5rem; }
-    .live-track-search { width:calc(100% - 2rem); left:.5rem; right:.5rem; }
   }
 
   .live-track-search {
-    position:absolute; top:1rem; left:1rem; z-index:100;
+    position:relative; z-index:50; margin:1rem 1rem 0; width:auto;
     background:#fff; border:1px solid var(--tblr-border-color); border-radius:10px;
-    box-shadow:var(--tblr-shadow-card); overflow:visible; width:360px;
+    box-shadow:var(--tblr-shadow-card); overflow:visible;
   }
-  .live-track-search-inner { border-radius:10px; background:#fff; }
-  .live-track-search-inner { display:flex; align-items:center; gap:.6rem; padding:.55rem .75rem; }
-  .live-track-search i { color:#6c757d; font-size:1rem; }
-  .live-track-search input { flex:1; border:none; outline:none; font-size:.9rem; background:transparent; }
+  .live-track-search-inner { border-radius:10px; background:#fff; color:#1c1e36; cursor:text; }
+  .live-track-search-inner { display:flex; align-items:center; gap:.6rem; padding:.45rem .75rem; }
+  .live-track-search-label { display:flex; align-items:center; gap:.6rem; flex:1; min-width:0; cursor:text; color:#1c1e36; }
+  .live-track-search i { color:#6c757d; font-size:1rem; pointer-events:none; flex-shrink:0; }
+  .live-track-search input {
+    flex:1; min-width:0; border:none; outline:none; font-size:.95rem;
+    background:transparent; cursor:text; padding:.15rem 0;
+    color:#1c1e36 !important; -webkit-text-fill-color:#1c1e36; caret-color:#1c1e36;
+  }
+  .live-track-search input::placeholder { color:#8a94a6; opacity:1; }
   .live-track-search input:focus { outline:none; }
+  .live-track-search-btn {
+    flex-shrink:0; border:none; background:#C1121F; color:#fff; font-size:.8rem;
+    font-weight:700; border-radius:6px; padding:.3rem .75rem; cursor:pointer;
+  }
+  .live-track-search-btn:hover { background:#a00f1a; }
+  .live-track-search-btn:focus-visible { outline:2px solid #C1121F; outline-offset:2px; }
   .live-track-search-results { display:none; list-style:none; margin:0; padding:0; position:absolute; top:100%; left:0; right:0; max-height:300px; overflow-y:auto; background:#fff; border:1px solid var(--tblr-border-color); border-top:none; border-radius:0 0 10px 10px; z-index:101; box-shadow:var(--tblr-shadow-card); }
   .live-track-search-results.show { display:block; }
   .live-track-search-item { padding:.6rem .8rem; cursor:pointer; font-size:.875rem; color:#1c1e36; border-bottom:1px solid #f1f3f5; }
@@ -211,13 +222,18 @@
 
     <!-- Right panel: Map -->
     <section class="live-track-right" aria-label="Live map">
-      <div class="live-track-card" style="height:100%; position:relative; overflow:hidden;">
+      <div class="live-track-card" style="height:100%; overflow:hidden; display:flex; flex-direction:column;">
         <!-- Search bar for places -->
         <div class="live-track-search" role="search" aria-label="Search places">
-          <div class="live-track-search-inner">
-            <i class="fa-solid fa-magnifying-glass" aria-hidden="true"></i>
-            <input type="text" id="place-search" placeholder="Search a place in Negros (e.g. Kabankalan)…" autocomplete="off" aria-label="Search for a place in Negros Island" aria-autocomplete="list" aria-controls="place-search-results" aria-expanded="false">
-          </div>
+          <form method="get" action="{% url 'bus:bus_map' %}" id="place-search-form">
+            <div class="live-track-search-inner">
+              <label class="live-track-search-label" for="place-search">
+                <i class="fa-solid fa-magnifying-glass" aria-hidden="true"></i>
+                <input type="text" name="place" value="{{ search_query }}" id="place-search" placeholder="Search a place on the map (e.g. Kabankalan, Iloilo City)…" autocomplete="off" aria-label="Search for a place on the map" aria-autocomplete="list" aria-controls="place-search-results" aria-expanded="false">
+              </label>
+              <button type="submit" class="live-track-search-btn">Search</button>
+            </div>
+          </form>
           <ul class="live-track-search-results" id="place-search-results" role="listbox" aria-label="Search results"></ul>
         </div>
 
@@ -232,6 +248,7 @@
   {% endif %}
 
 </div>
+{% endblock %}
 
 {% block extra_js %}
 <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
@@ -575,10 +592,19 @@
   if (waitingMarker) allBounds.push(waitingMarker.getLatLng());
   if (allBounds.length) map.fitBounds(allBounds, { padding: [40, 40], maxZoom: 12 });
 
+  // A place submitted through the plain form (?place=...) opens centered here.
+  if (data.search_target) {
+    const t = data.search_target;
+    map.setView([t.lat, t.lng], 12);
+    searchMarker = L.marker([t.lat, t.lng]).addTo(map)
+      .bindPopup('<b>' + escapeHtml(t.name) + '</b><br>Search result')
+      .openPopup();
+  }
+
   // --- Continuous real-time movement ---
   // Each bus advances along its origin -> destination track every frame, so it
-  // glides smoothly like a live GPS feed. At the end it turns around (return
-  // trip) instead of freezing.
+  // glides smoothly like a live GPS feed. Once it reaches the destination it
+  // stays parked there (no simulated return trip).
   function animateBusMovement(now) {
     const dt = Math.min((now - lastFrameTime) / 1000, 5);
     lastFrameTime = now;
@@ -589,18 +615,15 @@
       const lengthKm = Math.max(haversine(from.lat, from.lng, to.lat, to.lng) * ROAD_FACTOR, 0.2);
       const speed = busSpeed(bus);
 
-      if (speed > 0) {
-        bus.progress += ((speed * SIM_TIME_SCALE * dt) / 3600) / lengthKm * bus.dir;
-        if (bus.progress >= 1) { bus.progress = 1; bus.dir = -1; }
-        else if (bus.progress <= 0) { bus.progress = 0; bus.dir = 1; }
+      if (speed > 0 && bus.progress < 1) {
+        bus.progress += ((speed * SIM_TIME_SCALE * dt) / 3600) / lengthKm;
+        if (bus.progress > 1) bus.progress = 1;
       }
 
       const pos = pointOnTrack(bus.track, bus.progress);
       bus.lat = pos.lat;
       bus.lng = pos.lng;
-      bus.rotation = bus.dir >= 0
-        ? bearing(from.lat, from.lng, to.lat, to.lng)
-        : bearing(to.lat, to.lng, from.lat, from.lng);
+      bus.rotation = bearing(from.lat, from.lng, to.lat, to.lng);
 
       bus.marker.setLatLng([pos.lat, pos.lng]);
       applyBusRotation(bus);
@@ -713,6 +736,44 @@
   const resultsBox = document.getElementById('place-search-results');
   let debounceTimer;
   let searchAbortController = null;
+  let suppressFocusSearch = false;
+
+  // Clicking anywhere on the search bar (icon, padding) must focus the input
+  // so the user can start typing immediately.
+  const searchBar = document.querySelector('.live-track-search-inner');
+  if (searchBar) {
+    searchBar.addEventListener('mousedown', function(e) {
+      if (e.target !== searchInput) {
+        e.preventDefault();
+        searchInput.focus();
+      }
+    });
+    searchBar.addEventListener('click', function(e) {
+      if (e.target !== searchInput) searchInput.focus();
+    });
+  }
+
+  // Safety net: if anything transparent sits above the bar (map panes, a
+  // stray backdrop, etc.), a click inside the bar's box still focuses the
+  // input so the passenger can type.
+  const searchRoot = document.querySelector('.live-track-search');
+  const searchBtn = document.querySelector('.live-track-search-btn');
+  if (searchRoot) {
+    document.addEventListener('pointerdown', function(e) {
+      if (e.target === searchInput || e.target === searchBtn) return;
+      const r = searchRoot.getBoundingClientRect();
+      if (e.clientX >= r.left && e.clientX <= r.right &&
+          e.clientY >= r.top && e.clientY <= r.bottom) {
+        e.preventDefault();
+        searchInput.focus();
+      }
+    }, true);
+  }
+
+  // On desktop the field is ready to type in immediately after loading.
+  if (window.matchMedia && window.matchMedia('(hover: hover) and (pointer: fine)').matches) {
+    searchInput.focus({ preventScroll: true });
+  }
 
   function setSearchExpanded(open) {
     searchInput.setAttribute('aria-expanded', open ? 'true' : 'false');
@@ -729,16 +790,53 @@
     setSearchExpanded(true);
   }
 
+  // Every Negros place is embedded in the page, so results appear instantly
+  // and the search keeps working even when the remote geocoder is unreachable.
+  const SEARCH_PLACES = (data.places && data.places.length) ? data.places : (data.terminals || []);
+
   function localPlaceMatches(query) {
-    const q = query.toLowerCase();
-    return (data.terminals || []).filter(function(t) {
-      return t && t.name && t.name.toLowerCase().indexOf(q) !== -1;
-    }).map(function(t) {
-      return { lat: t.lat, lon: t.lng, display_name: t.name + ', Negros Island, Philippines' };
+    const q = query.trim().toLowerCase();
+    if (!q) return [];
+    const scored = [];
+    SEARCH_PLACES.forEach(function(t) {
+      if (!t || t.lat == null || t.lng == null) return;
+      const name = (t.name || '').toLowerCase();
+      const label = (t.label || '').toLowerCase();
+      const province = (t.province || '').toLowerCase();
+      let score;
+      if (q === name) score = 0;
+      else if (name.indexOf(q) === 0) score = 1;
+      else if (name.indexOf(q) !== -1) score = 2;
+      else if (q.indexOf(name) !== -1) score = 3;
+      else if ((label + ' ' + province).indexOf(q) !== -1) score = 4;
+      else return;
+      scored.push({ score: score, place: t });
     });
+    scored.sort(function(a, b) {
+      return a.score - b.score || (a.place.name || '').length - (b.place.name || '').length;
+    });
+    const out = [], seen = {};
+    scored.forEach(function(item) {
+      const t = item.place;
+      const key = t.name.toLowerCase() + '|' + t.lat + '|' + t.lng;
+      if (seen[key]) return;
+      seen[key] = true;
+      const province = (t.province || '').trim();
+      out.push({
+        lat: t.lat,
+        lon: t.lng,
+        display_name: province
+          ? t.name + ', ' + province + ', Philippines'
+          : t.name + ', Negros Island, Philippines'
+      });
+    });
+    return out.slice(0, 8);
   }
 
   function selectPlace(place, lat, lon) {
+    // Cancel any in-flight search so its late response cannot reopen the list.
+    clearTimeout(debounceTimer);
+    if (searchAbortController) searchAbortController.abort();
     searchInput.value = place.display_name;
     resultsBox.classList.remove('show');
     setSearchExpanded(false);
@@ -747,6 +845,8 @@
     searchMarker = L.marker([lat, lon]).addTo(map)
       .bindPopup('<b>' + escapeHtml(String(place.display_name).split(',')[0]) + '</b><br>' + escapeHtml(place.display_name))
       .openPopup();
+    // Keep focus on the input without re-running the search for the selected name.
+    suppressFocusSearch = true;
     searchInput.focus();
   }
 
@@ -810,6 +910,32 @@
     setSearchExpanded(true);
   }
 
+  function showPopularPlaces() {
+    const all = (data.places || data.terminals || []).map(function(p) {
+      const province = (p.province || '').trim();
+      return {
+        name: p.name,
+        display_name: province
+          ? p.name + ', ' + province + ', Philippines'
+          : p.name + ', Negros Island, Philippines',
+        lat: p.lat,
+        lon: (p.lng !== undefined ? p.lng : p.lon)
+      };
+    });
+    if (!all.length) return;
+    const featured = ['Bacolod', 'Kabankalan', 'Dumaguete', 'Iloilo City', 'Cebu', 'Tagbilaran', 'San Carlos', 'Sipalay'];
+    const picked = [];
+    const push = function(p) {
+      if (picked.length < 8 && !picked.some(function(x) { return x.display_name === p.display_name; })) picked.push(p);
+    };
+    featured.forEach(function(name) {
+      const hit = all.find(function(p) { return p.name.toLowerCase().indexOf(name.toLowerCase()) === 0; });
+      if (hit) push(hit);
+    });
+    all.forEach(push);
+    showSearchResults(picked);
+  }
+
   function doSearch(q) {
     if (searchAbortController) searchAbortController.abort();
     searchAbortController = new AbortController();
@@ -843,7 +969,12 @@
     debounceTimer = setTimeout(function() { doSearch(q); }, 250);
   });
   searchInput.addEventListener('focus', function() {
+    if (suppressFocusSearch) { suppressFocusSearch = false; return; }
     if (this.value.trim().length >= 2) doSearch(this.value.trim());
+    else showPopularPlaces();
+  });
+  searchInput.addEventListener('click', function() {
+    if (this.value.trim().length < 2) showPopularPlaces();
   });
   document.addEventListener('click', function(e) {
     if (!searchInput.contains(e.target) && !resultsBox.contains(e.target)) {
@@ -856,8 +987,30 @@
       resultsBox.classList.remove('show');
       setSearchExpanded(false);
       this.blur();
+    } else if (e.key === 'Enter') {
+      // Enter picks the first suggestion (or runs the search if none yet).
+      const first = resultsBox.querySelector('.live-track-search-item');
+      if (first) {
+        e.preventDefault();
+        first.click();
+      } else if (this.value.trim().length >= 2) {
+        e.preventDefault();
+        doSearch(this.value.trim());
+      }
     }
   });
+
+  // Works even if the dropdown script is blocked: submits ?place= and the
+  // server opens the map centered on that place.
+  const searchForm = document.getElementById('place-search-form');
+  if (searchForm) {
+    searchForm.addEventListener('submit', function(e) {
+      e.preventDefault();
+      const q = searchInput.value.trim();
+      if (q.length >= 2) doSearch(q);
+      else { searchInput.focus(); showPopularPlaces(); }
+    });
+  }
 
   // --- Hamburger menu (for mobile sidebar toggle) ---
   const hamburger = document.querySelector('.live-track-hamburger');
@@ -884,5 +1037,4 @@
   });
 })();
 </script>
-{% endblock %}
 {% endblock %}

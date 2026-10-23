@@ -14,6 +14,7 @@ from django.contrib.auth.decorators import login_required
 from django.views.decorators.http import require_POST
 from django.core.cache import cache
 from django.core.paginator import Paginator
+from django.views.decorators.cache import never_cache
 from django.db import IntegrityError
 from django.db.models import Q
 from django.utils import timezone
@@ -101,6 +102,32 @@ def _load_city_places():
 
 CITY_PLACES = _load_city_places()
 PLACES = TERMINALS + CITY_PLACES
+
+# Place search must work without the remote geocoder, and must cover every
+# city/municipality visible inside the map bounds (Negros, Panay, Cebu, Bohol,
+# ...) so searching a place shown on the map finds it.
+MAP_LAT_MIN, MAP_LNG_MIN, MAP_LAT_MAX, MAP_LNG_MAX = 8.5, 121.8, 11.5, 124.2
+
+
+def _inside_map_bounds(place):
+    return (MAP_LAT_MIN <= place['lat'] <= MAP_LAT_MAX
+            and MAP_LNG_MIN <= place['lng'] <= MAP_LNG_MAX)
+
+
+def _dedupe_places(places):
+    seen, unique = set(), []
+    for p in places:
+        key = ((p.get('name') or '').strip().lower(), round(p['lat'], 3), round(p['lng'], 3))
+        if key in seen:
+            continue
+        seen.add(key)
+        unique.append(p)
+    return unique
+
+
+SEARCH_PLACES = _dedupe_places(
+    list(TERMINALS) + [p for p in CITY_PLACES if _inside_map_bounds(p)]
+)
 
 # Each entry: (place keywords, lat, lng).
 ROUTE_TERMINAL_GPS = [(t['keywords'], t['lat'], t['lng']) for t in TERMINALS]
@@ -211,6 +238,20 @@ def terminal_json(t):
         'lat': t['lat'],
         'lng': t['lng'],
     }
+
+
+def _search_places_json():
+    """Every place the live-map search can match without the remote geocoder."""
+    return [
+        {
+            'name': p['name'],
+            'label': p.get('label') or p['name'],
+            'province': p.get('province', ''),
+            'lat': p['lat'],
+            'lng': p['lng'],
+        }
+        for p in SEARCH_PLACES
+    ]
 
 
 def _bus_status_context(bus, now=None, reference=None):
@@ -617,7 +658,21 @@ def eta_map_json(results, waiting):
     })
 
 
-def map_all_buses_json(buses, waiting):
+def _find_search_place(query):
+    """Resolve a typed place name to a known map place (for the no-JS form)."""
+    q = (query or '').strip().lower()
+    if not q:
+        return None
+    for p in SEARCH_PLACES:
+        if (p.get('name') or '').lower() == q or (p.get('label') or '').lower() == q:
+            return p
+    for p in SEARCH_PLACES:
+        if q in (p.get('name') or '').lower() or q in (p.get('label') or '').lower():
+            return p
+    return None
+
+
+def map_all_buses_json(buses, waiting, search_target=None):
     """Map payload listing every active bus with its movement status label."""
     items = []
     now = timezone.now()
@@ -658,6 +713,8 @@ def map_all_buses_json(buses, waiting):
         'waiting': {'name': waiting['name'], 'lat': waiting['lat'], 'lng': waiting['lng']} if waiting else None,
         'buses': items,
         'terminals': [terminal_json(t) for t in TERMINALS],
+        'places': _search_places_json(),
+        'search_target': search_target,
     })
 
 
@@ -668,6 +725,7 @@ def _resolve_trip_params(request):
     return origin_name, dest_name, waiting_name
 
 
+@never_cache
 def bus_map_page(request):
     """Live GPS tracking + ETA board (public, no login).
 
@@ -698,6 +756,16 @@ def bus_map_page(request):
     else:
         results = build_eta_results(active_buses, origin, dest, waiting, today, now)
 
+    search_query = request.GET.get('place', '').strip()
+    search_place = _find_search_place(search_query)
+    search_target = None
+    if search_place:
+        search_target = {
+            'name': search_place['name'],
+            'lat': search_place['lat'],
+            'lng': search_place['lng'],
+        }
+
     return render(request, 'bus/map.html', {
         'terminals': PLACES,
         'origin_name': origin.get('label', origin['name']) if origin else origin_name,
@@ -705,9 +773,10 @@ def bus_map_page(request):
         'waiting_name': waiting.get('label', waiting['name']) if waiting else waiting_name,
         'results': results, 'error': error,
         'today': today, 'now': timezone.localtime(now),
-        'map_json': map_all_buses_json(active_buses, waiting),
+        'map_json': map_all_buses_json(active_buses, waiting, search_target),
         'movement_choices': Bus.MOVEMENT_CHOICES,
         'is_admin': is_admin,
+        'search_query': search_query,
         'default_lat': 12.8797, 'default_lng': 121.7740,
     })
 
@@ -727,19 +796,59 @@ def bus_locations_ajax(request):
 NEGROS_VIEWBOX = '121.8,8.5,124.2,11.5'  # lon_min, lat_min, lon_max, lat_max
 
 
-def _local_place_matches(query, limit=5):
-    """Match known Vallacar terminals locally so search still works offline."""
-    q = (query or '').lower()
-    matches = []
-    for t in TERMINALS:
-        terms = (t['name'].lower(),) + tuple(t['keywords'])
-        if any(q in term or term in q for term in terms):
-            matches.append({
-                'lat': t['lat'], 'lon': t['lng'],
-                'display_name': f"{t['name']}, Negros Island, Philippines",
-                'local': True,
-            })
-    return matches[:limit]
+def _local_place_matches(query, limit=8):
+    """Match known places locally so search still works without the geocoder.
+
+    Covers the Vallacar terminals plus every Negros city/municipality from
+    ``ph_cities.json``. Results are ordered from exact to partial matches.
+    """
+    q = (query or '').strip().lower()
+    if not q:
+        return []
+
+    scored = []
+    for t in SEARCH_PLACES:
+        name = (t.get('name') or '').lower()
+        label = (t.get('label') or '').lower()
+        province = (t.get('province') or '').lower()
+        terms = tuple(x for x in (name, label, province) + tuple(t.get('keywords') or ()) if x)
+        if not terms:
+            continue
+
+        if q == name:
+            score = 0
+        elif name.startswith(q):
+            score = 1
+        elif q in name:
+            score = 2
+        elif name in q:
+            score = 3
+        elif any(q in term for term in terms):
+            score = 4
+        else:
+            continue
+        scored.append((score, len(name), t))
+
+    scored.sort(key=lambda item: (item[0], item[1]))
+    matches, seen = [], set()
+    for _score, _length, t in scored:
+        province = (t.get('province') or '').strip()
+        key = (t['name'].lower(), round(t['lat'], 3), round(t['lng'], 3))
+        if key in seen:
+            continue
+        seen.add(key)
+        display_name = (
+            f"{t['name']}, {province}, Philippines" if province
+            else f"{t['name']}, Negros Island, Philippines"
+        )
+        matches.append({
+            'lat': t['lat'], 'lon': t['lng'],
+            'display_name': display_name,
+            'local': True,
+        })
+        if len(matches) >= limit:
+            break
+    return matches
 
 
 def geocode_ajax(request):
