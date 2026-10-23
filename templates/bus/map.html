@@ -533,8 +533,12 @@
 
     let progress = 0.5;
     if (track) {
-      if (b.movement_status === 'at_terminal') {
-        // Park terminal buses at the start of their corridor.
+      if (b.movement_status === 'at_terminal' && !b.is_approx && b.lat != null && b.lng != null) {
+        // A conductor terminal tap gives a real fix: park the bus at the
+        // terminal on its route instead of the corridor start.
+        progress = projectOnPath(b.lat, b.lng, track);
+      } else if (b.movement_status === 'at_terminal') {
+        // No fix yet: park terminal buses at the start of their corridor.
         progress = 0.02;
       } else if (b.is_approx) {
         // No GPS fix: spread buses along the corridor so they do not stack.

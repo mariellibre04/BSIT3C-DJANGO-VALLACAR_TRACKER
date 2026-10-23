@@ -63,6 +63,9 @@
             <td><span class="badge bg-success-lt text-success">{{ bus.get_status_display }}</span></td>
             <td>
               <div class="d-flex gap-1">
+                <button type="button" class="btn btn-ghost-secondary btn-icon btn-sm" data-bs-toggle="modal" data-bs-target="#busQrModal" data-qr-url="{{ request.scheme }}://{{ request.get_host }}{% url 'bus:bus_tap' bus.qr_token %}" data-bus-number="{{ bus.bus_number }}" title="Bus QR code">
+                  <i class="fas fa-qrcode text-secondary"></i>
+                </button>
                 <button type="button" class="btn btn-ghost-secondary btn-icon btn-sm" data-bs-toggle="modal" data-bs-target="#busModal" data-mode="edit" data-id="{{ bus.id }}" data-bus_number="{{ bus.bus_number }}" data-plate_number="{{ bus.plate_number }}" data-capacity="{{ bus.capacity }}" data-route="{{ bus.route }}" data-status="{{ bus.status }}" data-current_location="{{ bus.current_location }}" data-latitude="{{ bus.latitude|default:'' }}" data-longitude="{{ bus.longitude|default:'' }}" data-movement_status="{{ bus.movement_status }}" data-movement_reason="{{ bus.movement_reason }}" title="Edit">
                   <i class="fas fa-edit text-primary"></i>
                 </button>
@@ -114,6 +117,21 @@
   </div></div>
 </div>
 
+<div class="modal modal-blur fade" id="busQrModal" tabindex="-1">
+  <div class="modal-dialog modal-sm modal-dialog-centered"><div class="modal-content">
+    <div class="modal-header"><h5 class="modal-title">Bus QR — <span id="busQrNumber"></span></h5><button type="button" class="btn-close" data-bs-dismiss="modal"></button></div>
+    <div class="modal-body text-center">
+      <div id="busQrBox" class="d-inline-block p-2 bg-white rounded"></div>
+      <div class="text-muted small mt-2">Conductor scans this at each terminal to record a tap.</div>
+      <div class="mt-2"><a id="busQrLink" href="#" target="_blank" rel="noopener" class="small text-break"></a></div>
+    </div>
+    <div class="modal-footer">
+      <button type="button" class="btn btn-outline-secondary" id="downloadBusQr">Download PNG</button>
+      <button type="button" class="btn btn-primary" id="printBusQr">Print</button>
+    </div>
+  </div></div>
+</div>
+
 <div class="modal modal-blur fade" id="deleteBusModal" tabindex="-1">
   <div class="modal-dialog modal-sm modal-dialog-centered"><div class="modal-content">
     <div class="modal-header"><h5 class="modal-title">Delete Bus</h5><button type="button" class="btn-close" data-bs-dismiss="modal"></button></div>
@@ -124,10 +142,12 @@
 {% endblock %}
 
 {% block extra_js %}
+<script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
 <script>
 (function() {
   const modalEl = document.getElementById('busModal');
   const deleteModalEl = document.getElementById('deleteBusModal');
+  const qrModalEl = document.getElementById('busQrModal');
   const form = document.getElementById('busForm');
   const alertBox = document.getElementById('busAlert');
   const title = document.getElementById('busModalTitle');
@@ -175,6 +195,70 @@
     if (!currentId) return;
     fetch('/bus/ajax/delete/' + currentId + '/', {method: 'POST', headers: {'X-CSRFToken': document.querySelector('[name=csrfmiddlewaretoken]').value}})
     .then(r => r.json()).then(data => { if (data.status === 'deleted') window.location.reload(); });
+  });
+
+  // --- Unique bus QR code ---
+  let qrUrl = '';
+  let qrBusNumber = '';
+  const qrBox = document.getElementById('busQrBox');
+  qrModalEl.addEventListener('show.bs.modal', function(event) {
+    const button = event.relatedTarget;
+    if (!button) return;
+    qrUrl = button.getAttribute('data-qr-url');
+    qrBusNumber = button.getAttribute('data-bus-number') || '';
+    document.getElementById('busQrNumber').textContent = qrBusNumber;
+    const link = document.getElementById('busQrLink');
+    link.href = qrUrl;
+    link.textContent = qrUrl;
+    qrBox.innerHTML = '';
+    if (window.QRCode) {
+      new QRCode(qrBox, {
+        text: qrUrl,
+        width: 240,
+        height: 240,
+        colorDark: '#000000',
+        colorLight: '#ffffff',
+        correctLevel: QRCode.CorrectLevel.M
+      });
+    } else {
+      qrBox.innerHTML = '<div class="text-danger small p-3">QR library failed to load. Check your internet connection.</div>';
+    }
+  });
+  function getQrCanvas() { return qrBox.querySelector('canvas'); }
+  document.getElementById('downloadBusQr').addEventListener('click', function() {
+    const canvas = getQrCanvas();
+    if (!canvas) return;
+    const a = document.createElement('a');
+    a.download = 'bus-' + qrBusNumber.replace(/[^a-z0-9_-]+/gi, '_') + '-qr.png';
+    a.href = canvas.toDataURL('image/png');
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+  });
+  document.getElementById('printBusQr').addEventListener('click', function() {
+    const canvas = getQrCanvas();
+    if (!canvas) return;
+    const win = window.open('', '_blank');
+    if (!win) return;
+    const doc = win.document;
+    const wrap = doc.createElement('div');
+    wrap.style.textAlign = 'center';
+    wrap.style.fontFamily = 'sans-serif';
+    wrap.style.padding = '24px';
+    const heading = doc.createElement('h2');
+    heading.textContent = 'Bus ' + qrBusNumber;
+    const img = doc.createElement('img');
+    img.src = canvas.toDataURL('image/png');
+    img.width = 320;
+    img.height = 320;
+    const caption = doc.createElement('p');
+    caption.textContent = qrUrl;
+    wrap.appendChild(heading);
+    wrap.appendChild(img);
+    wrap.appendChild(caption);
+    doc.body.appendChild(wrap);
+    win.focus();
+    setTimeout(function() { win.print(); }, 300);
   });
 })();
 </script>

@@ -7,7 +7,7 @@ from urllib.error import URLError
 from urllib.parse import urlencode
 from urllib.request import Request, urlopen
 
-from django.shortcuts import get_object_or_404, render
+from django.shortcuts import get_object_or_404, redirect, render
 from django.http import JsonResponse
 from django.contrib import messages
 from django.contrib.auth.decorators import login_required
@@ -15,13 +15,13 @@ from django.views.decorators.http import require_POST
 from django.core.cache import cache
 from django.core.paginator import Paginator
 from django.views.decorators.cache import never_cache
-from django.db import IntegrityError
+from django.db import IntegrityError, transaction
 from django.db.models import Q
 from django.utils import timezone
 
 from apps.scoping import scoped_bus, scoped_buses
 from django.db.models import Count
-from .models import Bus
+from .models import Bus, BusTerminalTap
 
 MIN_CAPACITY = 1
 MAX_CAPACITY = 100
@@ -447,6 +447,47 @@ def bus_get_ajax(request, pk):
     else:
         bus = get_object_or_404(Bus, pk=pk)
     return JsonResponse(_bus_gps_payload(bus))
+
+
+@never_cache
+def bus_tap_page(request, token):
+    """Conductor check-in: the bus QR opens this page, the conductor picks the
+    terminal they are at and the tap is recorded on the bus."""
+    bus = get_object_or_404(Bus, qr_token=token)
+
+    if request.method == 'POST':
+        terminal_name = request.POST.get('terminal', '').strip()
+        terminal = next((t for t in TERMINALS if t['name'] == terminal_name), None)
+        if terminal is None:
+            messages.error(request, 'Choose a valid terminal.')
+        else:
+            with transaction.atomic():
+                BusTerminalTap.objects.create(
+                    bus=bus,
+                    terminal_name=terminal['label'],
+                    latitude=Decimal(str(terminal['lat'])),
+                    longitude=Decimal(str(terminal['lng'])),
+                    user=request.user if request.user.is_authenticated else None,
+                )
+                bus.current_location = f"{terminal['label']} Terminal"
+                bus.latitude = Decimal(str(terminal['lat']))
+                bus.longitude = Decimal(str(terminal['lng']))
+                bus.movement_status = Bus.MOVE_AT_TERMINAL
+                bus.movement_reason = ''
+                bus.last_gps_update = timezone.now()
+                bus.save()
+            messages.success(
+                request,
+                f'Tap recorded: {bus.bus_number} is at {terminal["label"]} Terminal.',
+            )
+            return redirect('bus:bus_tap', token=bus.qr_token)
+
+    taps = bus.terminal_taps.select_related('user')[:10]
+    return render(request, 'bus/tap.html', {
+        'bus': bus,
+        'terminals': TERMINALS,
+        'taps': taps,
+    })
 
 
 @login_required(login_url='login')

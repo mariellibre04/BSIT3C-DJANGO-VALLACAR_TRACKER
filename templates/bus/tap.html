@@ -1,0 +1,103 @@
+{% extends "theme/base.html" %}
+{% block content %}
+<div class="container-xl">
+  <div class="page-header d-print-none" aria-label="Page header">
+    <div class="container-xl">
+      <div class="row align-items-center">
+        <div class="col">
+          <div class="page-pretitle">Conductor Check-in</div>
+          <h2 class="page-title mb-0">Terminal Tap</h2>
+          <div class="text-muted small">Scan the bus QR, choose the terminal, and confirm the tap.</div>
+        </div>
+        <div class="col-auto">
+          <a href="{% url 'bus:bus_map' %}" class="btn btn-outline-primary">
+            <i class="fa-solid fa-satellite-dish me-1"></i> Live Tracking
+          </a>
+        </div>
+      </div>
+    </div>
+  </div>
+  <br>
+
+  <div class="row g-3">
+    <div class="col-12 col-lg-5">
+      <div class="card">
+        <div class="card-header">
+          <div class="card-title">Bus</div>
+          <span class="badge bg-success-lt text-success ms-auto">{{ bus.get_status_display }}</span>
+        </div>
+        <div class="card-body">
+          <div class="d-flex align-items-center gap-3 mb-3">
+            <span class="avatar avatar-lg bg-primary-lt text-primary"><i class="fas fa-bus fa-lg"></i></span>
+            <div>
+              <div class="h2 mb-0">{{ bus.bus_number }}</div>
+              <div class="text-muted">{{ bus.plate_number }}</div>
+            </div>
+          </div>
+          <div class="mb-2"><span class="text-muted">Route:</span> <strong>{{ bus.route }}</strong></div>
+          <div class="mb-2"><span class="text-muted">Current location:</span> {{ bus.current_location|default:"—" }}</div>
+          <div class="mb-2"><span class="text-muted">Movement:</span> {{ bus.get_movement_status_display }}</div>
+          {% if bus.last_gps_update %}
+          <div class="text-muted small">Last update: {{ bus.last_gps_update|date:"M d, Y H:i" }}</div>
+          {% endif %}
+        </div>
+      </div>
+    </div>
+
+    <div class="col-12 col-lg-7">
+      <div class="card">
+        <div class="card-header">
+          <div class="card-title">Tap at a terminal</div>
+        </div>
+        <form method="post">
+          {% csrf_token %}
+          <div class="card-body">
+            <label class="form-label required" for="tap_terminal">Terminal</label>
+            <select name="terminal" id="tap_terminal" class="form-select form-select-lg" required>
+              <option value="">Choose the terminal you are at…</option>
+              {% for t in terminals %}
+              <option value="{{ t.name }}" {% if bus.current_location|lower == t.label|lower|add:" terminal" %}selected{% endif %}>{{ t.label }}</option>
+              {% endfor %}
+            </select>
+            <div class="form-hint mt-2">
+              This records the bus at the selected terminal and updates its live location.
+              {% if not user.is_authenticated %}<br>You are tapping as a guest. Sign in to attach your account to the tap.{% endif %}
+            </div>
+          </div>
+          <div class="card-footer d-flex justify-content-end">
+            <button type="submit" class="btn btn-primary btn-lg">
+              <i class="fa-solid fa-hand-pointer me-1"></i> Confirm Terminal Tap
+            </button>
+          </div>
+        </form>
+      </div>
+
+      <div class="card mt-3">
+        <div class="card-header">
+          <div class="card-title">Recent taps</div>
+        </div>
+        <div class="table-responsive">
+          <table class="table table-vcenter card-table">
+            <thead>
+              <tr><th>When</th><th>Terminal</th><th>By</th></tr>
+            </thead>
+            <tbody>
+              {% for tap in taps %}
+              <tr>
+                <td class="text-muted">{{ tap.tapped_at|date:"M d, Y H:i" }}</td>
+                <td class="fw-semibold">{{ tap.terminal_name }}</td>
+                <td class="text-muted">
+                  {% if tap.user %}{{ tap.user.get_full_name|default:tap.user.username }}{% else %}Guest{% endif %}
+                </td>
+              </tr>
+              {% empty %}
+              <tr><td colspan="3"><div class="empty py-4"><p class="empty-title">No taps yet</p></div></td></tr>
+              {% endfor %}
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+{% endblock %}

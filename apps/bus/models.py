@@ -1,5 +1,7 @@
 """Bus records for Vallacar Tracker."""
 
+import uuid
+
 from django.conf import settings
 from django.core.validators import MaxValueValidator, MinValueValidator
 from django.db import models
@@ -30,6 +32,10 @@ class Bus(models.Model):
 
     bus_number = models.CharField(max_length=50, unique=True)
     plate_number = models.CharField(max_length=20, unique=True)
+    qr_token = models.UUIDField(
+        default=uuid.uuid4, unique=True, editable=False,
+        help_text='Unique token embedded in this bus QR code.',
+    )
     capacity = models.PositiveIntegerField(
         validators=[MinValueValidator(1), MaxValueValidator(100)]
     )
@@ -84,3 +90,31 @@ class Bus(models.Model):
     @property
     def is_full(self):
         return self.available_seats <= 0
+
+
+class BusTerminalTap(models.Model):
+    """A conductor scan of a bus QR code at a terminal."""
+
+    bus = models.ForeignKey(
+        Bus,
+        related_name='terminal_taps',
+        on_delete=models.CASCADE,
+    )
+    terminal_name = models.CharField(max_length=255)
+    latitude = models.DecimalField(max_digits=9, decimal_places=6, null=True, blank=True)
+    longitude = models.DecimalField(max_digits=9, decimal_places=6, null=True, blank=True)
+    user = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        related_name='terminal_taps',
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+    )
+    tapped_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        db_table = 'tblbusterminaltap'
+        ordering = ['-tapped_at']
+
+    def __str__(self):
+        return f'{self.bus.bus_number} @ {self.terminal_name}'
