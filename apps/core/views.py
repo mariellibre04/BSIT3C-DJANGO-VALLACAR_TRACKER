@@ -167,11 +167,15 @@ def welcome_view(request):
     capacity = buses.aggregate(total=Sum('capacity'))['total'] or 0
     occupied = sum(b.total_passengers or 0 for b in buses)
     free_seats = max(0, capacity - occupied)
-    return render(request, 'welcome.html', {
+
+    from apps.bus.views import terminal_monitor_context
+    context = terminal_monitor_context(request)
+    context.update({
         'on_road': on_road,
         'free_seats': free_seats,
         'total_routes': routes,
     })
+    return render(request, 'welcome.html', context)
 
 
 def dashboard(request):

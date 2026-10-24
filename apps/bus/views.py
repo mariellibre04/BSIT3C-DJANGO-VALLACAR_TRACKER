@@ -8,6 +8,7 @@ from urllib.parse import urlencode
 from urllib.request import Request, urlopen
 
 from django.shortcuts import get_object_or_404, redirect, render
+from django.urls import reverse
 from django.http import JsonResponse
 from django.contrib import messages
 from django.contrib.auth.decorators import login_required
@@ -449,9 +450,47 @@ def bus_get_ajax(request, pk):
     return JsonResponse(_bus_gps_payload(bus))
 
 
+def terminal_monitor_context(request):
+    """QR targets used by the terminal monitor kiosk."""
+    bus_qr_map = {
+        bus.bus_number: request.build_absolute_uri(
+            reverse('bus:bus_tap', args=[bus.qr_token])
+        )
+        for bus in Bus.objects.all()
+    }
+    return {
+        'kiosk_qr_data': {
+            'checkin': request.build_absolute_uri(reverse('bus:conductor_checkin')),
+            'buses': bus_qr_map,
+        },
+    }
+
+
 def bus_kiosk_page(request):
     """Airport-style terminal monitor board for passengers (static design)."""
-    return render(request, 'bus/terminal_monitor.html')
+    return render(request, 'bus/terminal_monitor.html', terminal_monitor_context(request))
+
+
+def _find_terminal(terminal_name):
+    return next((t for t in TERMINALS if t['name'] == terminal_name), None)
+
+
+def _record_terminal_tap(bus, terminal, user=None):
+    with transaction.atomic():
+        BusTerminalTap.objects.create(
+            bus=bus,
+            terminal_name=terminal['label'],
+            latitude=Decimal(str(terminal['lat'])),
+            longitude=Decimal(str(terminal['lng'])),
+            user=user if user and user.is_authenticated else None,
+        )
+        bus.current_location = f"{terminal['label']} Terminal"
+        bus.latitude = Decimal(str(terminal['lat']))
+        bus.longitude = Decimal(str(terminal['lng']))
+        bus.movement_status = Bus.MOVE_AT_TERMINAL
+        bus.movement_reason = ''
+        bus.last_gps_update = timezone.now()
+        bus.save()
 
 
 @never_cache
@@ -461,26 +500,11 @@ def bus_tap_page(request, token):
     bus = get_object_or_404(Bus, qr_token=token)
 
     if request.method == 'POST':
-        terminal_name = request.POST.get('terminal', '').strip()
-        terminal = next((t for t in TERMINALS if t['name'] == terminal_name), None)
+        terminal = _find_terminal(request.POST.get('terminal', '').strip())
         if terminal is None:
             messages.error(request, 'Choose a valid terminal.')
         else:
-            with transaction.atomic():
-                BusTerminalTap.objects.create(
-                    bus=bus,
-                    terminal_name=terminal['label'],
-                    latitude=Decimal(str(terminal['lat'])),
-                    longitude=Decimal(str(terminal['lng'])),
-                    user=request.user if request.user.is_authenticated else None,
-                )
-                bus.current_location = f"{terminal['label']} Terminal"
-                bus.latitude = Decimal(str(terminal['lat']))
-                bus.longitude = Decimal(str(terminal['lng']))
-                bus.movement_status = Bus.MOVE_AT_TERMINAL
-                bus.movement_reason = ''
-                bus.last_gps_update = timezone.now()
-                bus.save()
+            _record_terminal_tap(bus, terminal, request.user)
             messages.success(
                 request,
                 f'Tap recorded: {bus.bus_number} is at {terminal["label"]} Terminal.',
@@ -492,6 +516,33 @@ def bus_tap_page(request, token):
         'bus': bus,
         'terminals': TERMINALS,
         'taps': taps,
+    })
+
+
+def conductor_checkin_page(request):
+    """Public conductor check-in reached from the terminal monitor kiosk QR."""
+    buses = Bus.objects.order_by('bus_number')
+    selected_number = request.GET.get('bus', '').strip()
+    selected_bus = buses.filter(bus_number=selected_number).first()
+
+    if request.method == 'POST':
+        bus = get_object_or_404(Bus, pk=request.POST.get('bus') or 0)
+        terminal = _find_terminal(request.POST.get('terminal', '').strip())
+        if terminal is None:
+            messages.error(request, 'Choose a valid terminal.')
+        else:
+            _record_terminal_tap(bus, terminal, request.user)
+            messages.success(
+                request,
+                f'Tap recorded: {bus.bus_number} is at {terminal["label"]} Terminal.',
+            )
+            return redirect('bus:bus_tap', token=bus.qr_token)
+
+    return render(request, 'bus/conductor_checkin.html', {
+        'buses': buses,
+        'terminals': TERMINALS,
+        'selected_bus': selected_bus,
+        'selected_number': selected_number,
     })
 
 

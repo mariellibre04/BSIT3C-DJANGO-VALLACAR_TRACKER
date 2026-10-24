@@ -1,0 +1,64 @@
+{% extends "theme/base.html" %}
+{% block content %}
+<div class="container-xl">
+  <div class="page-header d-print-none" aria-label="Page header">
+    <div class="container-xl">
+      <div class="row align-items-center">
+        <div class="col">
+          <div class="page-pretitle">Conductor Check-in</div>
+          <h2 class="page-title mb-0">Scan &amp; Check In</h2>
+          <div class="text-muted small">Choose your bus and terminal to record a tap.</div>
+        </div>
+        <div class="col-auto">
+          <a href="{% url 'bus:bus_kiosk' %}" class="btn btn-outline-primary">
+            <i class="fa-solid fa-tv me-1"></i> Terminal Monitor
+          </a>
+        </div>
+      </div>
+    </div>
+  </div>
+  <br>
+
+  <div class="row g-3">
+    <div class="col-12 col-lg-6">
+      <div class="card">
+        <form method="post">
+          {% csrf_token %}
+          <div class="card-body">
+            <div class="mb-3">
+              <label class="form-label required" for="checkin_bus">Bus</label>
+              <select name="bus" id="checkin_bus" class="form-select form-select-lg" required>
+                <option value="">Choose your bus…</option>
+                {% for b in buses %}
+                <option value="{{ b.id }}" {% if selected_bus and selected_bus.id == b.id %}selected{% endif %}>{{ b.bus_number }} — {{ b.plate_number }}</option>
+                {% endfor %}
+              </select>
+            </div>
+            <div>
+              <label class="form-label required" for="checkin_terminal">Terminal</label>
+              <select name="terminal" id="checkin_terminal" class="form-select form-select-lg" required>
+                <option value="">Choose the terminal you are at…</option>
+                {% for t in terminals %}
+                <option value="{{ t.name }}">{{ t.label }}</option>
+                {% endfor %}
+              </select>
+              <div class="form-hint mt-2">This records the bus at the selected terminal and updates its live location.</div>
+            </div>
+          </div>
+          <div class="card-footer d-flex justify-content-end">
+            <button type="submit" class="btn btn-primary btn-lg">
+              <i class="fa-solid fa-hand-pointer me-1"></i> Confirm Terminal Tap
+            </button>
+          </div>
+        </form>
+      </div>
+
+      {% if selected_number and not selected_bus %}
+      <div class="alert alert-warning mt-3">
+        Bus &ldquo;{{ selected_number }}&rdquo; is not registered yet. Choose an available bus above.
+      </div>
+      {% endif %}
+    </div>
+  </div>
+</div>
+{% endblock %}
