@@ -62,7 +62,7 @@
 
     <!-- Terminal summary -->
     <section class="k-terminal-strip" aria-label="Terminal summary">
-      <article class="k-terminal active">
+      <button type="button" class="k-terminal" data-terminal="Bacolod">
         <div class="k-terminal-head">
           <span class="k-terminal-dot"></span> Bacolod
           <span class="k-hub">HUB</span>
@@ -72,47 +72,47 @@
           <span class="k-sep"></span>
           <span><strong>4</strong> inbound</span>
         </div>
-      </article>
-      <article class="k-terminal">
+      </button>
+      <button type="button" class="k-terminal" data-terminal="Kabankalan">
         <div class="k-terminal-head"><span class="k-terminal-dot"></span> Kabankalan</div>
         <div class="k-terminal-stats">
           <span><strong>1</strong> at terminal</span>
           <span class="k-sep"></span>
           <span><strong>0</strong> inbound</span>
         </div>
-      </article>
-      <article class="k-terminal">
+      </button>
+      <button type="button" class="k-terminal" data-terminal="Dumaguete">
         <div class="k-terminal-head"><span class="k-terminal-dot"></span> Dumaguete</div>
         <div class="k-terminal-stats">
           <span><strong>1</strong> at terminal</span>
           <span class="k-sep"></span>
           <span><strong>0</strong> inbound</span>
         </div>
-      </article>
-      <article class="k-terminal">
+      </button>
+      <button type="button" class="k-terminal" data-terminal="Sipalay">
         <div class="k-terminal-head"><span class="k-terminal-dot"></span> Sipalay</div>
         <div class="k-terminal-stats">
           <span><strong>1</strong> at terminal</span>
           <span class="k-sep"></span>
           <span><strong>0</strong> inbound</span>
         </div>
-      </article>
-      <article class="k-terminal">
+      </button>
+      <button type="button" class="k-terminal" data-terminal="San Carlos">
         <div class="k-terminal-head"><span class="k-terminal-dot"></span> San Carlos</div>
         <div class="k-terminal-stats">
           <span><strong>1</strong> at terminal</span>
           <span class="k-sep"></span>
           <span><strong>0</strong> inbound</span>
         </div>
-      </article>
-      <article class="k-terminal">
+      </button>
+      <button type="button" class="k-terminal" data-terminal="Hinigaran">
         <div class="k-terminal-head"><span class="k-terminal-dot"></span> Hinigaran</div>
         <div class="k-terminal-stats">
           <span><strong>1</strong> at terminal</span>
           <span class="k-sep"></span>
           <span><strong>0</strong> inbound</span>
         </div>
-      </article>
+      </button>
     </section>
 
     <!-- Status board -->
@@ -375,6 +375,39 @@
         btn.innerHTML = document.fullscreenElement
           ? '<i class="fa-solid fa-compress"></i>'
           : '<i class="fa-solid fa-expand"></i>';
+      });
+
+      var termButtons = Array.prototype.slice.call(document.querySelectorAll('.k-terminal[data-terminal]'));
+      var busRows = Array.prototype.slice.call(document.querySelectorAll('.k-bus-row'));
+      var sectionRows = Array.prototype.slice.call(document.querySelectorAll('.k-section'));
+      var currentTerm = '';
+
+      function setTerminalFilter(term) {
+        currentTerm = term;
+        termButtons.forEach(function (card) {
+          var isActive = card.getAttribute('data-terminal') === term;
+          card.classList.toggle('active', isActive);
+          card.setAttribute('aria-pressed', isActive ? 'true' : 'false');
+        });
+        busRows.forEach(function (row) {
+          var pill = row.querySelector('.k-terminal-pill');
+          var name = pill ? pill.textContent.trim() : '';
+          row.style.display = !term || name === term ? '' : 'none';
+        });
+        sectionRows.forEach(function (row) {
+          row.style.display = term ? 'none' : '';
+        });
+      }
+
+      termButtons.forEach(function (card) {
+        var term = card.getAttribute('data-terminal');
+        card.addEventListener('click', function () {
+          setTerminalFilter(currentTerm === term ? '' : term);
+        });
+      });
+
+      document.addEventListener('keydown', function (event) {
+        if (event.key === 'Escape') setTerminalFilter('');
       });
     })();
   </script>

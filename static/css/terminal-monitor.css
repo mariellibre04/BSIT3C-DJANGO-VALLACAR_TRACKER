@@ -257,6 +257,9 @@ body.kiosk-body::before {
   border: 1px solid var(--k-line);
   border-radius: 14px;
   background: linear-gradient(180deg, rgba(255, 255, 255, .035), rgba(255, 255, 255, .008));
+  color: inherit;
+  font: inherit;
+  cursor: pointer;
   overflow: hidden;
 }
 
