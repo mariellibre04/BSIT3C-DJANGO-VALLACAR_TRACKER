@@ -311,17 +311,7 @@ def admin_dashboard(request):
         status=MaintenanceRecord.STATUS_COMPLETED
     ).count()
 
-    from apps.bookings.models import Booking
-    pending_bookings = list(
-        Booking.objects.select_related('bus').filter(
-            bus__user=request.user, status=Booking.STATUS_PENDING
-        ).order_by('-created_at')[:5]
-    )
-    pending_booking_count = Booking.objects.filter(
-        bus__user=request.user, status=Booking.STATUS_PENDING
-    ).count()
-
-    alert_count = len(alert_trips) + open_incident_count + len(overdue_maintenance) + pending_booking_count
+    alert_count = len(alert_trips) + open_incident_count + len(overdue_maintenance)
 
     context = {
         'is_admin': True,
@@ -347,8 +337,6 @@ def admin_dashboard(request):
         'open_incident_count': open_incident_count,
         'overdue_maintenance': overdue_maintenance,
         'pending_maintenance': pending_maintenance,
-        'pending_bookings': pending_bookings,
-        'pending_booking_count': pending_booking_count,
         'alert_count': alert_count,
     }
     return render(request, 'home.html', context)

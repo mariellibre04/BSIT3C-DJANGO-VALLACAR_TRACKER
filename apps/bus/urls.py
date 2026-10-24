@@ -8,7 +8,6 @@ urlpatterns = [
     path('map/', views.bus_map_page, name='bus_map'),
     path('kiosk/', views.bus_kiosk_page, name='bus_kiosk'),
     path('tap/<uuid:token>/', views.bus_tap_page, name='bus_tap'),
-    path('eta/', views.passenger_eta_page, name='passenger_eta'),
     path('ajax/list/', views.bus_list_ajax, name='bus_list_ajax'),
     path('ajax/locations/', views.bus_locations_ajax, name='bus_locations_ajax'),
     path('ajax/geocode/', views.geocode_ajax, name='geocode_ajax'),

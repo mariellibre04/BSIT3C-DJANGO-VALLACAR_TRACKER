@@ -618,7 +618,6 @@ def build_eta_results(buses, origin, dest, waiting, today, now):
     Each result carries the live position, estimated arrival at the waiting
     place and destination, free seats and the next scheduled trip.
     """
-    from apps.bookings.models import active_holds
     from apps.trips.models import Trip
 
     results = []
@@ -648,7 +647,7 @@ def build_eta_results(buses, origin, dest, waiting, today, now):
             lat, lng, is_approx = bus_map_coords(b, ignore_gps=True)
         eta_wait = estimate_arrival(lat, lng, waiting['lat'], waiting['lng'], b.movement_status)
         eta_dest = estimate_arrival(lat, lng, dest['lat'], dest['lng'], b.movement_status)
-        seats_free = max(0, b.capacity - occupied - active_holds(b.id))
+        seats_free = max(0, b.capacity - occupied)
         trip = (Trip.objects.filter(bus=b, scheduled_departure__date=today)
                 .order_by('scheduled_departure'))
         upcoming = trip.filter(scheduled_departure__gte=now).first() or trip.last()
@@ -677,31 +676,6 @@ def build_eta_results(buses, origin, dest, waiting, today, now):
         })
     results.sort(key=lambda r: (r['eta_wait'] is None, r['eta_wait']['minutes'] if r['eta_wait'] else 0))
     return results
-
-
-def eta_map_json(results, waiting):
-    """Payload the Leaflet map on the tracking pages renders."""
-    buses = []
-    for r in results:
-        frm, to = route_endpoints(r['route'])
-        buses.append({
-            'bus_id': r.get('bus_id'),
-            'bus_number': r['bus_number'],
-            'route': r['route'],
-            'lat': r['lat'], 'lng': r['lng'],
-            'seats_free': r['seats_free'],
-            'is_approx': r['is_approx'],
-            'movement_status': r.get('movement_status'),
-            'departure': r.get('departure'),
-            'reason': r.get('reason'),
-            'route_from': terminal_json(frm),
-            'route_to': terminal_json(to),
-        })
-    return json.dumps({
-        'waiting': {'name': waiting['name'], 'lat': waiting['lat'], 'lng': waiting['lng']} if waiting else None,
-        'buses': buses,
-        'terminals': [terminal_json(t) for t in TERMINALS],
-    })
 
 
 def _find_search_place(query):
@@ -777,8 +751,7 @@ def bus_map_page(request):
 
     Passengers pick From / To / I-am-waiting-in, then watch the assigned
     Ceres liners approach the waiting terminal on the live map, with an
-    estimated arrival time, seat availability and a Book button. Staff keep
-    GPS editing.
+    estimated arrival time and seat availability. Staff keep GPS editing.
     """
     is_admin = request.user.is_authenticated
     origin_name, dest_name, waiting_name = _resolve_trip_params(request)
@@ -989,42 +962,3 @@ def bus_gps_update_ajax(request, pk):
     payload = _bus_gps_payload(bus)
     payload['status'] = 'updated'
     return JsonResponse(payload)
-
-
-def passenger_eta_page(request):
-    """Public passenger board: going from A to B? See the assigned Ceres
-    liners on that route with estimated arrival — no more waiting all day.
-
-    Read-only and public (no login) so riders can check before leaving home.
-
-    Riders pick where they are waiting; each assigned bus shows its live
-    position, estimated arrival at the waiting place, free seats, and a
-    Book button. Bookings notify the assigned driver / conductor.
-    """
-    origin_name, dest_name, waiting_name = _resolve_trip_params(request)
-    origin = terminal_by_name(origin_name)
-    dest = terminal_by_name(dest_name)
-    waiting = terminal_by_name(waiting_name)
-
-    results, error = [], None
-    today = timezone.localdate()
-    now = timezone.now()
-    if origin is None or dest is None or waiting is None:
-        error = 'Please select a valid origin, destination, and waiting place.'
-    elif origin.get('label') == dest.get('label'):
-        error = 'Origin and destination must be different terminals.'
-    else:
-        buses = list(
-            Bus.objects.annotate(total_passengers=Count('passengers'))
-            .filter(status=Bus.STATUS_ACTIVE)
-            .order_by('bus_number')
-        )
-        results = build_eta_results(buses, origin, dest, waiting, today, now)
-
-    return render(request, 'bus/eta.html', {
-        'terminals': PLACES, 'origin_name': origin.get('label', origin['name']) if origin else origin_name,
-        'dest_name': dest.get('label', dest['name']) if dest else dest_name,
-        'waiting_name': waiting.get('label', waiting['name']) if waiting else waiting_name,
-        'results': results, 'error': error, 'today': today, 'now': timezone.localtime(now),
-        'map_json': eta_map_json(results, waiting),
-    })

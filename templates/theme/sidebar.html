@@ -43,16 +43,6 @@
         </li>
 
         <li class="nav-item">
-          <a class="nav-link {% if request.resolver_match.url_name == 'passenger_eta' %}active{% endif %}" href="{% url 'bus:passenger_eta' %}">
-            <span class="nav-link-icon d-md-none d-lg-inline-block">
-              <i class="nav-icon fas fa-clock"></i>
-            </span>
-            <span class="nav-link-title">Passenger ETA</span>
-          </a>
-        </li>
-
-
-        <li class="nav-item">
           <a class="nav-link {% if request.resolver_match.app_name == 'driver' %}active{% endif %}" href="{% url 'driver:driver_list' %}">
             <span class="nav-link-icon d-md-none d-lg-inline-block">
               <i class="nav-icon fas fa-id-card"></i>
@@ -100,24 +90,6 @@
               <i class="nav-icon fas fa-tv"></i>
             </span>
             <span class="nav-link-title">Terminal Monitor</span>
-          </a>
-        </li>
-
-        <li class="nav-item">
-          <a class="nav-link {% if request.resolver_match.url_name == 'passenger_eta' %}active{% endif %}" href="{% url 'bus:passenger_eta' %}">
-            <span class="nav-link-icon d-md-none d-lg-inline-block">
-              <i class="nav-icon fas fa-clock"></i>
-            </span>
-            <span class="nav-link-title">Passenger ETA</span>
-          </a>
-        </li>
-
-        <li class="nav-item">
-          <a class="nav-link {% if request.resolver_match.app_name == 'bookings' %}active{% endif %}" href="{% url 'bookings:booking_list' %}">
-            <span class="nav-link-icon d-md-none d-lg-inline-block">
-              <i class="nav-icon fas fa-ticket"></i>
-            </span>
-            <span class="nav-link-title">Bookings</span>
           </a>
         </li>
 
@@ -202,14 +174,6 @@
               <i class="fa fa-dashboard"></i>
             </span>
             <span class="nav-link-title">Dashboard</span>
-          </a>
-        </li>
-        <li class="nav-item">
-          <a class="nav-link {% if request.resolver_match.url_name == 'passenger_eta' %}active{% endif %}" href="{% url 'bus:passenger_eta' %}">
-            <span class="nav-link-icon d-md-none d-lg-inline-block">
-              <i class="nav-icon fas fa-clock"></i>
-            </span>
-            <span class="nav-link-title">Passenger ETA</span>
           </a>
         </li>
         <li class="nav-item">
