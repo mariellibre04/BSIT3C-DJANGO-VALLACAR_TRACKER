@@ -1,0 +1,13 @@
+{% for t in kiosk_terminals %}
+<button type="button" class="k-terminal" data-terminal="{{ t.name }}" aria-pressed="false">
+  <div class="k-terminal-head">
+    <span class="k-terminal-dot"></span> {{ t.name }}
+    {% if t.is_hub %}<span class="k-hub">HUB</span>{% endif %}
+  </div>
+  <div class="k-terminal-stats">
+    <span><strong>{{ t.at_terminal }}</strong> at terminal</span>
+    <span class="k-sep"></span>
+    <span><strong>{{ t.inbound }}</strong> inbound</span>
+  </div>
+</button>
+{% endfor %}

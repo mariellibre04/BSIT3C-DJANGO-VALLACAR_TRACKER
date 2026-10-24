@@ -94,6 +94,15 @@
         </li>
 
         <li class="nav-item">
+          <a class="nav-link {% if request.resolver_match.url_name == 'bus_scan' %}active{% endif %}" href="{% url 'bus:bus_scan' %}">
+            <span class="nav-link-icon d-md-none d-lg-inline-block">
+              <i class="nav-icon fas fa-qrcode"></i>
+            </span>
+            <span class="nav-link-title">Terminal Scanner</span>
+          </a>
+        </li>
+
+        <li class="nav-item">
           <a class="nav-link {% if request.resolver_match.app_name == 'trips' and request.resolver_match.url_name == 'trip_list' %}active{% endif %}" href="{% url 'trips:trip_list' %}">
             <span class="nav-link-icon d-md-none d-lg-inline-block">
               <i class="nav-icon fas fa-route"></i>
@@ -190,6 +199,14 @@
               <i class="nav-icon fas fa-tv"></i>
             </span>
             <span class="nav-link-title">Terminal Monitor</span>
+          </a>
+        </li>
+        <li class="nav-item">
+          <a class="nav-link {% if request.resolver_match.url_name == 'bus_scan' %}active{% endif %}" href="{% url 'bus:bus_scan' %}">
+            <span class="nav-link-icon d-md-none d-lg-inline-block">
+              <i class="nav-icon fas fa-qrcode"></i>
+            </span>
+            <span class="nav-link-title">Terminal Scanner</span>
           </a>
         </li>
         <li class="nav-item mt-2">

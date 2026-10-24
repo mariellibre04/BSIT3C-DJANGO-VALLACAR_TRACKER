@@ -1,0 +1,19 @@
+<tr class="k-bus-row">
+  <td>
+    <div class="k-bus">
+      <span class="k-bus-icon"><i class="fa-solid fa-bus"></i></span>
+      <span><span class="k-bus-no">{{ b.number }}</span><span class="k-bus-plate">Plate {{ b.plate }}</span></span>
+      <button type="button" class="k-qr-btn" data-bus-number="{{ b.number }}" title="Show conductor check-in QR for bus {{ b.number }}" aria-label="Show conductor check-in QR for bus {{ b.number }}">
+        <i class="fa-solid fa-qrcode"></i>
+      </button>
+    </div>
+  </td>
+  <td>
+    <span class="k-route">{{ b.route_from }}{% if b.route_to %} <i class="fa-solid fa-arrow-right-long"></i> {{ b.route_to }}{% endif %}</span>
+    <span class="k-route-sub">Ceres Liner</span>
+  </td>
+  <td><span class="k-terminal-pill{% if b.is_hub %} hub{% endif %}"><span class="k-dot"></span> {{ b.terminal }}</span></td>
+  <td><span class="k-bay">&mdash;</span></td>
+  <td><span class="k-time">{% if b.time %}{{ b.time|date:"g:i A" }}{% else %}&mdash;{% endif %}</span></td>
+  <td><span class="k-status {{ b.status_class }}"><span class="k-status-dot"></span> {{ b.status_label }}</span></td>
+</tr>

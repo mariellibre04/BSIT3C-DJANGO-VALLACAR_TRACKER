@@ -9,7 +9,10 @@
           <h2 class="page-title mb-0">Terminal Tap</h2>
           <div class="text-muted small">Scan the bus QR, choose the terminal, and confirm the tap.</div>
         </div>
-        <div class="col-auto">
+        <div class="col-auto d-flex gap-2">
+          <a href="{% url 'bus:bus_scan' %}" class="btn btn-primary">
+            <i class="fa-solid fa-camera me-1"></i> Webcam Scanner
+          </a>
           <a href="{% url 'bus:bus_map' %}" class="btn btn-outline-primary">
             <i class="fa-solid fa-satellite-dish me-1"></i> Live Tracking
           </a>

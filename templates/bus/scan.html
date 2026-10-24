@@ -1,0 +1,386 @@
+{% extends "theme/base.html" %}
+{% block content %}
+{% csrf_token %}
+<div class="container-xl">
+  <div class="page-header d-print-none" aria-label="Page header">
+    <div class="container-xl">
+      <div class="row align-items-center">
+        <div class="col">
+          <div class="page-pretitle">Terminal Check-in</div>
+          <h2 class="page-title mb-0">Webcam QR Scanner</h2>
+          <div class="text-muted small">Choose the terminal, scan the bus QR, and the check-in appears on the live map.</div>
+        </div>
+        <div class="col-auto d-flex gap-2">
+          <a href="{% url 'bus:conductor_checkin' %}" class="btn btn-outline-secondary">
+            <i class="fa-solid fa-keyboard me-1"></i> Manual Check-in
+          </a>
+          <a href="{% url 'bus:bus_map' %}" class="btn btn-outline-primary">
+            <i class="fa-solid fa-map-location-dot me-1"></i> Live Map
+          </a>
+        </div>
+      </div>
+    </div>
+  </div>
+  <br>
+
+  <div class="row g-3">
+    <div class="col-12 col-lg-5">
+      <div class="card">
+        <div class="card-header">
+          <h3 class="card-title">1. Choose terminal</h3>
+        </div>
+        <div class="card-body">
+          <label class="form-label required" for="scan_terminal">Terminal</label>
+          <select id="scan_terminal" class="form-select form-select-lg" required>
+            <option value="">Choose the terminal you are at…</option>
+            {% for t in terminals %}
+            <option value="{{ t.name }}" {% if selected_terminal == t.name %}selected{% endif %}>{{ t.label }}</option>
+            {% endfor %}
+          </select>
+          <div class="form-hint mt-2">Every scan records a terminal tap and updates the bus location on the live map.</div>
+
+          <div class="d-flex gap-2 mt-3">
+            <button type="button" id="scan_start" class="btn btn-primary">
+              <i class="fa-solid fa-camera me-1"></i> Start camera
+            </button>
+            <button type="button" id="scan_stop" class="btn btn-outline-secondary d-none">
+              <i class="fa-solid fa-video-slash me-1"></i> Stop camera
+            </button>
+          </div>
+
+          <div id="scan_status" class="alert alert-info mt-3 mb-0 small" role="status">
+            Choose a terminal, then start the camera and point the bus QR at it.
+          </div>
+
+          <div id="scanner_reader" class="mt-3 rounded overflow-hidden bg-dark" style="min-height: 240px;"></div>
+
+          <div class="form-hint mt-2">
+            Move the QR closer or farther until the modules look sharp (about 15–30 cm),
+            keep it flat, and avoid glare.
+            Camera access needs <strong>localhost</strong> or <strong>HTTPS</strong>.
+            If it fails, allow the camera from the camera icon in the address bar and check
+            Windows <strong>Settings &rarr; Privacy &amp; security &rarr; Camera</strong>.
+            Scans are recorded instantly, so you can scan the next bus right away.
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="col-12 col-lg-7">
+      <div class="card">
+        <div class="card-header">
+          <h3 class="card-title">2. Last scan</h3>
+        </div>
+        <div class="card-body" id="scan_result">
+          <div class="empty py-4">
+            <p class="empty-title">Waiting for a bus QR…</p>
+            <p class="empty-subtitle text-muted">The latest check-in will appear here with a link to the live map.</p>
+          </div>
+        </div>
+      </div>
+
+      <div class="card mt-3">
+        <div class="card-header">
+          <h3 class="card-title">Recent check-ins</h3>
+          <a href="{% url 'bus:bus_map' %}" class="btn btn-sm btn-outline-primary ms-auto" target="_blank" rel="noopener">
+            <i class="fa-solid fa-map-location-dot me-1"></i> Open map
+          </a>
+        </div>
+        <div class="table-responsive">
+          <table class="table table-vcenter card-table">
+            <thead>
+              <tr><th>Bus</th><th>Terminal</th><th>When</th></tr>
+            </thead>
+            <tbody id="recent_taps">
+              {% for tap in taps %}
+              <tr>
+                <td class="fw-semibold">{{ tap.bus.bus_number }}</td>
+                <td>{{ tap.terminal_name }}</td>
+                <td class="text-muted">{{ tap.tapped_at|date:"M d, H:i" }}</td>
+              </tr>
+              {% empty %}
+              <tr><td colspan="3" class="text-muted">No check-ins yet.</td></tr>
+              {% endfor %}
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script src="https://unpkg.com/html5-qrcode@2.3.8/html5-qrcode.min.js"></script>
+<script>
+  (function () {
+    var readerId = 'scanner_reader';
+    var terminalSelect = document.getElementById('scan_terminal');
+    var startBtn = document.getElementById('scan_start');
+    var stopBtn = document.getElementById('scan_stop');
+    var statusEl = document.getElementById('scan_status');
+    var resultEl = document.getElementById('scan_result');
+    var recentBody = document.getElementById('recent_taps');
+    var checkinUrl = '{% url "bus:bus_scan_checkin_ajax" %}';
+    var mapUrl = '{% url "bus:bus_map" %}';
+    var csrfInput = document.querySelector('[name=csrfmiddlewaretoken]');
+    var csrfToken = csrfInput ? csrfInput.value : '{{ csrf_token }}';
+    var scanner = null;
+    var scanning = false;
+    var busy = false;
+    var cooldownUntil = 0;
+    var lastToken = '';
+    var lastTokenAt = 0;
+
+    function escapeHtml(value) {
+      return String(value == null ? '' : value)
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;')
+        .replace(/'/g, '&#39;');
+    }
+
+    function setStatus(message, className) {
+      statusEl.className = 'alert mt-3 mb-0 small ' + (className || 'alert-info');
+      statusEl.textContent = message;
+    }
+
+    function tokenFromText(text) {
+      var match = String(text || '').match(
+        /[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}/
+      );
+      return match ? match[0] : '';
+    }
+
+    function cameraErrorText(error) {
+      var name = (error && error.name) || '';
+      var message = (error && error.message) || (typeof error === 'string' ? error : '');
+      var hint = 'Check the camera icon in the address bar and Windows Settings > Privacy & security > Camera.';
+
+      if (name === 'NotAllowedError' || name === 'PermissionDeniedError' ||
+          /permission|denied|not allowed/i.test(message)) {
+        hint = 'Camera permission is blocked. Click the camera/lock icon in the address bar, allow camera access, then reload.';
+      } else if (name === 'NotFoundError' || name === 'DevicesNotFoundError' ||
+                 /not found|no camera|device.*not/i.test(message)) {
+        hint = 'No camera was found. Connect a webcam and reload the page.';
+      } else if (name === 'NotReadableError' || name === 'TrackStartError' ||
+                 /in use|not readable|busy/i.test(message)) {
+        hint = 'The camera is busy. Close other apps using it (Teams, Zoom, Camera) and try again.';
+      }
+
+      var detail = [name, message].filter(Boolean).join(': ');
+      return (detail ? detail + '. ' : '') + hint;
+    }
+
+    async function startWithCamera(cameraConfig, videoConstraints) {
+      if (scanner) {
+        try { await scanner.stop(); } catch (error) {}
+        try { scanner.clear(); } catch (error) {}
+      }
+      scanner = new Html5Qrcode(readerId, { verbose: false });
+      await scanner.start(cameraConfig, {
+        fps: 20,
+        qrbox: function (viewfinderWidth, viewfinderHeight) {
+          var edge = Math.floor(Math.min(viewfinderWidth, viewfinderHeight) * 0.72);
+          return { width: edge, height: edge };
+        },
+        disableFlip: false,
+        experimentalFeatures: { useBarCodeDetectorIfSupported: true },
+        videoConstraints: videoConstraints
+      }, handleScan, function () {});
+    }
+
+    async function startCamera() {
+      if (!terminalSelect.value) {
+        setStatus('Choose the terminal first, then start the camera.', 'alert-warning');
+        terminalSelect.focus();
+        return;
+      }
+      if (!window.isSecureContext) {
+        setStatus('Camera access needs localhost or HTTPS. Open this page from localhost or use manual check-in.', 'alert-warning');
+        return;
+      }
+      if (!window.Html5Qrcode) {
+        setStatus('The scanner library could not load. Check your internet connection and reload.', 'alert-danger');
+        return;
+      }
+      if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
+        setStatus('This browser does not support camera access. Use Chrome, Edge, or Firefox.', 'alert-danger');
+        return;
+      }
+
+      startBtn.disabled = true;
+      setStatus('Starting camera…', 'alert-info');
+
+      var attempts = [
+        {
+          camera: { facingMode: 'environment' },
+          constraints: { facingMode: 'environment', width: { ideal: 1280 }, height: { ideal: 720 } }
+        },
+        {
+          camera: { facingMode: 'user' },
+          constraints: { facingMode: 'user', width: { ideal: 1280 }, height: { ideal: 720 } }
+        }
+      ];
+      var lastError = null;
+
+      for (var i = 0; i < attempts.length; i++) {
+        try {
+          await startWithCamera(attempts[i].camera, attempts[i].constraints);
+          scanning = true;
+          startBtn.classList.add('d-none');
+          stopBtn.classList.remove('d-none');
+          setStatus('Camera is live. Point the bus QR inside the frame.', 'alert-info');
+          return;
+        } catch (error) {
+          lastError = error;
+        }
+      }
+
+      try {
+        var cameras = await Html5Qrcode.getCameras();
+        for (var j = 0; j < cameras.length; j++) {
+          try {
+            await startWithCamera(
+              { deviceId: { exact: cameras[j].id } },
+              { deviceId: { exact: cameras[j].id }, width: { ideal: 1280 }, height: { ideal: 720 } }
+            );
+            scanning = true;
+            startBtn.classList.add('d-none');
+            stopBtn.classList.remove('d-none');
+            setStatus('Camera is live. Point the bus QR inside the frame.', 'alert-info');
+            return;
+          } catch (error) {
+            lastError = error;
+          }
+        }
+      } catch (error) {
+        if (!lastError) lastError = error;
+      }
+
+      startBtn.disabled = false;
+      setStatus('Could not start the camera. ' + cameraErrorText(lastError), 'alert-danger');
+    }
+
+    async function stopCamera() {
+      if (!scanner || !scanning) return;
+      try {
+        await scanner.stop();
+      } catch (error) {}
+      scanning = false;
+      startBtn.disabled = false;
+      startBtn.classList.remove('d-none');
+      stopBtn.classList.add('d-none');
+      setStatus('Camera stopped.', 'alert-secondary');
+    }
+
+    function submitToken(token) {
+      if (busy) return;
+      if (!terminalSelect.value) {
+        setStatus('Choose the terminal first, then scan again.', 'alert-warning');
+        return;
+      }
+      if (token === lastToken && Date.now() - lastTokenAt < 15000) {
+        setStatus('This bus was just checked in. Wait a few seconds before scanning it again.', 'alert-warning');
+        return;
+      }
+
+      busy = true;
+      lastToken = token;
+      lastTokenAt = Date.now();
+      setStatus('Bus QR detected. Recording check-in…', 'alert-info');
+
+      fetch(checkinUrl, {
+        method: 'POST',
+        headers: {
+          'X-CSRFToken': csrfToken,
+          'Content-Type': 'application/x-www-form-urlencoded'
+        },
+        body: new URLSearchParams({ token: token, terminal: terminalSelect.value })
+      })
+        .then(function (response) {
+          return response.json().then(function (data) {
+            return { ok: response.ok, data: data };
+          });
+        })
+        .then(function (result) {
+          if (!result.ok) throw new Error(result.data.error || 'Check-in failed.');
+          showResult(result.data);
+          prependRecentTap(result.data);
+          setStatus(
+            'Checked in: bus ' + result.data.bus.bus_number + ' at ' +
+            result.data.terminal + ' Terminal. Ready for the next bus.',
+            'alert-success'
+          );
+        })
+        .catch(function (error) {
+          lastToken = '';
+          lastTokenAt = 0;
+          setStatus(error.message || 'Check-in failed.', 'alert-danger');
+        })
+        .finally(function () {
+          busy = false;
+        });
+    }
+
+    function handleScan(decodedText) {
+      if (busy || Date.now() < cooldownUntil) return;
+
+      var token = tokenFromText(decodedText);
+      if (!token) return;
+
+      cooldownUntil = Date.now() + 2500;
+      submitToken(token);
+    }
+
+    function showResult(data) {
+      resultEl.innerHTML =
+        '<div class="d-flex align-items-center gap-3">' +
+          '<span class="avatar avatar-lg bg-success-lt text-success"><i class="fas fa-bus fa-lg"></i></span>' +
+          '<div>' +
+            '<div class="h2 mb-0">Bus ' + escapeHtml(data.bus.bus_number) + '</div>' +
+            '<div class="text-muted">' + escapeHtml(data.bus.plate_number) +
+              ' &middot; ' + escapeHtml(data.bus.route) + '</div>' +
+          '</div>' +
+        '</div>' +
+        '<div class="alert alert-success mt-3 mb-0">' +
+          '<i class="fa-solid fa-circle-check me-1"></i> Checked in at <strong>' +
+          escapeHtml(data.terminal) + ' Terminal</strong> at ' + escapeHtml(data.tapped_at) + '.' +
+        '</div>' +
+        '<a class="btn btn-outline-primary mt-3" href="' + mapUrl + '" target="_blank" rel="noopener">' +
+          '<i class="fa-solid fa-map-location-dot me-1"></i> View on live map</a>';
+    }
+
+    function prependRecentTap(data) {
+      var empty = recentBody.querySelector('td[colspan]');
+      if (empty) empty.closest('tr').remove();
+
+      var row = document.createElement('tr');
+      var bus = document.createElement('td');
+      bus.className = 'fw-semibold';
+      bus.textContent = data.bus.bus_number;
+      var terminal = document.createElement('td');
+      terminal.textContent = data.terminal;
+      var when = document.createElement('td');
+      when.className = 'text-muted';
+      when.textContent = data.tapped_at;
+      row.appendChild(bus);
+      row.appendChild(terminal);
+      row.appendChild(when);
+      recentBody.insertBefore(row, recentBody.firstChild);
+    }
+
+    terminalSelect.addEventListener('change', function () {
+      if (scanning) {
+        setStatus('Terminal set. Point the bus QR at the camera.', 'alert-info');
+      }
+    });
+    startBtn.addEventListener('click', startCamera);
+    stopBtn.addEventListener('click', stopCamera);
+    window.addEventListener('beforeunload', function () {
+      if (scanner && scanning) scanner.stop().catch(function () {});
+    });
+  })();
+</script>
+{% endblock %}

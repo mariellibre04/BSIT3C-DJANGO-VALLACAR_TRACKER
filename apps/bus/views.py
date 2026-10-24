@@ -1,11 +1,14 @@
+import hashlib
 import json
 import math
+import re
 from datetime import timedelta
 from decimal import Decimal, InvalidOperation
 from pathlib import Path
 from urllib.error import URLError
 from urllib.parse import urlencode
 from urllib.request import Request, urlopen
+from uuid import UUID
 
 from django.shortcuts import get_object_or_404, redirect, render
 from django.urls import reverse
@@ -15,9 +18,10 @@ from django.contrib.auth.decorators import login_required
 from django.views.decorators.http import require_POST
 from django.core.cache import cache
 from django.core.paginator import Paginator
+from django.template.loader import render_to_string
 from django.views.decorators.cache import never_cache
 from django.db import IntegrityError, transaction
-from django.db.models import Q
+from django.db.models import OuterRef, Q, Subquery
 from django.utils import timezone
 
 from apps.scoping import scoped_bus, scoped_buses
@@ -75,6 +79,19 @@ TERMINALS = [
 
 for _terminal in TERMINALS:
     _terminal.setdefault('label', _terminal['name'])
+
+# Terminals shown as summary cards on the terminal-monitor kiosk.
+KIOSK_TERMINAL_NAMES = [
+    'Bacolod', 'Kabankalan', 'Dumaguete', 'Sipalay', 'San Carlos', 'Hinigaran',
+]
+
+KIOSK_STATUS_CLASS = {
+    Bus.MOVE_AT_TERMINAL: 'is-at',
+    Bus.MOVE_EN_ROUTE: 'is-enroute',
+    Bus.MOVE_STOPPED: 'is-delayed',
+    Bus.MOVE_DELAYED: 'is-delayed',
+    Bus.MOVE_OFF_ROUTE: 'is-delayed',
+}
 
 
 def _load_city_places():
@@ -450,8 +467,108 @@ def bus_get_ajax(request, pk):
     return JsonResponse(_bus_gps_payload(bus))
 
 
+def _kiosk_board_context():
+    """Build the live terminal-monitor board from buses and their last tap."""
+    latest_tap_id = (
+        BusTerminalTap.objects.filter(bus_id=OuterRef('pk'))
+        .order_by('-tapped_at')
+        .values('id')[:1]
+    )
+    buses = list(
+        Bus.objects.filter(status=Bus.STATUS_ACTIVE)
+        .annotate(latest_tap_id=Subquery(latest_tap_id))
+        .order_by('bus_number')
+    )
+    tap_ids = [bus.latest_tap_id for bus in buses if bus.latest_tap_id]
+    latest_taps = {
+        tap.bus_id: tap
+        for tap in BusTerminalTap.objects.filter(id__in=tap_ids)
+    }
+    at_counts = {name: 0 for name in KIOSK_TERMINAL_NAMES}
+    inbound_counts = {name: 0 for name in KIOSK_TERMINAL_NAMES}
+    at_terminal, inbound = [], []
+    latest_change = None
+    signature_parts = []
+
+    for bus in buses:
+        tap = latest_taps.get(bus.id)
+        is_at = bus.movement_status == Bus.MOVE_AT_TERMINAL
+        route_from, route_to = route_endpoints(bus.route)
+        dest = route_to['name'] if route_to else ''
+
+        if is_at:
+            terminal = tap.terminal_name if tap else (bus.current_location or '')
+            when = tap.tapped_at if tap else (bus.last_gps_update or bus.updated_at)
+        else:
+            terminal = dest or (tap.terminal_name if tap else '') or (bus.current_location or '')
+            when = bus.last_gps_update or bus.updated_at or (tap.tapped_at if tap else None)
+
+        terminal = terminal.replace(' Terminal', '').strip()
+        if when is not None and (latest_change is None or when > latest_change):
+            latest_change = when
+
+        item = {
+            'number': bus.bus_number,
+            'plate': bus.plate_number,
+            'route_from': route_from['label'] if route_from else (bus.route or '—'),
+            'route_to': route_to['label'] if route_to else '',
+            'terminal': terminal or '—',
+            'is_hub': terminal == 'Bacolod',
+            'time': when,
+            'status_class': KIOSK_STATUS_CLASS.get(bus.movement_status, 'is-enroute'),
+            'status_label': bus.get_movement_status_display(),
+            'is_at_terminal': is_at,
+        }
+        signature_parts.append(
+            '|'.join([
+                str(bus.id),
+                bus.bus_number,
+                bus.plate_number or '',
+                bus.movement_status,
+                bus.route or '',
+                terminal,
+                when.isoformat() if when else '',
+            ])
+        )
+
+        if is_at:
+            at_terminal.append(item)
+            if terminal in at_counts:
+                at_counts[terminal] += 1
+        else:
+            inbound.append(item)
+            if terminal in inbound_counts:
+                inbound_counts[terminal] += 1
+
+    at_terminal.sort(key=lambda row: row['time'] or timezone.now(), reverse=True)
+    terminals = [
+        {
+            'name': name,
+            'is_hub': name == 'Bacolod',
+            'at_terminal': at_counts[name],
+            'inbound': inbound_counts[name],
+        }
+        for name in KIOSK_TERMINAL_NAMES
+    ]
+
+    if latest_change is None:
+        updated_label = 'No check-ins yet'
+    else:
+        clock = timezone.localtime(latest_change).strftime('%I:%M %p').lstrip('0')
+        updated_label = f'Updated {clock}'
+
+    signature = '\n'.join(signature_parts)
+    return {
+        'kiosk_terminals': terminals,
+        'kiosk_at_terminal': at_terminal,
+        'kiosk_inbound': inbound,
+        'kiosk_updated_label': updated_label,
+        'kiosk_version': hashlib.sha1(signature.encode('utf-8')).hexdigest() if signature else '',
+    }
+
+
 def terminal_monitor_context(request):
-    """QR targets used by the terminal monitor kiosk."""
+    """QR targets used by the static terminal monitor kiosk."""
     bus_qr_map = {
         bus.bus_number: request.build_absolute_uri(
             reverse('bus:bus_tap', args=[bus.qr_token])
@@ -467,17 +584,62 @@ def terminal_monitor_context(request):
 
 
 def bus_kiosk_page(request):
-    """Airport-style terminal monitor board for passengers (static design)."""
+    """Airport-style terminal monitor board with the static demo rows."""
     return render(request, 'bus/terminal_monitor.html', terminal_monitor_context(request))
+
+
+@never_cache
+def bus_kiosk_refresh(request):
+    """Return refreshed kiosk fragments after a terminal check-in."""
+    context = _kiosk_board_context()
+    bus_qr_map = {
+        bus.bus_number: request.build_absolute_uri(
+            reverse('bus:bus_tap', args=[bus.qr_token])
+        )
+        for bus in Bus.objects.all()
+    }
+    return JsonResponse({
+        'version': context['kiosk_version'],
+        'updated': context['kiosk_updated_label'],
+        'buses': bus_qr_map,
+        'terminals_html': render_to_string(
+            'bus/_kiosk_terminals.html', context, request=request
+        ),
+        'board_html': render_to_string(
+            'bus/_kiosk_board_body.html', context, request=request
+        ),
+        'ticker_html': render_to_string(
+            'bus/_kiosk_ticker_items.html', context, request=request
+        ),
+    })
 
 
 def _find_terminal(terminal_name):
     return next((t for t in TERMINALS if t['name'] == terminal_name), None)
 
 
+_QR_TOKEN_RE = re.compile(
+    r'[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-'
+    r'[0-9a-fA-F]{4}-[0-9a-fA-F]{12}'
+)
+
+
+def _extract_qr_token(raw):
+    """Pull the bus QR token out of a scanned URL or raw token."""
+    if not raw:
+        return None
+    text = raw.strip()
+    match = _QR_TOKEN_RE.search(text)
+    candidate = match.group(0) if match else text
+    try:
+        return UUID(candidate)
+    except (ValueError, TypeError, AttributeError):
+        return None
+
+
 def _record_terminal_tap(bus, terminal, user=None):
     with transaction.atomic():
-        BusTerminalTap.objects.create(
+        tap = BusTerminalTap.objects.create(
             bus=bus,
             terminal_name=terminal['label'],
             latitude=Decimal(str(terminal['lat'])),
@@ -491,6 +653,7 @@ def _record_terminal_tap(bus, terminal, user=None):
         bus.movement_reason = ''
         bus.last_gps_update = timezone.now()
         bus.save()
+    return tap
 
 
 @never_cache
@@ -543,6 +706,48 @@ def conductor_checkin_page(request):
         'terminals': TERMINALS,
         'selected_bus': selected_bus,
         'selected_number': selected_number,
+    })
+
+
+@never_cache
+def bus_scan_page(request):
+    """Webcam QR station: scan a bus QR at a terminal to record a tap."""
+    taps = BusTerminalTap.objects.select_related('bus', 'user')[:8]
+    return render(request, 'bus/scan.html', {
+        'terminals': TERMINALS,
+        'taps': taps,
+        'selected_terminal': request.GET.get('terminal', '').strip(),
+    })
+
+
+@never_cache
+@require_POST
+def bus_scan_checkin_ajax(request):
+    """Record a terminal tap from a scanned bus QR (used by the webcam page)."""
+    token = _extract_qr_token(request.POST.get('token', ''))
+    if token is None:
+        return JsonResponse({'error': 'That QR code is not a valid bus code.'}, status=400)
+
+    bus = Bus.objects.filter(qr_token=token).first()
+    if bus is None:
+        return JsonResponse({'error': 'That QR code does not match a registered bus.'}, status=404)
+
+    terminal = _find_terminal((request.POST.get('terminal') or '').strip())
+    if terminal is None:
+        return JsonResponse({'error': 'Choose a valid terminal before scanning.'}, status=400)
+
+    tap = _record_terminal_tap(bus, terminal, request.user)
+    return JsonResponse({
+        'status': 'ok',
+        'bus': {
+            'id': bus.id,
+            'bus_number': bus.bus_number,
+            'plate_number': bus.plate_number,
+            'route': bus.route,
+            'current_location': bus.current_location,
+        },
+        'terminal': terminal['label'],
+        'tapped_at': timezone.localtime(tap.tapped_at).strftime('%b %d, %Y %I:%M %p'),
     })
 
 

@@ -1,0 +1,12 @@
+{% for b in kiosk_at_terminal %}
+<span><b>AT TERMINAL</b> &middot; Bus {{ b.number }} &middot; {{ b.terminal }}{% if b.time %} &middot; {{ b.time|date:"g:i A" }}{% endif %}</span>
+{% empty %}
+<span><b>WAITING</b> &middot; Scan a bus QR to check in at a terminal</span>
+{% endfor %}
+<span><b>REMINDER</b> &middot; Keep your ticket ready and listen for boarding calls</span>
+{% for b in kiosk_at_terminal %}
+<span><b>AT TERMINAL</b> &middot; Bus {{ b.number }} &middot; {{ b.terminal }}{% if b.time %} &middot; {{ b.time|date:"g:i A" }}{% endif %}</span>
+{% empty %}
+<span><b>WAITING</b> &middot; Scan a bus QR to check in at a terminal</span>
+{% endfor %}
+<span><b>REMINDER</b> &middot; Keep your ticket ready and listen for boarding calls</span>

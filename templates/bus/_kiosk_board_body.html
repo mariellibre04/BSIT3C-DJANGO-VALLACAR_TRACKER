@@ -1,0 +1,17 @@
+<tr class="k-section">
+  <td colspan="6"><span>Now at terminal</span><span class="k-section-count">{{ kiosk_at_terminal|length }} buses</span></td>
+</tr>
+{% for b in kiosk_at_terminal %}
+  {% include 'bus/_kiosk_bus_row.html' with b=b %}
+{% empty %}
+<tr class="k-bus-row"><td colspan="6"><span class="k-empty-row">No buses checked in at a terminal yet. Scan a bus QR to check in.</span></td></tr>
+{% endfor %}
+
+<tr class="k-section inbound">
+  <td colspan="6"><span>Arriving / en route</span><span class="k-section-count">{{ kiosk_inbound|length }} buses</span></td>
+</tr>
+{% for b in kiosk_inbound %}
+  {% include 'bus/_kiosk_bus_row.html' with b=b %}
+{% empty %}
+<tr class="k-bus-row"><td colspan="6"><span class="k-empty-row">No other active buses right now.</span></td></tr>
+{% endfor %}

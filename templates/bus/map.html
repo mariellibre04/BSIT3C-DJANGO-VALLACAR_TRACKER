@@ -532,11 +532,12 @@
     if (!track && !inNegros(b.lat, b.lng)) return;
 
     let progress = 0.5;
+    let useExactFix = false;
     if (track) {
       if (b.movement_status === 'at_terminal' && !b.is_approx && b.lat != null && b.lng != null) {
-        // A conductor terminal tap gives a real fix: park the bus at the
-        // terminal on its route instead of the corridor start.
-        progress = projectOnPath(b.lat, b.lng, track);
+        // A conductor terminal tap gives a real fix: show the bus exactly at
+        // the terminal it checked in at.
+        useExactFix = true;
       } else if (b.movement_status === 'at_terminal') {
         // No fix yet: park terminal buses at the start of their corridor.
         progress = 0.02;
@@ -549,7 +550,8 @@
       }
     }
 
-    const start = track ? pointOnTrack(track, progress) : { lat: b.lat, lng: b.lng };
+    const start = useExactFix ? { lat: b.lat, lng: b.lng }
+      : (track ? pointOnTrack(track, progress) : { lat: b.lat, lng: b.lng });
     const rotation = track ? bearing(track.from.lat, track.from.lng, track.to.lat, track.to.lng) : 0;
     const icon = createBusIcon(b, rotation);
     const m = L.marker([start.lat, start.lng], { icon: icon }).addTo(map);

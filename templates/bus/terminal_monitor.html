@@ -403,7 +403,12 @@
       <select class="k-qr-select" id="busQrSelect"></select>
       <div class="k-qr-code k-qr-code-large" id="busQrCode"></div>
       <p>Scan with your phone, then choose the terminal you are at.</p>
-      <a class="k-qr-modal-link" id="busQrLink" href="#" target="_blank" rel="noopener">Open check-in page</a>
+      <div class="k-qr-modal-links">
+        <a class="k-qr-modal-link" id="busQrLink" href="#" target="_blank" rel="noopener">Open check-in page</a>
+        <a class="k-qr-modal-link" href="{% url 'bus:bus_scan' %}" target="_blank" rel="noopener">
+          <i class="fa-solid fa-camera me-1"></i>Open webcam scanner
+        </a>
+      </div>
     </div>
   </div>
 
@@ -487,7 +492,7 @@
           height: size,
           colorDark: '#07101f',
           colorLight: '#ffffff',
-          correctLevel: QRCode.CorrectLevel.M
+          correctLevel: QRCode.CorrectLevel.L
         });
       }
 
@@ -510,7 +515,7 @@
         if (busSelect.value !== number) busSelect.value = number;
         qrTitle.textContent = 'Bus ' + number;
         qrLink.href = busQrUrl(number);
-        renderQr(qrCodeBox, qrLink.href, 220);
+        renderQr(qrCodeBox, qrLink.href, 300);
         qrModal.classList.add('is-open');
         qrModal.setAttribute('aria-hidden', 'false');
       }
