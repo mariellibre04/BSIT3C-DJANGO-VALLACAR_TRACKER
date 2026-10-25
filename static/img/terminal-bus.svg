@@ -1,0 +1,139 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 900 700" preserveAspectRatio="xMidYMid slice" role="img" aria-label="Vallacar bus waiting at the terminal">
+  <defs>
+    <linearGradient id="sky" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#b7d5ef"/>
+      <stop offset=".48" stop-color="#deebf7"/>
+      <stop offset=".78" stop-color="#f2ecdf"/>
+      <stop offset="1" stop-color="#e7dfd2"/>
+    </linearGradient>
+    <linearGradient id="hills" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#9db6a5"/>
+      <stop offset="1" stop-color="#7d9988"/>
+    </linearGradient>
+    <linearGradient id="body" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#ffffff"/>
+      <stop offset=".55" stop-color="#f2f5f9"/>
+      <stop offset="1" stop-color="#ccd6e2"/>
+    </linearGradient>
+    <linearGradient id="glass" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#17324f"/>
+      <stop offset=".42" stop-color="#4f809f"/>
+      <stop offset=".72" stop-color="#2d5674"/>
+      <stop offset="1" stop-color="#132a42"/>
+    </linearGradient>
+    <linearGradient id="road" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#5e6670"/>
+      <stop offset="1" stop-color="#3c434c"/>
+    </linearGradient>
+    <radialGradient id="sunGlow" cx="50%" cy="50%" r="50%">
+      <stop offset="0" stop-color="#fff6d8" stop-opacity=".95"/>
+      <stop offset=".55" stop-color="#ffe9b5" stop-opacity=".35"/>
+      <stop offset="1" stop-color="#ffe9b5" stop-opacity="0"/>
+    </radialGradient>
+    <linearGradient id="terminalRoof" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#475569"/>
+      <stop offset="1" stop-color="#334155"/>
+    </linearGradient>
+    <filter id="busShadow" x="-30%" y="-40%" width="160%" height="220%">
+      <feDropShadow dx="0" dy="18" stdDeviation="16" flood-color="#0b1b2e" flood-opacity=".35"/>
+    </filter>
+    <filter id="blur18"><feGaussianBlur stdDeviation="18"/></filter>
+    <filter id="blur7"><feGaussianBlur stdDeviation="7"/></filter>
+  </defs>
+
+  <rect width="900" height="700" fill="url(#sky)"/>
+  <circle cx="720" cy="150" r="190" fill="url(#sunGlow)"/>
+  <circle cx="720" cy="150" r="46" fill="#fff7df" opacity=".9"/>
+
+  <path d="M0 318 Q120 252 250 306 T520 288 T780 300 T900 280 V438 H0Z" fill="url(#hills)" opacity=".38"/>
+  <path d="M0 368 Q145 315 300 360 T620 348 T900 372 V470 H0Z" fill="#6d8a77" opacity=".32"/>
+  <path d="M0 410 Q170 370 340 402 T700 392 T900 414 V500 H0Z" fill="#4c6b58" opacity=".22"/>
+
+  <g opacity=".92">
+    <rect x="60" y="240" width="230" height="16" rx="8" fill="url(#terminalRoof)"/>
+    <rect x="78" y="256" width="14" height="230" fill="#3f4b5c"/>
+    <rect x="254" y="256" width="14" height="230" fill="#3f4b5c"/>
+    <rect x="96" y="256" width="164" height="14" fill="#556274"/>
+    <rect x="106" y="282" width="144" height="46" rx="8" fill="#e9eef5" opacity=".82"/>
+    <text x="178" y="309" text-anchor="middle" font-family="Inter, Arial, sans-serif" font-size="13" font-weight="700" letter-spacing="1.6" fill="#3b4a5d">CEBU SOUTH</text>
+    <rect x="196" y="414" width="6" height="72" fill="#566478"/>
+    <rect x="148" y="482" width="102" height="8" rx="4" fill="#566478"/>
+  </g>
+
+  <rect x="0" y="524" width="900" height="176" fill="url(#road)"/>
+  <rect x="0" y="524" width="900" height="9" fill="#8e99a5" opacity=".7"/>
+  <g opacity=".5" stroke="#f5f0dc" stroke-width="8" stroke-linecap="round">
+    <path d="M-20 620 H110"/>
+    <path d="M190 620 H320"/>
+    <path d="M400 620 H530"/>
+    <path d="M610 620 H740"/>
+    <path d="M820 620 H950"/>
+  </g>
+  <rect x="0" y="686" width="900" height="14" fill="#262c34"/>
+
+  <ellipse cx="470" cy="590" rx="335" ry="44" fill="#101d2c" opacity=".45" filter="url(#blur18)"/>
+
+  <g filter="url(#busShadow)">
+    <ellipse cx="278" cy="574" rx="66" ry="26" fill="#0b1220" opacity=".32" filter="url(#blur7)"/>
+    <ellipse cx="678" cy="574" rx="66" ry="26" fill="#0b1220" opacity=".32" filter="url(#blur7)"/>
+
+    <path d="M150 438 Q150 356 212 340 L620 308 Q716 304 744 380 L772 472 Q784 514 750 542 L726 558 Q716 578 688 578 L284 578 Q258 578 248 558 L206 552 Q160 540 152 500 Z" fill="url(#body)" stroke="#aebbc9" stroke-width="3"/>
+
+    <path d="M158 468 Q160 436 190 424 L752 390 Q770 388 772 408 L780 462 Q782 492 754 500 L178 522 Q156 522 156 500 Z" fill="#f6f8fb"/>
+    <path d="M158 462 L776 414 L780 444 L160 494 Z" fill="#d92d3a"/>
+    <path d="M160 486 L778 440 L780 454 L161 502 Z" fill="#f6f8fb"/>
+    <path d="M161 502 L779 454 L781 468 L162 518 Z" fill="#1f4f9c"/>
+
+    <path d="M212 340 L622 308 Q704 304 734 354 L740 392 L188 426 L190 366 Q194 348 212 340 Z" fill="#1c3a56"/>
+    <path d="M222 348 L612 318 Q686 315 716 356 L720 378 L202 407 L204 370 Q207 356 222 348 Z" fill="url(#glass)"/>
+
+    <g fill="#dcecf7" opacity=".2">
+      <path d="M240 349 L292 344 L288 401 L226 406 Z"/>
+      <path d="M380 338 L428 335 L424 396 L374 399 Z"/>
+      <path d="M520 327 L570 324 L566 389 L514 392 Z"/>
+      <path d="M618 320 L660 318 L658 384 L614 386 Z"/>
+    </g>
+
+    <g fill="#bdd5e6" opacity=".38">
+      <path d="M254 349 L282 347 L280 404 L244 407 Z"/>
+      <path d="M400 337 L420 336 L418 397 L392 398 Z"/>
+      <path d="M542 326 L558 325 L556 390 L536 391 Z"/>
+    </g>
+
+    <rect x="196" y="344" width="12" height="92" rx="6" fill="#e4eaf1"/>
+    <rect x="198" y="356" width="8" height="64" rx="4" fill="#5d7f99" opacity=".5"/>
+
+    <path d="M640 332 L700 328 Q724 328 728 352 L730 382 L638 388 Z" fill="#dce8f2" opacity=".24"/>
+
+    <path d="M166 430 Q176 414 202 410 L246 407 L244 438 L166 443 Z" fill="#e9eef4"/>
+    <rect x="170" y="436" width="70" height="10" rx="5" fill="#bfc9d4"/>
+    <rect x="170" y="452" width="58" height="8" rx="4" fill="#bfc9d4" opacity=".8"/>
+
+    <circle cx="280" cy="546" r="52" fill="#121820"/>
+    <circle cx="280" cy="546" r="32" fill="#5b6572"/>
+    <circle cx="280" cy="546" r="17" fill="#c4ced8"/>
+    <circle cx="280" cy="546" r="7" fill="#6c7784"/>
+    <circle cx="686" cy="546" r="52" fill="#121820"/>
+    <circle cx="686" cy="546" r="32" fill="#5b6572"/>
+    <circle cx="686" cy="546" r="17" fill="#c4ced8"/>
+    <circle cx="686" cy="546" r="7" fill="#6c7784"/>
+
+    <path d="M242 520 Q248 496 274 492 L700 466 Q724 466 730 490 L734 512 Q704 524 672 522 L270 540 Q248 540 242 520 Z" fill="#1e3d5c" opacity=".16"/>
+
+    <rect x="718" y="438" width="46" height="18" rx="9" fill="#f7e7a8"/>
+    <rect x="722" y="442" width="22" height="10" rx="5" fill="#fff7d2"/>
+    <rect x="164" y="452" width="26" height="14" rx="7" fill="#d5303c" opacity=".8"/>
+
+    <path d="M740 418 Q766 414 770 432 L756 436 L742 432 Z" fill="#9aa7b5"/>
+
+    <text x="430" y="451" font-family="Inter, Arial, sans-serif" font-size="22" font-weight="800" letter-spacing="4" fill="#1c3a56">VALLACAR</text>
+    <text x="432" y="468" font-family="Inter, Arial, sans-serif" font-size="10" font-weight="700" letter-spacing="5.4" fill="#d92d3a">CERES LINER</text>
+  </g>
+
+  <g fill="#e8eef5" opacity=".55">
+    <circle cx="816" cy="472" r="5"/>
+    <circle cx="838" cy="460" r="3"/>
+    <circle cx="102" cy="486" r="4"/>
+    <circle cx="82" cy="468" r="2.5"/>
+  </g>
+</svg>

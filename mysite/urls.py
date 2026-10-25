@@ -19,8 +19,13 @@ from django.urls import path, include
 from django.conf import settings
 from django.conf.urls.static import static
 
+from apps.bus import views as bus_views
+
 urlpatterns = [
     path('admin/', admin.site.urls),
+    path('terminal/scan/', bus_views.terminal_scan_page, name='terminal_scan'),
+    path('api/checkin', bus_views.terminal_checkin_api, name='terminal_checkin_api'),
+    path('api/checkin/', bus_views.terminal_checkin_api),
     path('', include('apps.core.urls')),
     path('users/', include('apps.users.urls')),
     path('info/', include('apps.info.urls')),

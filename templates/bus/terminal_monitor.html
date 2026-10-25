@@ -61,58 +61,8 @@
     </section>
 
     <!-- Terminal summary -->
-    <section class="k-terminal-strip" aria-label="Terminal summary">
-      <button type="button" class="k-terminal" data-terminal="Bacolod">
-        <div class="k-terminal-head">
-          <span class="k-terminal-dot"></span> Bacolod
-          <span class="k-hub">HUB</span>
-        </div>
-        <div class="k-terminal-stats">
-          <span><strong>1</strong> at terminal</span>
-          <span class="k-sep"></span>
-          <span><strong>4</strong> inbound</span>
-        </div>
-      </button>
-      <button type="button" class="k-terminal" data-terminal="Kabankalan">
-        <div class="k-terminal-head"><span class="k-terminal-dot"></span> Kabankalan</div>
-        <div class="k-terminal-stats">
-          <span><strong>1</strong> at terminal</span>
-          <span class="k-sep"></span>
-          <span><strong>0</strong> inbound</span>
-        </div>
-      </button>
-      <button type="button" class="k-terminal" data-terminal="Dumaguete">
-        <div class="k-terminal-head"><span class="k-terminal-dot"></span> Dumaguete</div>
-        <div class="k-terminal-stats">
-          <span><strong>1</strong> at terminal</span>
-          <span class="k-sep"></span>
-          <span><strong>0</strong> inbound</span>
-        </div>
-      </button>
-      <button type="button" class="k-terminal" data-terminal="Sipalay">
-        <div class="k-terminal-head"><span class="k-terminal-dot"></span> Sipalay</div>
-        <div class="k-terminal-stats">
-          <span><strong>1</strong> at terminal</span>
-          <span class="k-sep"></span>
-          <span><strong>0</strong> inbound</span>
-        </div>
-      </button>
-      <button type="button" class="k-terminal" data-terminal="San Carlos">
-        <div class="k-terminal-head"><span class="k-terminal-dot"></span> San Carlos</div>
-        <div class="k-terminal-stats">
-          <span><strong>1</strong> at terminal</span>
-          <span class="k-sep"></span>
-          <span><strong>0</strong> inbound</span>
-        </div>
-      </button>
-      <button type="button" class="k-terminal" data-terminal="Hinigaran">
-        <div class="k-terminal-head"><span class="k-terminal-dot"></span> Hinigaran</div>
-        <div class="k-terminal-stats">
-          <span><strong>1</strong> at terminal</span>
-          <span class="k-sep"></span>
-          <span><strong>0</strong> inbound</span>
-        </div>
-      </button>
+    <section class="k-terminal-strip" id="kioskTerminals" aria-label="Terminal summary">
+      {% include 'bus/_kiosk_terminals.html' %}
     </section>
 
     <!-- Scan to connect -->
@@ -136,11 +86,11 @@
         </div>
         <div class="k-board-meta">
           <span class="k-live"><span class="k-live-dot"></span> Live</span>
-          <span><i class="fa-regular fa-clock"></i> Updated just now</span>
+          <span id="kioskUpdated"><i class="fa-regular fa-clock"></i> {{ kiosk_updated_label }}</span>
         </div>
       </div>
 
-      <div class="k-table-wrap">
+      <div class="k-table-wrap" id="kioskTableWrap">
         <table class="k-table">
           <thead>
             <tr>
@@ -153,213 +103,7 @@
             </tr>
           </thead>
           <tbody>
-            <tr class="k-section">
-              <td colspan="6"><span>Now at terminal</span><span class="k-section-count">6 buses</span></td>
-            </tr>
-
-            <tr class="k-bus-row">
-              <td>
-                <div class="k-bus">
-                  <span class="k-bus-icon"><i class="fa-solid fa-bus"></i></span>
-                  <span><span class="k-bus-no">53</span><span class="k-bus-plate">Plate 78</span></span>
-                  <button type="button" class="k-qr-btn" data-bus-number="53" title="Show conductor check-in QR for bus 53" aria-label="Show conductor check-in QR for bus 53">
-                    <i class="fa-solid fa-qrcode"></i>
-                  </button>
-                </div>
-              </td>
-              <td>
-                <span class="k-route">Bacolod <i class="fa-solid fa-arrow-right-long"></i> Dumaguete</span>
-                <span class="k-route-sub">Ceres Liner &middot; Aircon</span>
-              </td>
-              <td><span class="k-terminal-pill hub"><span class="k-dot"></span> Bacolod</span></td>
-              <td><span class="k-bay">Bay 1</span></td>
-              <td><span class="k-time">6:45 PM</span></td>
-              <td><span class="k-status is-boarding"><span class="k-status-dot"></span> Boarding</span></td>
-            </tr>
-
-            <tr class="k-bus-row">
-              <td>
-                <div class="k-bus">
-                  <span class="k-bus-icon"><i class="fa-solid fa-bus"></i></span>
-                  <span><span class="k-bus-no">364</span><span class="k-bus-plate">Plate 84</span></span>
-                  <button type="button" class="k-qr-btn" data-bus-number="364" title="Show conductor check-in QR for bus 364" aria-label="Show conductor check-in QR for bus 364">
-                    <i class="fa-solid fa-qrcode"></i>
-                  </button>
-                </div>
-              </td>
-              <td>
-                <span class="k-route">Sipalay <i class="fa-solid fa-arrow-right-long"></i> Kabankalan</span>
-                <span class="k-route-sub">Ceres Liner &middot; Ordinary</span>
-              </td>
-              <td><span class="k-terminal-pill"><span class="k-dot"></span> Kabankalan</span></td>
-              <td><span class="k-bay">Bay 2</span></td>
-              <td><span class="k-time">6:30 PM</span></td>
-              <td><span class="k-status is-at"><span class="k-status-dot"></span> At Terminal</span></td>
-            </tr>
-
-            <tr class="k-bus-row">
-              <td>
-                <div class="k-bus">
-                  <span class="k-bus-icon"><i class="fa-solid fa-bus"></i></span>
-                  <span><span class="k-bus-no">117</span><span class="k-bus-plate">Plate 112</span></span>
-                  <button type="button" class="k-qr-btn" data-bus-number="117" title="Show conductor check-in QR for bus 117" aria-label="Show conductor check-in QR for bus 117">
-                    <i class="fa-solid fa-qrcode"></i>
-                  </button>
-                </div>
-              </td>
-              <td>
-                <span class="k-route">Dumaguete <i class="fa-solid fa-arrow-right-long"></i> Bais</span>
-                <span class="k-route-sub">Ceres Liner &middot; Ordinary</span>
-              </td>
-              <td><span class="k-terminal-pill"><span class="k-dot"></span> Dumaguete</span></td>
-              <td><span class="k-bay">Bay 4</span></td>
-              <td><span class="k-time">6:50 PM</span></td>
-              <td><span class="k-status is-at"><span class="k-status-dot"></span> At Terminal</span></td>
-            </tr>
-
-            <tr class="k-bus-row">
-              <td>
-                <div class="k-bus">
-                  <span class="k-bus-icon"><i class="fa-solid fa-bus"></i></span>
-                  <span><span class="k-bus-no">509</span><span class="k-bus-plate">Plate 56</span></span>
-                  <button type="button" class="k-qr-btn" data-bus-number="509" title="Show conductor check-in QR for bus 509" aria-label="Show conductor check-in QR for bus 509">
-                    <i class="fa-solid fa-qrcode"></i>
-                  </button>
-                </div>
-              </td>
-              <td>
-                <span class="k-route">Sipalay <i class="fa-solid fa-arrow-right-long"></i> Bacolod</span>
-                <span class="k-route-sub">Ceres Liner &middot; Aircon</span>
-              </td>
-              <td><span class="k-terminal-pill"><span class="k-dot"></span> Sipalay</span></td>
-              <td><span class="k-bay">Bay 1</span></td>
-              <td><span class="k-time">7:05 PM</span></td>
-              <td><span class="k-status is-at"><span class="k-status-dot"></span> At Terminal</span></td>
-            </tr>
-
-            <tr class="k-bus-row">
-              <td>
-                <div class="k-bus">
-                  <span class="k-bus-icon"><i class="fa-solid fa-bus"></i></span>
-                  <span><span class="k-bus-no">77</span><span class="k-bus-plate">Plate 91</span></span>
-                  <button type="button" class="k-qr-btn" data-bus-number="77" title="Show conductor check-in QR for bus 77" aria-label="Show conductor check-in QR for bus 77">
-                    <i class="fa-solid fa-qrcode"></i>
-                  </button>
-                </div>
-              </td>
-              <td>
-                <span class="k-route">San Carlos <i class="fa-solid fa-arrow-right-long"></i> Bacolod</span>
-                <span class="k-route-sub">Ceres Liner &middot; Ordinary</span>
-              </td>
-              <td><span class="k-terminal-pill"><span class="k-dot"></span> San Carlos</span></td>
-              <td><span class="k-bay">Bay 2</span></td>
-              <td><span class="k-time">7:15 PM</span></td>
-              <td><span class="k-status is-at"><span class="k-status-dot"></span> At Terminal</span></td>
-            </tr>
-
-            <tr class="k-bus-row">
-              <td>
-                <div class="k-bus">
-                  <span class="k-bus-icon"><i class="fa-solid fa-bus"></i></span>
-                  <span><span class="k-bus-no">55</span><span class="k-bus-plate">Plate 203</span></span>
-                  <button type="button" class="k-qr-btn" data-bus-number="55" title="Show conductor check-in QR for bus 55" aria-label="Show conductor check-in QR for bus 55">
-                    <i class="fa-solid fa-qrcode"></i>
-                  </button>
-                </div>
-              </td>
-              <td>
-                <span class="k-route">Hinigaran <i class="fa-solid fa-arrow-right-long"></i> Bacolod</span>
-                <span class="k-route-sub">Ceres Liner &middot; Ordinary</span>
-              </td>
-              <td><span class="k-terminal-pill"><span class="k-dot"></span> Hinigaran</span></td>
-              <td><span class="k-bay">Bay 1</span></td>
-              <td><span class="k-time">7:18 PM</span></td>
-              <td><span class="k-status is-at"><span class="k-status-dot"></span> At Terminal</span></td>
-            </tr>
-
-            <tr class="k-section inbound">
-              <td colspan="6"><span>Arriving / en route</span><span class="k-section-count">4 buses</span></td>
-            </tr>
-
-            <tr class="k-bus-row">
-              <td>
-                <div class="k-bus">
-                  <span class="k-bus-icon"><i class="fa-solid fa-bus"></i></span>
-                  <span><span class="k-bus-no">208</span><span class="k-bus-plate">Plate 147</span></span>
-                  <button type="button" class="k-qr-btn" data-bus-number="208" title="Show conductor check-in QR for bus 208" aria-label="Show conductor check-in QR for bus 208">
-                    <i class="fa-solid fa-qrcode"></i>
-                  </button>
-                </div>
-              </td>
-              <td>
-                <span class="k-route">Kabankalan <i class="fa-solid fa-arrow-right-long"></i> Bacolod</span>
-                <span class="k-route-sub">Ceres Liner &middot; Aircon</span>
-              </td>
-              <td><span class="k-terminal-pill hub"><span class="k-dot"></span> Bacolod</span></td>
-              <td><span class="k-bay">Bay 2</span></td>
-              <td><span class="k-time">6:38 PM</span></td>
-              <td><span class="k-status is-arriving"><span class="k-status-dot"></span> Arriving</span></td>
-            </tr>
-
-            <tr class="k-bus-row">
-              <td>
-                <div class="k-bus">
-                  <span class="k-bus-icon"><i class="fa-solid fa-bus"></i></span>
-                  <span><span class="k-bus-no">305</span><span class="k-bus-plate">Plate 88</span></span>
-                  <button type="button" class="k-qr-btn" data-bus-number="305" title="Show conductor check-in QR for bus 305" aria-label="Show conductor check-in QR for bus 305">
-                    <i class="fa-solid fa-qrcode"></i>
-                  </button>
-                </div>
-              </td>
-              <td>
-                <span class="k-route">Dumaguete <i class="fa-solid fa-arrow-right-long"></i> Bacolod</span>
-                <span class="k-route-sub">Ceres Liner &middot; Aircon</span>
-              </td>
-              <td><span class="k-terminal-pill hub"><span class="k-dot"></span> Bacolod</span></td>
-              <td><span class="k-bay">Bay 4</span></td>
-              <td><span class="k-time">6:52 PM</span></td>
-              <td><span class="k-status is-enroute"><span class="k-status-dot"></span> En Route</span></td>
-            </tr>
-
-            <tr class="k-bus-row">
-              <td>
-                <div class="k-bus">
-                  <span class="k-bus-icon"><i class="fa-solid fa-bus"></i></span>
-                  <span><span class="k-bus-no">330</span><span class="k-bus-plate">Plate 64</span></span>
-                  <button type="button" class="k-qr-btn" data-bus-number="330" title="Show conductor check-in QR for bus 330" aria-label="Show conductor check-in QR for bus 330">
-                    <i class="fa-solid fa-qrcode"></i>
-                  </button>
-                </div>
-              </td>
-              <td>
-                <span class="k-route">San Carlos <i class="fa-solid fa-arrow-right-long"></i> Bacolod</span>
-                <span class="k-route-sub">Ceres Liner &middot; Ordinary</span>
-              </td>
-              <td><span class="k-terminal-pill hub"><span class="k-dot"></span> Bacolod</span></td>
-              <td><span class="k-bay">Bay 5</span></td>
-              <td><span class="k-time">7:05 PM</span></td>
-              <td><span class="k-status is-delayed"><span class="k-status-dot"></span> Delayed</span></td>
-            </tr>
-
-            <tr class="k-bus-row">
-              <td>
-                <div class="k-bus">
-                  <span class="k-bus-icon"><i class="fa-solid fa-bus"></i></span>
-                  <span><span class="k-bus-no">44</span><span class="k-bus-plate">Plate 119</span></span>
-                  <button type="button" class="k-qr-btn" data-bus-number="44" title="Show conductor check-in QR for bus 44" aria-label="Show conductor check-in QR for bus 44">
-                    <i class="fa-solid fa-qrcode"></i>
-                  </button>
-                </div>
-              </td>
-              <td>
-                <span class="k-route">San Carlos <i class="fa-solid fa-arrow-right-long"></i> Bacolod</span>
-                <span class="k-route-sub">Ceres Liner &middot; Ordinary</span>
-              </td>
-              <td><span class="k-terminal-pill hub"><span class="k-dot"></span> Bacolod</span></td>
-              <td><span class="k-bay">Bay 3</span></td>
-              <td><span class="k-time">7:20 PM</span></td>
-              <td><span class="k-status is-enroute"><span class="k-status-dot"></span> En Route</span></td>
-            </tr>
+            {% include 'bus/_kiosk_board_body.html' %}
           </tbody>
         </table>
       </div>
@@ -374,18 +118,9 @@
         <span><i class="legend-enroute"></i> En Route</span>
         <span><i class="legend-delayed"></i> Delayed</span>
       </div>
-      <div class="k-ticker" aria-label="Terminal announcements">
+      <div class="k-ticker" id="kioskTicker" aria-label="Terminal announcements">
         <div class="k-ticker-track">
-          <span><b>NOW BOARDING</b> &middot; Bus 53 &middot; Bacolod &middot; Bay 1</span>
-          <span><b>ARRIVING</b> &middot; Bus 208 &middot; Bacolod &middot; Bay 2</span>
-          <span><b>DELAYED</b> &middot; Bus 330 &middot; from San Carlos</span>
-          <span><b>NEXT DEPARTURE</b> &middot; Bus 364 &middot; Kabankalan &middot; 6:30 PM</span>
-          <span><b>REMINDER</b> &middot; Keep your ticket ready and listen for boarding calls</span>
-          <span><b>NOW BOARDING</b> &middot; Bus 53 &middot; Bacolod &middot; Bay 1</span>
-          <span><b>ARRIVING</b> &middot; Bus 208 &middot; Bacolod &middot; Bay 2</span>
-          <span><b>DELAYED</b> &middot; Bus 330 &middot; from San Carlos</span>
-          <span><b>NEXT DEPARTURE</b> &middot; Bus 364 &middot; Kabankalan &middot; 6:30 PM</span>
-          <span><b>REMINDER</b> &middot; Keep your ticket ready and listen for boarding calls</span>
+          {% include 'bus/_kiosk_ticker_items.html' %}
         </div>
       </div>
     </footer>
@@ -442,34 +177,37 @@
           : '<i class="fa-solid fa-expand"></i>';
       });
 
-      var termButtons = Array.prototype.slice.call(document.querySelectorAll('.k-terminal[data-terminal]'));
-      var busRows = Array.prototype.slice.call(document.querySelectorAll('.k-bus-row'));
-      var sectionRows = Array.prototype.slice.call(document.querySelectorAll('.k-section'));
+      var kioskTerminals = document.getElementById('kioskTerminals');
+      var kioskTableWrap = document.getElementById('kioskTableWrap');
+      var kioskTicker = document.getElementById('kioskTicker');
+      var kioskUpdated = document.getElementById('kioskUpdated');
       var currentTerm = '';
 
       function setTerminalFilter(term) {
-        currentTerm = term;
-        termButtons.forEach(function (card) {
-          var isActive = card.getAttribute('data-terminal') === term;
+        currentTerm = term || '';
+        document.querySelectorAll('.k-terminal[data-terminal]').forEach(function (card) {
+          var isActive = card.getAttribute('data-terminal') === currentTerm;
           card.classList.toggle('active', isActive);
           card.setAttribute('aria-pressed', isActive ? 'true' : 'false');
         });
-        busRows.forEach(function (row) {
+        document.querySelectorAll('.k-bus-row').forEach(function (row) {
           var pill = row.querySelector('.k-terminal-pill');
           var name = pill ? pill.textContent.trim() : '';
-          row.style.display = !term || name === term ? '' : 'none';
+          row.style.display = !currentTerm || name === currentTerm ? '' : 'none';
         });
-        sectionRows.forEach(function (row) {
-          row.style.display = term ? 'none' : '';
+        document.querySelectorAll('.k-section').forEach(function (row) {
+          row.style.display = currentTerm ? 'none' : '';
         });
       }
 
-      termButtons.forEach(function (card) {
-        var term = card.getAttribute('data-terminal');
-        card.addEventListener('click', function () {
+      if (kioskTerminals) {
+        kioskTerminals.addEventListener('click', function (event) {
+          var card = event.target.closest('.k-terminal[data-terminal]');
+          if (!card) return;
+          var term = card.getAttribute('data-terminal');
           setTerminalFilter(currentTerm === term ? '' : term);
         });
-      });
+      }
 
       document.addEventListener('keydown', function (event) {
         if (event.key === 'Escape') setTerminalFilter('');
@@ -536,13 +274,22 @@
         busSelect.appendChild(option);
       }
 
-      document.querySelectorAll('.k-qr-btn').forEach(function (trigger) {
-        var number = trigger.getAttribute('data-bus-number') || '';
-        addBusOption(number);
-        trigger.addEventListener('click', function () { showBusQr(number); });
-      });
+      function syncBusOptions() {
+        knownBuses = [];
+        busSelect.innerHTML = '';
+        Object.keys(qrData.buses || {}).forEach(addBusOption);
+        document.querySelectorAll('.k-qr-btn[data-bus-number]').forEach(function (trigger) {
+          addBusOption(trigger.getAttribute('data-bus-number'));
+        });
+      }
 
-      Object.keys(qrData.buses || {}).forEach(addBusOption);
+      syncBusOptions();
+
+      document.addEventListener('click', function (event) {
+        var trigger = event.target.closest('.k-qr-btn[data-bus-number]');
+        if (!trigger) return;
+        showBusQr(trigger.getAttribute('data-bus-number') || '');
+      });
 
       busSelect.addEventListener('change', function () { showBusQr(busSelect.value); });
 
@@ -556,6 +303,52 @@
       });
       document.addEventListener('keydown', function (event) {
         if (event.key === 'Escape' && qrModal.classList.contains('is-open')) closeQrModal();
+      });
+
+      var kioskRefreshUrl = "{% url 'bus:bus_kiosk_refresh' %}";
+      var kioskVersion = "{{ kiosk_version|escapejs }}";
+      var kioskRefreshing = false;
+
+      function refreshKiosk() {
+        if (document.hidden || kioskRefreshing) return;
+        kioskRefreshing = true;
+        fetch(kioskRefreshUrl, {
+          headers: { 'X-Requested-With': 'XMLHttpRequest' },
+          cache: 'no-store'
+        })
+          .then(function (response) {
+            if (!response.ok) throw new Error('Kiosk refresh failed');
+            return response.json();
+          })
+          .then(function (data) {
+            if (!data || data.version === kioskVersion) return;
+            kioskVersion = data.version;
+            if (data.terminals_html && kioskTerminals) {
+              kioskTerminals.innerHTML = data.terminals_html;
+            }
+            if (data.board_html && kioskTableWrap) {
+              var body = kioskTableWrap.querySelector('tbody');
+              if (body) body.innerHTML = data.board_html;
+            }
+            if (data.ticker_html && kioskTicker) {
+              var track = kioskTicker.querySelector('.k-ticker-track');
+              if (track) track.innerHTML = data.ticker_html;
+            }
+            if (data.updated && kioskUpdated) {
+              kioskUpdated.innerHTML = '<i class="fa-regular fa-clock"></i> ' + data.updated;
+            }
+            qrData.buses = data.buses || {};
+            syncBusOptions();
+            setTerminalFilter(currentTerm);
+          })
+          .catch(function () {})
+          .finally(function () { kioskRefreshing = false; });
+      }
+
+      setInterval(refreshKiosk, 3000);
+      window.setTimeout(refreshKiosk, 600);
+      document.addEventListener('visibilitychange', function () {
+        if (!document.hidden) refreshKiosk();
       });
     })();
   </script>

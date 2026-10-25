@@ -80,6 +80,17 @@ TERMINALS = [
 for _terminal in TERMINALS:
     _terminal.setdefault('label', _terminal['name'])
 
+DEFAULT_STAFF_TERMINAL_ID = 'CEBU-SOUTH'
+
+STAFF_TERMINALS = {
+    'CEBU-SOUTH': {
+        'name': 'CEBU-SOUTH',
+        'label': 'CEBU-SOUTH',
+        'lat': 10.2958,
+        'lng': 123.8934,
+    },
+}
+
 # Terminals shown as summary cards on the terminal-monitor kiosk.
 KIOSK_TERMINAL_NAMES = [
     'Bacolod', 'Kabankalan', 'Dumaguete', 'Sipalay', 'San Carlos', 'Hinigaran',
@@ -568,7 +579,7 @@ def _kiosk_board_context():
 
 
 def terminal_monitor_context(request):
-    """QR targets used by the static terminal monitor kiosk."""
+    """QR targets used by the terminal monitor kiosk."""
     bus_qr_map = {
         bus.bus_number: request.build_absolute_uri(
             reverse('bus:bus_tap', args=[bus.qr_token])
@@ -584,8 +595,10 @@ def terminal_monitor_context(request):
 
 
 def bus_kiosk_page(request):
-    """Airport-style terminal monitor board with the static demo rows."""
-    return render(request, 'bus/terminal_monitor.html', terminal_monitor_context(request))
+    """Live airport-style terminal monitor board."""
+    context = terminal_monitor_context(request)
+    context.update(_kiosk_board_context())
+    return render(request, 'bus/terminal_monitor.html', context)
 
 
 @never_cache
@@ -616,6 +629,73 @@ def bus_kiosk_refresh(request):
 
 def _find_terminal(terminal_name):
     return next((t for t in TERMINALS if t['name'] == terminal_name), None)
+
+
+def _normalize_terminal_key(value):
+    return re.sub(r'[^A-Z0-9]+', '-', (value or '').strip().upper()).strip('-')
+
+
+def _staff_terminal(terminal_id):
+    key = _normalize_terminal_key(terminal_id)
+    if not key:
+        key = DEFAULT_STAFF_TERMINAL_ID
+    if key in STAFF_TERMINALS:
+        return STAFF_TERMINALS[key]
+    for terminal in TERMINALS:
+        if _normalize_terminal_key(terminal['name']) == key:
+            return {
+                'name': terminal['name'],
+                'label': terminal['label'],
+                'lat': terminal['lat'],
+                'lng': terminal['lng'],
+            }
+    return None
+
+
+def _staff_terminal_id_for_user(user):
+    terminal_id = getattr(user, 'terminal_id', None)
+    if terminal_id:
+        return str(terminal_id)
+    return DEFAULT_STAFF_TERMINAL_ID
+
+
+def _resolve_scanned_bus(raw):
+    token = _extract_qr_token(raw)
+    if token is not None:
+        bus = Bus.objects.filter(qr_token=token).first()
+        if bus is not None:
+            return bus
+    text = str(raw or '').strip()
+    if not text:
+        return None
+    if text.isdigit():
+        bus = Bus.objects.filter(pk=int(text)).first()
+        if bus is not None:
+            return bus
+    return Bus.objects.filter(bus_number__iexact=text).first()
+
+
+def _record_staff_scan(bus, terminal, scan_type, user=None):
+    with transaction.atomic():
+        tap = BusTerminalTap.objects.create(
+            bus=bus,
+            terminal_name=terminal['label'],
+            latitude=Decimal(str(terminal['lat'])),
+            longitude=Decimal(str(terminal['lng'])),
+            user=user if user and user.is_authenticated else None,
+        )
+        if scan_type == 'OUT':
+            bus.current_location = f"En route from {terminal['label']} Terminal"
+            bus.movement_status = Bus.MOVE_EN_ROUTE
+        else:
+            bus.current_location = f"{terminal['label']} Terminal"
+            bus.movement_status = Bus.MOVE_AT_TERMINAL
+        bus.latitude = Decimal(str(terminal['lat']))
+        bus.longitude = Decimal(str(terminal['lng']))
+        bus.movement_reason = ''
+        bus.last_gps_update = timezone.now()
+        bus.save()
+    return tap
 
 
 _QR_TOKEN_RE = re.compile(
@@ -717,6 +797,79 @@ def bus_scan_page(request):
         'terminals': TERMINALS,
         'taps': taps,
         'selected_terminal': request.GET.get('terminal', '').strip(),
+    })
+
+
+@never_cache
+def terminal_scan_page(request):
+    """Mobile terminal-staff scanner for bus arrivals and departures."""
+    terminal = (
+        _staff_terminal(_staff_terminal_id_for_user(request.user))
+        or _staff_terminal(DEFAULT_STAFF_TERMINAL_ID)
+    )
+    return render(request, 'terminal/scan.html', {
+        'terminal_id': terminal['name'],
+        'terminal_label': terminal['label'],
+        'terminal': terminal,
+    })
+
+
+@never_cache
+@require_POST
+def terminal_checkin_api(request):
+    """Record an IN/OUT bus scan from the terminal-staff scanner."""
+    if request.content_type and request.content_type.startswith('application/json'):
+        try:
+            payload = json.loads(request.body or b'{}')
+        except (TypeError, ValueError, json.JSONDecodeError):
+            return JsonResponse({'error': 'Invalid JSON payload.'}, status=400)
+    else:
+        payload = request.POST
+
+    if not isinstance(payload, dict):
+        return JsonResponse({'error': 'Invalid check-in payload.'}, status=400)
+
+    scan_type = str(payload.get('type', '')).strip().upper()
+    if scan_type not in ('IN', 'OUT'):
+        return JsonResponse({'error': 'Type must be IN or OUT.'}, status=400)
+
+    raw_bus = payload.get('bus_id') or payload.get('bus') or payload.get('token')
+    if not raw_bus:
+        return JsonResponse({'error': 'Bus QR code is required.'}, status=400)
+
+    bus = _resolve_scanned_bus(raw_bus)
+    if bus is None:
+        return JsonResponse({'error': 'That QR code does not match a registered bus.'}, status=404)
+
+    terminal_id = (
+        payload.get('terminal_id')
+        or _staff_terminal_id_for_user(request.user)
+    )
+    terminal = _staff_terminal(terminal_id)
+    if terminal is None:
+        return JsonResponse({'error': 'Unknown terminal.'}, status=400)
+
+    tap = _record_staff_scan(bus, terminal, scan_type, request.user)
+    local_time = timezone.localtime(tap.tapped_at)
+    return JsonResponse({
+        'status': 'ok',
+        'type': scan_type,
+        'bus': {
+            'id': bus.id,
+            'bus_number': bus.bus_number,
+            'plate_number': bus.plate_number,
+            'route': bus.route,
+            'current_location': bus.current_location,
+            'movement_status': bus.movement_status,
+        },
+        'terminal': terminal['label'],
+        'message': (
+            f"Bus {bus.bus_number} checked in at {terminal['label']} Terminal."
+            if scan_type == 'IN'
+            else f"Bus {bus.bus_number} checked out from {terminal['label']} Terminal."
+        ),
+        'tapped_at': local_time.strftime('%b %d, %Y %I:%M %p'),
+        'kiosk_version': _kiosk_board_context()['kiosk_version'],
     })
 
 
