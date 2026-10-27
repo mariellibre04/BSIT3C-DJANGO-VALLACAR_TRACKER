@@ -58,6 +58,7 @@ def _parse_coord(raw, low, high):
 TERMINALS = [
     {'name': 'Bacolod', 'keywords': ('bacolod',), 'lat': 10.6765, 'lng': 122.9509},
     {'name': 'Kabankalan', 'keywords': ('kabankalan', 'kabnakalan'), 'lat': 9.9917, 'lng': 122.8128},
+    {'name': 'Mabinay', 'keywords': ('mabinay',), 'lat': 9.7264, 'lng': 122.9256},
     {'name': 'Dumaguete', 'keywords': ('dumaguete',), 'lat': 9.3072, 'lng': 123.3080},
     {'name': 'San Carlos', 'keywords': ('san carlos', 'sancarlos'), 'lat': 10.4966, 'lng': 123.4224},
     {'name': 'Cadiz', 'keywords': ('cadiz',), 'lat': 10.9586, 'lng': 123.1321},
@@ -93,7 +94,34 @@ STAFF_TERMINALS = {
 
 # Terminals shown as summary cards on the terminal-monitor kiosk.
 KIOSK_TERMINAL_NAMES = [
-    'Bacolod', 'Kabankalan', 'Dumaguete', 'Sipalay', 'San Carlos', 'Hinigaran',
+    'Bacolod', 'Kabankalan', 'Mabinay', 'Dumaguete', 'Sipalay', 'San Carlos', 'Hinigaran',
+]
+
+# Static fallback data so the webcam time-in / time-out flow can be demonstrated
+# before the real bus records are entered. These buses are created on first tap.
+ESTIMATED_STOP_MINUTES = 15
+STATIC_DEMO_BUSES = [
+    {
+        'bus_number': 'KDM-101',
+        'plate_number': 'VTI 1101',
+        'capacity': 49,
+        'route': 'Kabankalan-Dumaguete',
+        'terminal': 'Mabinay',
+    },
+    {
+        'bus_number': 'KDM-102',
+        'plate_number': 'VTI 1102',
+        'capacity': 49,
+        'route': 'Kabankalan-Dumaguete',
+        'terminal': 'Mabinay',
+    },
+    {
+        'bus_number': 'BDG-201',
+        'plate_number': 'VTI 2201',
+        'capacity': 49,
+        'route': 'Bacolod-Dumaguete',
+        'terminal': 'Kabankalan',
+    },
 ]
 
 KIOSK_STATUS_CLASS = {
@@ -507,12 +535,22 @@ def _kiosk_board_context():
         route_from, route_to = route_endpoints(bus.route)
         dest = route_to['name'] if route_to else ''
 
+        time_in = tap.tapped_at if tap else None
+        time_out = tap.left_at if tap else None
+
         if is_at:
             terminal = tap.terminal_name if tap else (bus.current_location or '')
-            when = tap.tapped_at if tap else (bus.last_gps_update or bus.updated_at)
+            when = time_in or (bus.last_gps_update or bus.updated_at)
+            estimated = _estimated_departure(tap)
+        elif time_out is not None:
+            # The bus has timed out: keep showing the stop it just left.
+            terminal = tap.terminal_name
+            when = time_out
+            estimated = None
         else:
             terminal = dest or (tap.terminal_name if tap else '') or (bus.current_location or '')
-            when = bus.last_gps_update or bus.updated_at or (tap.tapped_at if tap else None)
+            when = bus.last_gps_update or bus.updated_at or time_in
+            estimated = _estimated_departure(tap)
 
         terminal = terminal.replace(' Terminal', '').strip()
         if when is not None and (latest_change is None or when > latest_change):
@@ -526,6 +564,9 @@ def _kiosk_board_context():
             'terminal': terminal or '—',
             'is_hub': terminal == 'Bacolod',
             'time': when,
+            'time_in': time_in,
+            'time_out': time_out,
+            'estimated_departure': estimated,
             'status_class': KIOSK_STATUS_CLASS.get(bus.movement_status, 'is-enroute'),
             'status_label': bus.get_movement_status_display(),
             'is_at_terminal': is_at,
@@ -539,6 +580,9 @@ def _kiosk_board_context():
                 bus.route or '',
                 terminal,
                 when.isoformat() if when else '',
+                time_in.isoformat() if time_in else '',
+                time_out.isoformat() if time_out else '',
+                estimated.isoformat() if estimated else '',
             ])
         )
 
@@ -628,7 +672,22 @@ def bus_kiosk_refresh(request):
 
 
 def _find_terminal(terminal_name):
-    return next((t for t in TERMINALS if t['name'] == terminal_name), None)
+    name = (terminal_name or '').strip()
+    if not name:
+        return None
+    lowered = name.lower()
+    for terminal in TERMINALS:
+        if terminal['name'].lower() == lowered or terminal.get('label', '').lower() == lowered:
+            return terminal
+    for place in CITY_PLACES:
+        if place['label'].lower() == lowered or place['name'].lower() == lowered:
+            return {
+                'name': place['name'],
+                'label': place['name'],
+                'lat': place['lat'],
+                'lng': place['lng'],
+            }
+    return None
 
 
 def _normalize_terminal_key(value):
@@ -676,25 +735,11 @@ def _resolve_scanned_bus(raw):
 
 
 def _record_staff_scan(bus, terminal, scan_type, user=None):
-    with transaction.atomic():
-        tap = BusTerminalTap.objects.create(
-            bus=bus,
-            terminal_name=terminal['label'],
-            latitude=Decimal(str(terminal['lat'])),
-            longitude=Decimal(str(terminal['lng'])),
-            user=user if user and user.is_authenticated else None,
-        )
-        if scan_type == 'OUT':
-            bus.current_location = f"En route from {terminal['label']} Terminal"
-            bus.movement_status = Bus.MOVE_EN_ROUTE
-        else:
-            bus.current_location = f"{terminal['label']} Terminal"
-            bus.movement_status = Bus.MOVE_AT_TERMINAL
-        bus.latitude = Decimal(str(terminal['lat']))
-        bus.longitude = Decimal(str(terminal['lng']))
-        bus.movement_reason = ''
-        bus.last_gps_update = timezone.now()
-        bus.save()
+    """Record an IN (time-in) or OUT (time-out) staff scan."""
+    if scan_type == 'OUT':
+        tap, _closed = _record_departure_tap(bus, terminal, user)
+        return tap
+    tap, _created = _record_terminal_tap(bus, terminal, user)
     return tap
 
 
@@ -717,15 +762,37 @@ def _extract_qr_token(raw):
         return None
 
 
+def _open_tap_for(bus, terminal_name=None):
+    """Return the latest tap that has not been timed out yet."""
+    taps = bus.terminal_taps.filter(left_at__isnull=True)
+    if terminal_name:
+        taps = taps.filter(terminal_name=terminal_name)
+    return taps.order_by('-tapped_at').first()
+
+
+def _estimated_departure(tap):
+    if tap is None:
+        return None
+    return tap.tapped_at + timedelta(minutes=ESTIMATED_STOP_MINUTES)
+
+
 def _record_terminal_tap(bus, terminal, user=None):
+    """Record a time-in for the bus at a terminal.
+
+    If the bus already has an open tap at this terminal we keep that tap so the
+    conductor cannot accidentally create a duplicate time-in.
+    """
     with transaction.atomic():
-        tap = BusTerminalTap.objects.create(
-            bus=bus,
-            terminal_name=terminal['label'],
-            latitude=Decimal(str(terminal['lat'])),
-            longitude=Decimal(str(terminal['lng'])),
-            user=user if user and user.is_authenticated else None,
-        )
+        tap = _open_tap_for(bus, terminal['label'])
+        created = tap is None
+        if created:
+            tap = BusTerminalTap.objects.create(
+                bus=bus,
+                terminal_name=terminal['label'],
+                latitude=Decimal(str(terminal['lat'])),
+                longitude=Decimal(str(terminal['lng'])),
+                user=user if user and user.is_authenticated else None,
+            )
         bus.current_location = f"{terminal['label']} Terminal"
         bus.latitude = Decimal(str(terminal['lat']))
         bus.longitude = Decimal(str(terminal['lng']))
@@ -733,7 +800,65 @@ def _record_terminal_tap(bus, terminal, user=None):
         bus.movement_reason = ''
         bus.last_gps_update = timezone.now()
         bus.save()
-    return tap
+    return tap, created
+
+
+def _record_departure_tap(bus, terminal=None, user=None):
+    """Record a time-out by closing the bus's open tap.
+
+    Returns (tap, closed). ``closed`` is False when there was no open tap.
+    """
+    with transaction.atomic():
+        tap = _open_tap_for(bus)
+        if tap is None and terminal is not None:
+            tap = BusTerminalTap.objects.create(
+                bus=bus,
+                terminal_name=terminal['label'],
+                latitude=Decimal(str(terminal['lat'])),
+                longitude=Decimal(str(terminal['lng'])),
+                user=user if user and user.is_authenticated else None,
+            )
+        closed = tap is not None
+        now = timezone.now()
+        if tap is not None:
+            tap.left_at = now
+            tap.save(update_fields=['left_at'])
+            terminal_label = tap.terminal_name
+            latitude = tap.latitude
+            longitude = tap.longitude
+        else:
+            terminal_label = (bus.current_location or '').replace(' Terminal', '').strip()
+            latitude = bus.latitude
+            longitude = bus.longitude
+
+        bus.current_location = f"En route from {terminal_label} Terminal"
+        bus.latitude = latitude
+        bus.longitude = longitude
+        bus.movement_status = Bus.MOVE_EN_ROUTE
+        bus.movement_reason = ''
+        bus.last_gps_update = now
+        bus.save()
+    return tap, closed
+
+
+def _demo_bus_for(bus_number):
+    """Fetch (or create) one of the static demo buses used on the webcam page."""
+    demo = next(
+        (b for b in STATIC_DEMO_BUSES if b['bus_number'].lower() == (bus_number or '').lower()),
+        None,
+    )
+    if demo is None:
+        return None
+    bus, _created = Bus.objects.get_or_create(
+        bus_number=demo['bus_number'],
+        defaults={
+            'plate_number': demo['plate_number'],
+            'capacity': demo['capacity'],
+            'route': demo['route'],
+            'status': Bus.STATUS_ACTIVE,
+        },
+    )
+    return bus
 
 
 @never_cache
@@ -746,19 +871,45 @@ def bus_tap_page(request, token):
         terminal = _find_terminal(request.POST.get('terminal', '').strip())
         if terminal is None:
             messages.error(request, 'Choose a valid terminal.')
+        elif request.POST.get('action') == 'time_out':
+            tap, closed = _record_departure_tap(bus, terminal, request.user)
+            if closed:
+                messages.success(
+                    request,
+                    f'Time out recorded: {bus.bus_number} left {tap.terminal_name} Terminal at '
+                    f'{timezone.localtime(tap.left_at).strftime("%I:%M %p").lstrip("0")}.',
+                )
+            else:
+                messages.warning(
+                    request,
+                    f'{bus.bus_number} has no open time-in at {terminal["label"]} Terminal.',
+                )
         else:
-            _record_terminal_tap(bus, terminal, request.user)
-            messages.success(
-                request,
-                f'Tap recorded: {bus.bus_number} is at {terminal["label"]} Terminal.',
-            )
-            return redirect('bus:bus_tap', token=bus.qr_token)
+            tap, created = _record_terminal_tap(bus, terminal, request.user)
+            if created:
+                departure = _estimated_departure(tap)
+                messages.success(
+                    request,
+                    f'Time in recorded: {bus.bus_number} is at {terminal["label"]} Terminal. '
+                    f'Estimated departure '
+                    f'{timezone.localtime(departure).strftime("%I:%M %p").lstrip("0")}.',
+                )
+            else:
+                messages.info(
+                    request,
+                    f'{bus.bus_number} is already timed in at {terminal["label"]} Terminal.',
+                )
+        return redirect('bus:bus_tap', token=bus.qr_token)
 
+    open_tap = _open_tap_for(bus)
     taps = bus.terminal_taps.select_related('user')[:10]
     return render(request, 'bus/tap.html', {
         'bus': bus,
         'terminals': TERMINALS,
         'taps': taps,
+        'open_tap': open_tap,
+        'estimated_departure': _estimated_departure(open_tap),
+        'estimated_stop_minutes': ESTIMATED_STOP_MINUTES,
     })
 
 
@@ -773,13 +924,35 @@ def conductor_checkin_page(request):
         terminal = _find_terminal(request.POST.get('terminal', '').strip())
         if terminal is None:
             messages.error(request, 'Choose a valid terminal.')
+        elif request.POST.get('action') == 'time_out':
+            tap, closed = _record_departure_tap(bus, terminal, request.user)
+            if closed:
+                messages.success(
+                    request,
+                    f'Time out recorded: {bus.bus_number} left {tap.terminal_name} Terminal at '
+                    f'{timezone.localtime(tap.left_at).strftime("%I:%M %p").lstrip("0")}.',
+                )
+            else:
+                messages.warning(
+                    request,
+                    f'{bus.bus_number} has no open time-in at {terminal["label"]} Terminal.',
+                )
         else:
-            _record_terminal_tap(bus, terminal, request.user)
-            messages.success(
-                request,
-                f'Tap recorded: {bus.bus_number} is at {terminal["label"]} Terminal.',
-            )
-            return redirect('bus:bus_tap', token=bus.qr_token)
+            tap, created = _record_terminal_tap(bus, terminal, request.user)
+            if created:
+                departure = _estimated_departure(tap)
+                messages.success(
+                    request,
+                    f'Time in recorded: {bus.bus_number} is at {terminal["label"]} Terminal. '
+                    f'Estimated departure '
+                    f'{timezone.localtime(departure).strftime("%I:%M %p").lstrip("0")}.',
+                )
+            else:
+                messages.info(
+                    request,
+                    f'{bus.bus_number} is already timed in at {terminal["label"]} Terminal.',
+                )
+        return redirect('bus:bus_tap', token=bus.qr_token)
 
     return render(request, 'bus/conductor_checkin.html', {
         'buses': buses,
@@ -793,10 +966,17 @@ def conductor_checkin_page(request):
 def bus_scan_page(request):
     """Webcam QR station: scan a bus QR at a terminal to record a tap."""
     taps = BusTerminalTap.objects.select_related('bus', 'user')[:8]
+    terminal_names = {t['name'].lower() for t in TERMINALS}
+    city_places = [
+        p for p in CITY_PLACES if p['name'].lower() not in terminal_names
+    ]
     return render(request, 'bus/scan.html', {
         'terminals': TERMINALS,
+        'city_places': sorted(city_places, key=lambda p: (p['province'], p['name'])),
         'taps': taps,
         'selected_terminal': request.GET.get('terminal', '').strip(),
+        'demo_buses': STATIC_DEMO_BUSES,
+        'estimated_stop_minutes': ESTIMATED_STOP_MINUTES,
     })
 
 
@@ -850,7 +1030,8 @@ def terminal_checkin_api(request):
         return JsonResponse({'error': 'Unknown terminal.'}, status=400)
 
     tap = _record_staff_scan(bus, terminal, scan_type, request.user)
-    local_time = timezone.localtime(tap.tapped_at)
+    event_time = tap.left_at if scan_type == 'OUT' and tap.left_at else tap.tapped_at
+    local_time = timezone.localtime(event_time)
     return JsonResponse({
         'status': 'ok',
         'type': scan_type,
@@ -873,25 +1054,18 @@ def terminal_checkin_api(request):
     })
 
 
-@never_cache
-@require_POST
-def bus_scan_checkin_ajax(request):
-    """Record a terminal tap from a scanned bus QR (used by the webcam page)."""
-    token = _extract_qr_token(request.POST.get('token', ''))
-    if token is None:
-        return JsonResponse({'error': 'That QR code is not a valid bus code.'}, status=400)
+def _format_clock(value):
+    if value is None:
+        return None
+    return timezone.localtime(value).strftime('%I:%M %p').lstrip('0')
 
-    bus = Bus.objects.filter(qr_token=token).first()
-    if bus is None:
-        return JsonResponse({'error': 'That QR code does not match a registered bus.'}, status=404)
 
-    terminal = _find_terminal((request.POST.get('terminal') or '').strip())
-    if terminal is None:
-        return JsonResponse({'error': 'Choose a valid terminal before scanning.'}, status=400)
-
-    tap = _record_terminal_tap(bus, terminal, request.user)
-    return JsonResponse({
-        'status': 'ok',
+def _scan_tap_payload(bus, tap, status, message):
+    time_in = tap.tapped_at if tap else None
+    time_out = tap.left_at if tap else None
+    estimated = None if time_out else _estimated_departure(tap)
+    return {
+        'status': status,
         'bus': {
             'id': bus.id,
             'bus_number': bus.bus_number,
@@ -899,9 +1073,92 @@ def bus_scan_checkin_ajax(request):
             'route': bus.route,
             'current_location': bus.current_location,
         },
-        'terminal': terminal['label'],
-        'tapped_at': timezone.localtime(tap.tapped_at).strftime('%b %d, %Y %I:%M %p'),
-    })
+        'terminal': tap.terminal_name if tap else '',
+        'place': tap.terminal_name if tap else '',
+        'time_in': _format_clock(time_in),
+        'time_out': _format_clock(time_out),
+        'estimated_departure': _format_clock(estimated),
+        'tapped_at': (
+            timezone.localtime(tap.tapped_at).strftime('%b %d, %Y %I:%M %p')
+            if tap else ''
+        ),
+        'message': message,
+    }
+
+
+@never_cache
+@require_POST
+def bus_scan_checkin_ajax(request):
+    """Webcam scan endpoint supporting time-in, a time-out prompt and time-out.
+
+    The first scan of a bus at a terminal records an automatic time-in. Scanning
+    the same bus again returns a prompt so the conductor can choose "Time Out".
+    """
+    raw_token = request.POST.get('token', '')
+    token = _extract_qr_token(raw_token)
+    if token is not None:
+        bus = Bus.objects.filter(qr_token=token).first()
+    elif raw_token.strip():
+        return JsonResponse({'error': 'That QR code is not a valid bus code.'}, status=400)
+    else:
+        demo_number = (request.POST.get('bus_number') or '').strip()
+        bus = _demo_bus_for(demo_number) if demo_number else None
+        if bus is None and request.POST.get('bus_id'):
+            bus = Bus.objects.filter(pk=request.POST.get('bus_id')).first()
+    if bus is None:
+        return JsonResponse({'error': 'That QR code does not match a registered bus.'}, status=404)
+
+    terminal = _find_terminal((request.POST.get('terminal') or '').strip())
+    if terminal is None:
+        demo = next(
+            (b for b in STATIC_DEMO_BUSES if b['bus_number'].lower() == bus.bus_number.lower()),
+            None,
+        )
+        terminal = _find_terminal(demo['terminal']) if demo else None
+    if terminal is None:
+        return JsonResponse({'error': 'Choose a valid terminal before scanning.'}, status=400)
+
+    action = (request.POST.get('action') or '').strip().lower()
+
+    if action == 'time_out':
+        tap, closed = _record_departure_tap(bus, terminal, request.user)
+        if not closed:
+            return JsonResponse(
+                {'error': f'{bus.bus_number} has no open time-in at {terminal["label"]} Terminal.'},
+                status=400,
+            )
+        return JsonResponse(_scan_tap_payload(
+            bus,
+            tap,
+            'time_out',
+            f'Time out: {bus.bus_number} left {tap.terminal_name} Terminal.',
+        ))
+
+    open_tap = _open_tap_for(bus)
+    if open_tap is not None:
+        payload = _scan_tap_payload(
+            bus,
+            open_tap,
+            'prompt',
+            f'{bus.bus_number} is already timed in at {open_tap.terminal_name} Terminal. '
+            f'Choose Time Out to record the departure.',
+        )
+        payload['prompt'] = {
+            'title': f'Bus {bus.bus_number} is already timed in',
+            'terminal': open_tap.terminal_name,
+            'time_in': payload['time_in'],
+            'estimated_departure': payload['estimated_departure'],
+            'actions': ['time_out'],
+        }
+        return JsonResponse(payload)
+
+    tap, created = _record_terminal_tap(bus, terminal, request.user)
+    message = (
+        f'Time in: {bus.bus_number} tapped in at {tap.terminal_name} Terminal.'
+        if created
+        else f'{bus.bus_number} is already timed in at {tap.terminal_name} Terminal.'
+    )
+    return JsonResponse(_scan_tap_payload(bus, tap, 'time_in', message))
 
 
 @login_required(login_url='login')

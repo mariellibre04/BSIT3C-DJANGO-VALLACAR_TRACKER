@@ -14,6 +14,15 @@
   </td>
   <td><span class="k-terminal-pill{% if b.is_hub %} hub{% endif %}"><span class="k-dot"></span> {{ b.terminal }}</span></td>
   <td><span class="k-bay">&mdash;</span></td>
-  <td><span class="k-time">{% if b.time %}{{ b.time|date:"g:i A" }}{% else %}&mdash;{% endif %}</span></td>
+  <td><span class="k-time">{% if b.time_in %}{{ b.time_in|date:"g:i A" }}{% else %}&mdash;{% endif %}</span></td>
+  <td>
+    <span class="k-time">
+      {% if b.time_out %}
+        <span class="k-left-at-label">Departed</span> {{ b.time_out|date:"g:i A" }}
+      {% elif b.estimated_departure %}
+        <span class="k-left-at-label">Est.</span> {{ b.estimated_departure|date:"g:i A" }}
+      {% else %}&mdash;{% endif %}
+    </span>
+  </td>
   <td><span class="k-status {{ b.status_class }}"><span class="k-status-dot"></span> {{ b.status_label }}</span></td>
 </tr>

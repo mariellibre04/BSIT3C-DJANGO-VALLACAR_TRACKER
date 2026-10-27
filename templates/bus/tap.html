@@ -63,13 +63,18 @@
               {% endfor %}
             </select>
             <div class="form-hint mt-2">
-              This records the bus at the selected terminal and updates its live location.
+              <strong>Check In</strong> records the time in at this terminal and an estimated
+              departure{% if estimated_stop_minutes %} {{ estimated_stop_minutes }} minutes later{% endif %}.
+              <strong>Time Out</strong> closes the open stop with the actual departure time.
               {% if not user.is_authenticated %}<br>You are tapping as a guest. Sign in to attach your account to the tap.{% endif %}
             </div>
           </div>
-          <div class="card-footer d-flex justify-content-end">
-            <button type="submit" class="btn btn-primary btn-lg">
-              <i class="fa-solid fa-hand-pointer me-1"></i> Confirm Terminal Tap
+          <div class="card-footer d-flex justify-content-between">
+            <button type="submit" name="action" value="check_in" class="btn btn-primary btn-lg w-50">
+              <i class="fa-solid fa-hand-pointer me-1"></i> Check In
+            </button>
+            <button type="submit" name="action" value="time_out" class="btn btn-warning btn-lg w-50">
+              <i class="fa-solid fa-hand-pointer-down me-1"></i> Time Out
             </button>
           </div>
         </form>
@@ -82,19 +87,26 @@
         <div class="table-responsive">
           <table class="table table-vcenter card-table">
             <thead>
-              <tr><th>When</th><th>Terminal</th><th>By</th></tr>
+              <tr><th>Time In</th><th>Terminal</th><th>Time Out</th><th>By</th></tr>
             </thead>
             <tbody>
               {% for tap in taps %}
               <tr>
-                <td class="text-muted">{{ tap.tapped_at|date:"M d, Y H:i" }}</td>
+                <td class="text-muted">{{ tap.tapped_at|date:"M d, g:i A" }}</td>
                 <td class="fw-semibold">{{ tap.terminal_name }}</td>
+                <td>
+                  {% if tap.left_at %}
+                  <span class="text-muted">{{ tap.left_at|date:"g:i A" }}</span>
+                  {% else %}
+                  <span class="badge bg-success-lt text-success">At terminal</span>
+                  {% endif %}
+                </td>
                 <td class="text-muted">
                   {% if tap.user %}{{ tap.user.get_full_name|default:tap.user.username }}{% else %}Guest{% endif %}
                 </td>
               </tr>
               {% empty %}
-              <tr><td colspan="3"><div class="empty py-4"><p class="empty-title">No taps yet</p></div></td></tr>
+              <tr><td colspan="4"><div class="empty py-4"><p class="empty-title">No taps yet</p></div></td></tr>
               {% endfor %}
             </tbody>
           </table>

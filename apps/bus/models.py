@@ -111,6 +111,7 @@ class BusTerminalTap(models.Model):
         blank=True,
     )
     tapped_at = models.DateTimeField(auto_now_add=True)
+    left_at = models.DateTimeField(null=True, blank=True)
 
     class Meta:
         db_table = 'tblbusterminaltap'

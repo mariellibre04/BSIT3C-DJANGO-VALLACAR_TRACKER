@@ -1,4 +1,8 @@
 {% extends "theme/base.html" %}
+{% load static %}
+{% block extra_css %}
+<link href="{% static 'libs/tom-select/dist/css/tom-select.bootstrap5.min.css' %}" rel="stylesheet">
+{% endblock %}
 {% block content %}
 {% csrf_token %}
 <div class="container-xl">
@@ -8,14 +12,16 @@
         <div class="col">
           <div class="page-pretitle">Terminal Check-in</div>
           <h2 class="page-title mb-0">Webcam QR Scanner</h2>
-          <div class="text-muted small">Choose the terminal, scan the bus QR, and the check-in appears on the live map.</div>
+          <div class="text-muted small">
+            First scan records <strong>Time In</strong>. Scan the same bus again to choose <strong>Time Out</strong>.
+          </div>
         </div>
         <div class="col-auto d-flex gap-2">
           <a href="{% url 'bus:conductor_checkin' %}" class="btn btn-outline-secondary">
             <i class="fa-solid fa-keyboard me-1"></i> Manual Check-in
           </a>
-          <a href="{% url 'bus:bus_map' %}" class="btn btn-outline-primary">
-            <i class="fa-solid fa-map-location-dot me-1"></i> Live Map
+          <a href="{% url 'bus:bus_kiosk' %}" class="btn btn-outline-primary" target="_blank" rel="noopener">
+            <i class="fa-solid fa-tv me-1"></i> Terminal Monitor
           </a>
         </div>
       </div>
@@ -30,14 +36,29 @@
           <h3 class="card-title">1. Choose terminal</h3>
         </div>
         <div class="card-body">
-          <label class="form-label required" for="scan_terminal">Terminal</label>
+          <label class="form-label required" for="scan_terminal">Terminal / City</label>
           <select id="scan_terminal" class="form-select form-select-lg" required>
-            <option value="">Choose the terminal you are at…</option>
-            {% for t in terminals %}
-            <option value="{{ t.name }}" {% if selected_terminal == t.name %}selected{% endif %}>{{ t.label }}</option>
+            <option value="">Search a terminal or city…</option>
+            <optgroup label="Bus terminals">
+              {% for t in terminals %}
+              <option value="{{ t.name }}" {% if selected_terminal == t.name %}selected{% endif %}>{{ t.label }}</option>
+              {% endfor %}
+            </optgroup>
+            {% regroup city_places by province as province_groups %}
+            {% for group in province_groups %}
+            <optgroup label="{{ group.grouper }}">
+              {% for c in group.list %}
+              <option value="{{ c.label }}" {% if selected_terminal == c.label %}selected{% endif %}>{{ c.name }}</option>
+              {% endfor %}
+            </optgroup>
             {% endfor %}
           </select>
-          <div class="form-hint mt-2">Every scan records a terminal tap and updates the bus location on the live map.</div>
+          <div class="form-hint mt-2">
+            Type to search all Philippine cities and municipalities. The first tap
+            records the time in and an estimated departure
+            ({{ estimated_stop_minutes }} minutes after arrival). Tapping the same
+            bus again lets you record the time out.
+          </div>
 
           <div class="d-flex gap-2 mt-3">
             <button type="button" id="scan_start" class="btn btn-primary">
@@ -60,7 +81,38 @@
             Camera access needs <strong>localhost</strong> or <strong>HTTPS</strong>.
             If it fails, allow the camera from the camera icon in the address bar and check
             Windows <strong>Settings &rarr; Privacy &amp; security &rarr; Camera</strong>.
-            Scans are recorded instantly, so you can scan the next bus right away.
+          </div>
+        </div>
+      </div>
+
+      <div class="card mt-3">
+        <div class="card-header">
+          <h3 class="card-title">Static demo buses</h3>
+          <span class="badge bg-secondary-lt text-secondary ms-auto">For testing</span>
+        </div>
+        <div class="card-body">
+          <div class="text-muted small mb-3">
+            No QR card yet? Use these sample buses to try the time in / time out flow.
+            The first tap times in; the next tap asks whether to time out.
+          </div>
+          <div class="list-group list-group-flush">
+            {% for demo in demo_buses %}
+            <div class="list-group-item px-0 d-flex align-items-center gap-3">
+              <span class="avatar bg-primary-lt text-primary"><i class="fas fa-bus"></i></span>
+              <div class="flex-fill">
+                <div class="fw-semibold">{{ demo.bus_number }}</div>
+                <div class="text-muted small">{{ demo.route }} &middot; {{ demo.plate_number }}</div>
+                <div class="text-muted small">Stop: {{ demo.terminal }} Terminal</div>
+              </div>
+              <button type="button" class="btn btn-sm btn-outline-primary js-demo-tap"
+                      data-bus-number="{{ demo.bus_number }}"
+                      data-terminal="{{ demo.terminal }}">
+                <i class="fa-solid fa-hand-pointer me-1"></i> Simulate scan
+              </button>
+            </div>
+            {% empty %}
+            <div class="text-muted small">No demo buses configured.</div>
+            {% endfor %}
           </div>
         </div>
       </div>
@@ -69,37 +121,46 @@
     <div class="col-12 col-lg-7">
       <div class="card">
         <div class="card-header">
-          <h3 class="card-title">2. Last scan</h3>
+          <h3 class="card-title">2. Latest tap</h3>
         </div>
         <div class="card-body" id="scan_result">
           <div class="empty py-4">
             <p class="empty-title">Waiting for a bus QR…</p>
-            <p class="empty-subtitle text-muted">The latest check-in will appear here with a link to the live map.</p>
+            <p class="empty-subtitle text-muted">
+              The latest time in / time out will appear here and on the terminal monitor.
+            </p>
           </div>
         </div>
       </div>
 
       <div class="card mt-3">
         <div class="card-header">
-          <h3 class="card-title">Recent check-ins</h3>
-          <a href="{% url 'bus:bus_map' %}" class="btn btn-sm btn-outline-primary ms-auto" target="_blank" rel="noopener">
-            <i class="fa-solid fa-map-location-dot me-1"></i> Open map
+          <h3 class="card-title">Recent taps</h3>
+          <a href="{% url 'bus:bus_kiosk' %}" class="btn btn-sm btn-outline-primary ms-auto" target="_blank" rel="noopener">
+            <i class="fa-solid fa-tv me-1"></i> Open monitor
           </a>
         </div>
         <div class="table-responsive">
           <table class="table table-vcenter card-table">
             <thead>
-              <tr><th>Bus</th><th>Terminal</th><th>When</th></tr>
+              <tr><th>Bus</th><th>Stop / Place</th><th>Time In</th><th>Time Out</th></tr>
             </thead>
             <tbody id="recent_taps">
               {% for tap in taps %}
               <tr>
                 <td class="fw-semibold">{{ tap.bus.bus_number }}</td>
                 <td>{{ tap.terminal_name }}</td>
-                <td class="text-muted">{{ tap.tapped_at|date:"M d, H:i" }}</td>
+                <td class="text-muted">{{ tap.tapped_at|date:"g:i A" }}</td>
+                <td>
+                  {% if tap.left_at %}
+                  <span class="text-muted">Left {{ tap.left_at|date:"g:i A" }}</span>
+                  {% else %}
+                  <span class="text-success">At terminal</span>
+                  {% endif %}
+                </td>
               </tr>
               {% empty %}
-              <tr><td colspan="3" class="text-muted">No check-ins yet.</td></tr>
+              <tr><td colspan="4" class="text-muted">No taps yet.</td></tr>
               {% endfor %}
             </tbody>
           </table>
@@ -111,6 +172,7 @@
 {% endblock %}
 
 {% block extra_js %}
+<script src="{% static 'libs/tom-select/dist/js/tom-select.complete.min.js' %}"></script>
 <script src="https://unpkg.com/html5-qrcode@2.3.8/html5-qrcode.min.js"></script>
 <script>
   (function () {
@@ -131,6 +193,28 @@
     var cooldownUntil = 0;
     var lastToken = '';
     var lastTokenAt = 0;
+    var lastBusRef = null;
+    var SAME_TOKEN_COOLDOWN = 5000;
+
+    var terminalTom = null;
+    function getTerminal() {
+      return terminalTom ? terminalTom.getValue() : terminalSelect.value;
+    }
+    function setTerminal(value) {
+      if (terminalTom) terminalTom.setValue(value, true);
+      else terminalSelect.value = value;
+    }
+    if (window.TomSelect && terminalSelect) {
+      if (terminalSelect.options.length && !terminalSelect.options[0].value) {
+        terminalSelect.remove(0);
+      }
+      terminalTom = new TomSelect(terminalSelect, {
+        create: false,
+        maxOptions: 400,
+        placeholder: 'Search a terminal or city…',
+        plugins: ['dropdown_input']
+      });
+    }
 
     function escapeHtml(value) {
       return String(value == null ? '' : value)
@@ -192,7 +276,7 @@
     }
 
     async function startCamera() {
-      if (!terminalSelect.value) {
+      if (!getTerminal()) {
         setStatus('Choose the terminal first, then start the camera.', 'alert-warning');
         terminalSelect.focus();
         return;
@@ -275,49 +359,90 @@
       setStatus('Camera stopped.', 'alert-secondary');
     }
 
-    function submitToken(token) {
-      if (busy) return;
-      if (!terminalSelect.value) {
-        setStatus('Choose the terminal first, then scan again.', 'alert-warning');
-        return;
-      }
-      if (token === lastToken && Date.now() - lastTokenAt < 15000) {
-        setStatus('This bus was just checked in. Wait a few seconds before scanning it again.', 'alert-warning');
-        return;
-      }
+    function postTap(busRef, action) {
+      var body = new URLSearchParams({ terminal: getTerminal() });
+      if (busRef.token) body.set('token', busRef.token);
+      if (busRef.bus_number) body.set('bus_number', busRef.bus_number);
+      if (action) body.set('action', action);
 
-      busy = true;
-      lastToken = token;
-      lastTokenAt = Date.now();
-      setStatus('Bus QR detected. Recording check-in…', 'alert-info');
-
-      fetch(checkinUrl, {
+      return fetch(checkinUrl, {
         method: 'POST',
         headers: {
           'X-CSRFToken': csrfToken,
           'Content-Type': 'application/x-www-form-urlencoded'
         },
-        body: new URLSearchParams({ token: token, terminal: terminalSelect.value })
-      })
-        .then(function (response) {
-          return response.json().then(function (data) {
-            return { ok: response.ok, data: data };
-          });
-        })
-        .then(function (result) {
-          if (!result.ok) throw new Error(result.data.error || 'Check-in failed.');
-          showResult(result.data);
-          prependRecentTap(result.data);
+        body: body
+      }).then(function (response) {
+        return response.json().then(function (data) {
+          return { ok: response.ok, data: data };
+        });
+      }).then(function (result) {
+        if (!result.ok) throw new Error(result.data.error || 'Tap failed.');
+        return result.data;
+      });
+    }
+
+    function timeOut(ref, button) {
+      if (busy) return;
+      busy = true;
+      if (button) button.disabled = true;
+      setStatus('Recording time out…', 'alert-info');
+      postTap(ref, 'time_out')
+        .then(function (data) {
+          showResult(data);
+          prependRecentTap(data, true);
           setStatus(
-            'Checked in: bus ' + result.data.bus.bus_number + ' at ' +
-            result.data.terminal + ' Terminal. Ready for the next bus.',
+            'Time out recorded: bus ' + data.bus.bus_number + ' left ' +
+            data.place + ' Terminal at ' + data.time_out + '.',
+            'alert-success'
+          );
+          lastToken = '';
+          lastTokenAt = 0;
+          lastBusRef = null;
+        })
+        .catch(function (error) {
+          if (button) button.disabled = false;
+          setStatus(error.message || 'Time out failed.', 'alert-danger');
+        })
+        .finally(function () {
+          busy = false;
+        });
+    }
+
+    function submitTap(busRef) {
+      if (busy) return;
+      if (!getTerminal()) {
+        setStatus('Choose the terminal first, then scan again.', 'alert-warning');
+        return;
+      }
+
+      busy = true;
+      lastBusRef = busRef;
+      setStatus('Bus QR detected. Recording time in…', 'alert-info');
+
+      postTap(busRef, '')
+        .then(function (data) {
+          if (data.status === 'prompt') {
+            showPrompt(data);
+            setStatus(data.message, 'alert-warning');
+            return;
+          }
+          showResult(data);
+          prependRecentTap(data, false);
+          var extra = data.estimated_departure
+            ? ' Estimated departure ' + data.estimated_departure + '.'
+            : '';
+          setStatus(
+            'Time in recorded: bus ' + data.bus.bus_number + ' at ' +
+            data.place + ' Terminal (' + data.time_in + ').' + extra,
             'alert-success'
           );
         })
         .catch(function (error) {
+          busy = false;
           lastToken = '';
           lastTokenAt = 0;
-          setStatus(error.message || 'Check-in failed.', 'alert-danger');
+          setStatus(error.message || 'Tap failed.', 'alert-danger');
         })
         .finally(function () {
           busy = false;
@@ -329,30 +454,81 @@
 
       var token = tokenFromText(decodedText);
       if (!token) return;
+      if (!getTerminal()) {
+        setStatus('Choose the terminal first, then scan again.', 'alert-warning');
+        return;
+      }
+      if (token === lastToken && Date.now() - lastTokenAt < SAME_TOKEN_COOLDOWN) {
+        setStatus('Bus just tapped. Scan again in a few seconds, or use the Time Out button below.', 'alert-warning');
+        return;
+      }
 
-      cooldownUntil = Date.now() + 2500;
-      submitToken(token);
+      cooldownUntil = Date.now() + 2000;
+      lastToken = token;
+      lastTokenAt = Date.now();
+      submitTap({ token: token });
+    }
+
+    function busHeader(data) {
+      return '<div class="d-flex align-items-center gap-3">' +
+        '<span class="avatar avatar-lg bg-success-lt text-success"><i class="fas fa-bus fa-lg"></i></span>' +
+        '<div>' +
+          '<div class="h2 mb-0">Bus ' + escapeHtml(data.bus.bus_number) + '</div>' +
+          '<div class="text-muted">' + escapeHtml(data.bus.plate_number) +
+            ' &middot; ' + escapeHtml(data.bus.route) + '</div>' +
+        '</div>' +
+      '</div>';
+    }
+
+    function departureLine(data) {
+      if (data.time_out) {
+        return '<span class="badge bg-warning-lt text-warning">Time Out</span> ' +
+          escapeHtml(data.time_out) + ' &middot; left <strong>' +
+          escapeHtml(data.place) + ' Terminal</strong>';
+      }
+      var est = data.estimated_departure
+        ? 'Estimated departure <strong>' + escapeHtml(data.estimated_departure) + '</strong>'
+        : 'Waiting for departure';
+      return '<span class="badge bg-success-lt text-success">Time In</span> ' +
+        escapeHtml(data.time_in) + ' &middot; <strong>' + escapeHtml(data.place) +
+        ' Terminal</strong><br>' + est;
     }
 
     function showResult(data) {
-      resultEl.innerHTML =
-        '<div class="d-flex align-items-center gap-3">' +
-          '<span class="avatar avatar-lg bg-success-lt text-success"><i class="fas fa-bus fa-lg"></i></span>' +
-          '<div>' +
-            '<div class="h2 mb-0">Bus ' + escapeHtml(data.bus.bus_number) + '</div>' +
-            '<div class="text-muted">' + escapeHtml(data.bus.plate_number) +
-              ' &middot; ' + escapeHtml(data.bus.route) + '</div>' +
-          '</div>' +
-        '</div>' +
-        '<div class="alert alert-success mt-3 mb-0">' +
-          '<i class="fa-solid fa-circle-check me-1"></i> Checked in at <strong>' +
-          escapeHtml(data.terminal) + ' Terminal</strong> at ' + escapeHtml(data.tapped_at) + '.' +
-        '</div>' +
-        '<a class="btn btn-outline-primary mt-3" href="' + mapUrl + '" target="_blank" rel="noopener">' +
-          '<i class="fa-solid fa-map-location-dot me-1"></i> View on live map</a>';
+      var ref = JSON.stringify(lastBusRef || {});
+      var button = data.status === 'time_in'
+        ? '<button type="button" class="btn btn-warning mt-3 js-time-out" data-ref="' +
+            escapeHtml(ref) + '"><i class="fa-solid fa-hand-pointer-down me-1"></i> Time Out</button> '
+        : '';
+      resultEl.innerHTML = busHeader(data) +
+        '<div class="alert alert-' + (data.status === 'time_out' ? 'warning' : 'success') +
+          ' mt-3 mb-0">' + departureLine(data) + '</div>' +
+        '<div class="d-flex flex-wrap gap-2 mt-3">' + button +
+          '<a class="btn btn-outline-primary" href="' + mapUrl + '" target="_blank" rel="noopener">' +
+            '<i class="fa-solid fa-tv me-1"></i> View terminal monitor</a>' +
+        '</div>';
     }
 
-    function prependRecentTap(data) {
+    function showPrompt(data) {
+      var ref = JSON.stringify(lastBusRef || {});
+      resultEl.innerHTML = busHeader(data) +
+        '<div class="alert alert-warning mt-3 mb-0">' +
+          '<div class="fw-semibold mb-1">Bus already timed in</div>' +
+          'Time in <strong>' + escapeHtml(data.time_in) + '</strong> at <strong>' +
+          escapeHtml(data.place) + ' Terminal</strong>.' +
+          (data.estimated_departure
+            ? '<br>Estimated departure <strong>' + escapeHtml(data.estimated_departure) + '</strong>.'
+            : '') +
+          '<br><span class="text-muted">Choose Time Out to record that this bus has left.</span>' +
+        '</div>' +
+        '<div class="d-flex flex-wrap gap-2 mt-3">' +
+          '<button type="button" class="btn btn-warning js-time-out" data-ref="' +
+            escapeHtml(ref) + '"><i class="fa-solid fa-hand-pointer-down me-1"></i> Time Out</button>' +
+          '<button type="button" class="btn btn-outline-secondary js-dismiss">Keep waiting</button>' +
+        '</div>';
+    }
+
+    function prependRecentTap(data, replaceFirst) {
       var empty = recentBody.querySelector('td[colspan]');
       if (empty) empty.closest('tr').remove();
 
@@ -360,22 +536,67 @@
       var bus = document.createElement('td');
       bus.className = 'fw-semibold';
       bus.textContent = data.bus.bus_number;
-      var terminal = document.createElement('td');
-      terminal.textContent = data.terminal;
-      var when = document.createElement('td');
-      when.className = 'text-muted';
-      when.textContent = data.tapped_at;
+      var place = document.createElement('td');
+      place.textContent = data.place;
+      var timeIn = document.createElement('td');
+      timeIn.className = 'text-muted';
+      timeIn.textContent = data.time_in || '—';
+      var timeOut = document.createElement('td');
+      if (data.time_out) {
+        timeOut.className = 'text-muted';
+        timeOut.textContent = 'Left ' + data.time_out;
+      } else {
+        timeOut.className = 'text-success';
+        timeOut.textContent = 'At terminal';
+      }
       row.appendChild(bus);
-      row.appendChild(terminal);
-      row.appendChild(when);
-      recentBody.insertBefore(row, recentBody.firstChild);
+      row.appendChild(place);
+      row.appendChild(timeIn);
+      row.appendChild(timeOut);
+
+      var first = recentBody.firstElementChild;
+      if (replaceFirst && first && first.children[0] &&
+          first.children[0].textContent === data.bus.bus_number) {
+        recentBody.replaceChild(row, first);
+      } else {
+        recentBody.insertBefore(row, recentBody.firstChild);
+      }
     }
 
-    terminalSelect.addEventListener('change', function () {
+    resultEl.addEventListener('click', function (event) {
+      var outBtn = event.target.closest('.js-time-out');
+      if (outBtn) {
+        var ref = {};
+        try { ref = JSON.parse(outBtn.getAttribute('data-ref') || '{}'); } catch (error) {}
+        if (!ref.token && !ref.bus_number) ref = lastBusRef || {};
+        timeOut(ref, outBtn);
+        return;
+      }
+      if (event.target.closest('.js-dismiss')) {
+        setStatus('Waiting for the next bus QR…', 'alert-info');
+      }
+    });
+
+    document.querySelectorAll('.js-demo-tap').forEach(function (button) {
+      button.addEventListener('click', function () {
+        if (busy) return;
+        var demoTerminal = button.getAttribute('data-terminal') || '';
+        if (demoTerminal && !getTerminal()) setTerminal(demoTerminal);
+        if (!getTerminal()) {
+          setStatus('Choose the terminal first, then simulate a scan.', 'alert-warning');
+          return;
+        }
+        submitTap({ bus_number: button.getAttribute('data-bus-number') || '' });
+      });
+    });
+
+    function onTerminalChange() {
       if (scanning) {
         setStatus('Terminal set. Point the bus QR at the camera.', 'alert-info');
       }
-    });
+    }
+    terminalSelect.addEventListener('change', onTerminalChange);
+    if (terminalTom) terminalTom.on('change', onTerminalChange);
     startBtn.addEventListener('click', startCamera);
     stopBtn.addEventListener('click', stopCamera);
     window.addEventListener('beforeunload', function () {

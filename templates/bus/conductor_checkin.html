@@ -48,9 +48,12 @@
               <div class="form-hint mt-2">This records the bus at the selected terminal and updates its live location.</div>
             </div>
           </div>
-          <div class="card-footer d-flex justify-content-end">
-            <button type="submit" class="btn btn-primary btn-lg">
-              <i class="fa-solid fa-hand-pointer me-1"></i> Confirm Terminal Tap
+          <div class="card-footer d-flex justify-content-between">
+            <button type="submit" name="action" value="check_in" class="btn btn-primary btn-lg w-50">
+              <i class="fa-solid fa-hand-pointer me-1"></i> Check In
+            </button>
+            <button type="submit" name="action" value="time_out" class="btn btn-warning btn-lg w-50">
+              <i class="fa-solid fa-hand-pointer-down me-1"></i> Time Out
             </button>
           </div>
         </form>
