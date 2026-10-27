@@ -1,7 +1,61 @@
 {% extends "theme/base.html" %}
-{% load static %}
 {% block extra_css %}
-<link href="{% static 'libs/tom-select/dist/css/tom-select.bootstrap5.min.css' %}" rel="stylesheet">
+<style>
+  .terminal-combobox { position: relative; }
+  .terminal-combobox-input { padding-right: 2.75rem; }
+  .terminal-combobox-toggle {
+    position: absolute;
+    top: 0;
+    right: 0;
+    bottom: 0;
+    width: 2.75rem;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border: 0;
+    background: transparent;
+    color: var(--tblr-muted);
+    cursor: pointer;
+  }
+  .terminal-combobox-toggle:hover { color: var(--tblr-body-color); }
+  .terminal-combobox-list {
+    position: absolute;
+    z-index: 1050;
+    left: 0;
+    right: 0;
+    top: calc(100% + 4px);
+    max-height: 320px;
+    overflow-y: auto;
+    background: var(--tblr-bg-surface-secondary);
+    border: 1px solid var(--tblr-border-color);
+    border-radius: var(--tblr-border-radius);
+    box-shadow: var(--tblr-shadow-card);
+  }
+  .terminal-combobox-group {
+    padding: 0.5rem 0.75rem 0.25rem;
+    font-size: 0.65rem;
+    font-weight: 600;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    color: var(--tblr-muted);
+  }
+  .terminal-combobox-option {
+    padding: 0.5rem 0.75rem;
+    font-size: 0.9375rem;
+    color: var(--tblr-body-color);
+    cursor: pointer;
+  }
+  .terminal-combobox-option:hover,
+  .terminal-combobox-option.is-active {
+    background: rgba(var(--tblr-primary-rgb), 0.15);
+    color: var(--tblr-body-color);
+  }
+  .terminal-combobox-empty {
+    padding: 0.625rem 0.75rem;
+    font-size: 0.8125rem;
+    color: var(--tblr-muted);
+  }
+</style>
 {% endblock %}
 {% block content %}
 {% csrf_token %}
@@ -36,23 +90,33 @@
           <h3 class="card-title">1. Choose terminal</h3>
         </div>
         <div class="card-body">
-          <label class="form-label required" for="scan_terminal">Terminal / City</label>
-          <select id="scan_terminal" class="form-select form-select-lg" required>
-            <option value="">Search a terminal or city…</option>
-            <optgroup label="Bus terminals">
-              {% for t in terminals %}
-              <option value="{{ t.name }}" {% if selected_terminal == t.name %}selected{% endif %}>{{ t.label }}</option>
+          <label class="form-label required" for="terminal_input">Terminal / City</label>
+          <div class="terminal-combobox" id="terminal_combobox">
+            <input type="text" id="terminal_input" class="form-control form-control-lg terminal-combobox-input"
+                   placeholder="Choose the terminal you are at…" autocomplete="off"
+                   role="combobox" aria-expanded="false" aria-controls="terminal_listbox" aria-autocomplete="list">
+            <button type="button" class="terminal-combobox-toggle" id="terminal_toggle" tabindex="-1"
+                    aria-label="Show terminals and cities">
+              <i class="fa-solid fa-chevron-down"></i>
+            </button>
+            <div class="terminal-combobox-list" id="terminal_listbox" role="listbox" hidden></div>
+            <select id="scan_terminal" class="d-none" tabindex="-1" aria-hidden="true">
+              <option value="">Choose the terminal you are at…</option>
+              <optgroup label="Bus terminals">
+                {% for t in terminals %}
+                <option value="{{ t.name }}" {% if selected_terminal == t.name %}selected{% endif %}>{{ t.label }}</option>
+                {% endfor %}
+              </optgroup>
+              {% regroup city_places by province as province_groups %}
+              {% for group in province_groups %}
+              <optgroup label="{{ group.grouper }}">
+                {% for c in group.list %}
+                <option value="{{ c.label }}" {% if selected_terminal == c.label %}selected{% endif %}>{{ c.name }}</option>
+                {% endfor %}
+              </optgroup>
               {% endfor %}
-            </optgroup>
-            {% regroup city_places by province as province_groups %}
-            {% for group in province_groups %}
-            <optgroup label="{{ group.grouper }}">
-              {% for c in group.list %}
-              <option value="{{ c.label }}" {% if selected_terminal == c.label %}selected{% endif %}>{{ c.name }}</option>
-              {% endfor %}
-            </optgroup>
-            {% endfor %}
-          </select>
+            </select>
+          </div>
           <div class="form-hint mt-2">
             Type to search all Philippine cities and municipalities. The first tap
             records the time in and an estimated departure
@@ -143,7 +207,7 @@
         <div class="table-responsive">
           <table class="table table-vcenter card-table">
             <thead>
-              <tr><th>Bus</th><th>Stop / Place</th><th>Time In</th><th>Time Out</th></tr>
+              <tr><th>Bus</th><th>Stop / Place</th><th>Time In</th><th>Time Out</th><th>Status</th></tr>
             </thead>
             <tbody id="recent_taps">
               {% for tap in taps %}
@@ -153,14 +217,23 @@
                 <td class="text-muted">{{ tap.tapped_at|date:"g:i A" }}</td>
                 <td>
                   {% if tap.left_at %}
-                  <span class="text-muted">Left {{ tap.left_at|date:"g:i A" }}</span>
+                  <span class="text-muted">Departed {{ tap.left_at|date:"g:i A" }}</span>
+                  {% elif tap.departure %}
+                  <span class="text-muted">Est. {{ tap.departure|date:"g:i A" }}</span>
+                  {% else %}
+                  <span class="text-muted">&mdash;</span>
+                  {% endif %}
+                </td>
+                <td>
+                  {% if tap.left_at %}
+                  <span class="text-muted">En route</span>
                   {% else %}
                   <span class="text-success">At terminal</span>
                   {% endif %}
                 </td>
               </tr>
               {% empty %}
-              <tr><td colspan="4" class="text-muted">No taps yet.</td></tr>
+              <tr><td colspan="5" class="text-muted">No taps yet.</td></tr>
               {% endfor %}
             </tbody>
           </table>
@@ -172,7 +245,6 @@
 {% endblock %}
 
 {% block extra_js %}
-<script src="{% static 'libs/tom-select/dist/js/tom-select.complete.min.js' %}"></script>
 <script src="https://unpkg.com/html5-qrcode@2.3.8/html5-qrcode.min.js"></script>
 <script>
   (function () {
@@ -196,25 +268,165 @@
     var lastBusRef = null;
     var SAME_TOKEN_COOLDOWN = 5000;
 
-    var terminalTom = null;
-    function getTerminal() {
-      return terminalTom ? terminalTom.getValue() : terminalSelect.value;
-    }
-    function setTerminal(value) {
-      if (terminalTom) terminalTom.setValue(value, true);
-      else terminalSelect.value = value;
-    }
-    if (window.TomSelect && terminalSelect) {
-      if (terminalSelect.options.length && !terminalSelect.options[0].value) {
-        terminalSelect.remove(0);
-      }
-      terminalTom = new TomSelect(terminalSelect, {
-        create: false,
-        maxOptions: 400,
-        placeholder: 'Search a terminal or city…',
-        plugins: ['dropdown_input']
+    var terminalInput = document.getElementById('terminal_input');
+    var terminalToggle = document.getElementById('terminal_toggle');
+    var terminalList = document.getElementById('terminal_listbox');
+    var terminalCombobox = document.getElementById('terminal_combobox');
+    var terminalItems = [];
+    var terminalFiltered = [];
+    var terminalActive = -1;
+
+    if (terminalSelect) {
+      Array.prototype.forEach.call(terminalSelect.querySelectorAll('optgroup'), function (group) {
+        Array.prototype.forEach.call(group.querySelectorAll('option'), function (option) {
+          if (!option.value) return;
+          terminalItems.push({
+            value: option.value,
+            label: (option.textContent || '').trim(),
+            group: group.label || ''
+          });
+        });
       });
     }
+
+    function getTerminal() {
+      return terminalSelect ? terminalSelect.value : '';
+    }
+    function terminalLabelFor(value) {
+      for (var i = 0; i < terminalItems.length; i++) {
+        if (terminalItems[i].value === value) return terminalItems[i].label;
+      }
+      return '';
+    }
+    function setTerminal(value) {
+      if (!terminalSelect) return;
+      terminalSelect.value = value;
+      if (terminalInput) terminalInput.value = value ? terminalLabelFor(value) : '';
+      closeTerminalList();
+    }
+    function closeTerminalList() {
+      if (!terminalList) return;
+      terminalList.hidden = true;
+      if (terminalInput) terminalInput.setAttribute('aria-expanded', 'false');
+      terminalActive = -1;
+    }
+    function renderTerminalList(query) {
+      if (!terminalList) return;
+      var q = (query || '').trim().toLowerCase();
+      terminalFiltered = terminalItems.filter(function (item) {
+        return !q || item.label.toLowerCase().indexOf(q) !== -1 ||
+          item.value.toLowerCase().indexOf(q) !== -1;
+      });
+      var limit = 300;
+      var shown = terminalFiltered.slice(0, limit);
+      var html = '';
+      var lastGroup = null;
+      for (var i = 0; i < shown.length; i++) {
+        var item = shown[i];
+        if (item.group !== lastGroup) {
+          lastGroup = item.group;
+          html += '<div class="terminal-combobox-group">' + escapeHtml(item.group) + '</div>';
+        }
+        html += '<div class="terminal-combobox-option" role="option" data-index="' + i + '">' +
+          escapeHtml(item.label) + '</div>';
+      }
+      if (!shown.length) {
+        html = '<div class="terminal-combobox-empty">No matching terminal or city.</div>';
+      } else if (terminalFiltered.length > limit) {
+        html += '<div class="terminal-combobox-empty">Showing first ' + limit + ' of ' +
+          terminalFiltered.length + '. Keep typing to narrow it down.</div>';
+      }
+      terminalList.innerHTML = html;
+      terminalList.hidden = false;
+      terminalActive = -1;
+      if (terminalInput) terminalInput.setAttribute('aria-expanded', 'true');
+    }
+    function chooseTerminal(index) {
+      var item = terminalFiltered[index];
+      if (!item) return;
+      setTerminal(item.value);
+      if (terminalSelect) terminalSelect.dispatchEvent(new Event('change', { bubbles: true }));
+      if (terminalInput) terminalInput.focus();
+    }
+
+    if (terminalInput) {
+      if (terminalSelect && terminalSelect.value) {
+        terminalInput.value = terminalLabelFor(terminalSelect.value);
+      }
+      terminalInput.addEventListener('focus', function () {
+        var current = terminalLabelFor(getTerminal());
+        renderTerminalList(terminalInput.value === current ? '' : terminalInput.value);
+      });
+      terminalInput.addEventListener('input', function () {
+        if (terminalSelect) terminalSelect.value = '';
+        renderTerminalList(terminalInput.value);
+      });
+      terminalInput.addEventListener('keydown', function (event) {
+        var options = terminalList
+          ? Array.prototype.slice.call(terminalList.querySelectorAll('.terminal-combobox-option'))
+          : [];
+        if (event.key === 'ArrowDown' || event.key === 'ArrowUp') {
+          if (terminalList.hidden) {
+            renderTerminalList(terminalInput.value);
+            options = Array.prototype.slice.call(terminalList.querySelectorAll('.terminal-combobox-option'));
+          }
+          if (!options.length) return;
+          event.preventDefault();
+          terminalActive += event.key === 'ArrowDown' ? 1 : -1;
+          if (terminalActive < 0) terminalActive = options.length - 1;
+          if (terminalActive >= options.length) terminalActive = 0;
+          options.forEach(function (el, i) {
+            el.classList.toggle('is-active', i === terminalActive);
+          });
+          options[terminalActive].scrollIntoView({ block: 'nearest' });
+        } else if (event.key === 'Enter') {
+          if (!terminalList.hidden && options.length) {
+            event.preventDefault();
+            var pick = options[terminalActive >= 0 ? terminalActive : 0];
+            chooseTerminal(parseInt(pick.getAttribute('data-index'), 10));
+          }
+        } else if (event.key === 'Escape') {
+          closeTerminalList();
+        }
+      });
+      terminalInput.addEventListener('blur', function () {
+        window.setTimeout(function () {
+          if (terminalCombobox && terminalCombobox.contains(document.activeElement)) return;
+          closeTerminalList();
+          if (terminalSelect && terminalSelect.value) {
+            terminalInput.value = terminalLabelFor(terminalSelect.value);
+          } else if (terminalInput.value.trim()) {
+            var typed = terminalInput.value.trim().toLowerCase();
+            var exact = terminalItems.filter(function (item) {
+              return item.label.toLowerCase() === typed || item.value.toLowerCase() === typed;
+            });
+            if (exact.length === 1) setTerminal(exact[0].value);
+          }
+        }, 120);
+      });
+    }
+    if (terminalList) {
+      terminalList.addEventListener('mousedown', function (event) {
+        var option = event.target.closest('.terminal-combobox-option');
+        if (!option) return;
+        event.preventDefault();
+        chooseTerminal(parseInt(option.getAttribute('data-index'), 10));
+      });
+    }
+    if (terminalToggle) {
+      terminalToggle.addEventListener('click', function () {
+        if (!terminalList) return;
+        if (terminalList.hidden) {
+          renderTerminalList('');
+          if (terminalInput) terminalInput.focus();
+        } else {
+          closeTerminalList();
+        }
+      });
+    }
+    document.addEventListener('click', function (event) {
+      if (terminalCombobox && !terminalCombobox.contains(event.target)) closeTerminalList();
+    });
 
     function escapeHtml(value) {
       return String(value == null ? '' : value)
@@ -278,7 +490,7 @@
     async function startCamera() {
       if (!getTerminal()) {
         setStatus('Choose the terminal first, then start the camera.', 'alert-warning');
-        terminalSelect.focus();
+        if (terminalInput) terminalInput.focus();
         return;
       }
       if (!window.isSecureContext) {
@@ -563,18 +775,28 @@
       var timeIn = document.createElement('td');
       timeIn.className = 'text-muted';
       timeIn.textContent = data.time_in || '—';
-      var timeOut = document.createElement('td');
+      var departure = document.createElement('td');
+      departure.className = 'text-muted';
       if (data.time_out) {
-        timeOut.className = 'text-muted';
-        timeOut.textContent = 'Left ' + data.time_out;
+        departure.textContent = 'Departed ' + data.time_out;
+      } else if (data.estimated_departure) {
+        departure.textContent = 'Est. ' + data.estimated_departure;
       } else {
-        timeOut.className = 'text-success';
-        timeOut.textContent = 'At terminal';
+        departure.textContent = '—';
+      }
+      var timeOutStatus = document.createElement('td');
+      if (data.time_out) {
+        timeOutStatus.className = 'text-muted';
+        timeOutStatus.textContent = 'En route';
+      } else {
+        timeOutStatus.className = 'text-success';
+        timeOutStatus.textContent = 'At terminal';
       }
       row.appendChild(bus);
       row.appendChild(place);
       row.appendChild(timeIn);
-      row.appendChild(timeOut);
+      row.appendChild(departure);
+      row.appendChild(timeOutStatus);
 
       var first = recentBody.firstElementChild;
       if (replaceFirst && first && first.children[0] &&
@@ -618,7 +840,6 @@
       }
     }
     terminalSelect.addEventListener('change', onTerminalChange);
-    if (terminalTom) terminalTom.on('change', onTerminalChange);
     startBtn.addEventListener('click', startCamera);
     stopBtn.addEventListener('click', stopCamera);
     window.addEventListener('beforeunload', function () {

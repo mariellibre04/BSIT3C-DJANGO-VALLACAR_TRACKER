@@ -98,22 +98,59 @@ KIOSK_TERMINAL_NAMES = [
 ]
 
 # Static fallback data so the webcam time-in / time-out flow can be demonstrated
-# before the real bus records are entered. These buses are created on first tap.
+# before the real bus records are entered. The kiosk refreshes their timeline so
+# the demo board always shows today's current time.
 ESTIMATED_STOP_MINUTES = 15
 STATIC_DEMO_BUSES = [
+    {
+        'bus_number': '364',
+        'plate_number': '84',
+        'capacity': 49,
+        'route': 'Sipalay-Kabankalan',
+        'terminal': 'Sipalay',
+        'state': 'en_route',
+        'in_minutes': 45,
+        'out_minutes': 4,
+    },
+    {
+        'bus_number': '53',
+        'plate_number': '78',
+        'capacity': 49,
+        'route': 'Bacolod-Dumaguete',
+        'terminal': 'Bacolod',
+        'state': 'en_route',
+        'in_minutes': 38,
+        'out_minutes': 1,
+    },
+    {
+        'bus_number': 't76775',
+        'plate_number': '46745',
+        'capacity': 49,
+        'route': 'Kabankalan',
+        'terminal': 'Kabankalan',
+        'state': 'at_terminal',
+        'in_minutes': 12,
+        'out_minutes': None,
+    },
     {
         'bus_number': 'KDM-101',
         'plate_number': 'VTI 1101',
         'capacity': 49,
         'route': 'Kabankalan-Dumaguete',
         'terminal': 'Mabinay',
+        'state': 'at_terminal',
+        'in_minutes': 7,
+        'out_minutes': None,
     },
     {
         'bus_number': 'KDM-102',
         'plate_number': 'VTI 1102',
         'capacity': 49,
         'route': 'Kabankalan-Dumaguete',
-        'terminal': 'Mabinay',
+        'terminal': 'Bais',
+        'state': 'en_route',
+        'in_minutes': 26,
+        'out_minutes': 3,
     },
     {
         'bus_number': 'BDG-201',
@@ -121,6 +158,59 @@ STATIC_DEMO_BUSES = [
         'capacity': 49,
         'route': 'Bacolod-Dumaguete',
         'terminal': 'Kabankalan',
+        'state': 'at_terminal',
+        'in_minutes': 5,
+        'out_minutes': None,
+    },
+    {
+        'bus_number': 'MAB-301',
+        'plate_number': 'VTI 3301',
+        'capacity': 49,
+        'route': 'Mabinay-Dumaguete',
+        'terminal': 'Mabinay',
+        'state': 'at_terminal',
+        'in_minutes': 9,
+        'out_minutes': None,
+    },
+    {
+        'bus_number': 'KAB-401',
+        'plate_number': 'VTI 4401',
+        'capacity': 49,
+        'route': 'Kabankalan-Bacolod',
+        'terminal': 'Kabankalan',
+        'state': 'en_route',
+        'in_minutes': 33,
+        'out_minutes': 2,
+    },
+    {
+        'bus_number': 'DUM-501',
+        'plate_number': 'VTI 5501',
+        'capacity': 49,
+        'route': 'Dumaguete-Bais',
+        'terminal': 'Dumaguete',
+        'state': 'at_terminal',
+        'in_minutes': 4,
+        'out_minutes': None,
+    },
+    {
+        'bus_number': 'SIP-601',
+        'plate_number': 'VTI 6601',
+        'capacity': 49,
+        'route': 'Sipalay-Himamaylan',
+        'terminal': 'Sipalay',
+        'state': 'en_route',
+        'in_minutes': 29,
+        'out_minutes': 2,
+    },
+    {
+        'bus_number': 'BAC-701',
+        'plate_number': 'VTI 7701',
+        'capacity': 49,
+        'route': 'Bacolod-San Carlos',
+        'terminal': 'Bacolod',
+        'state': 'at_terminal',
+        'in_minutes': 6,
+        'out_minutes': None,
     },
 ]
 
@@ -656,6 +746,7 @@ def terminal_monitor_context(request):
 
 def bus_kiosk_page(request):
     """Live airport-style terminal monitor board."""
+    seed_static_demo_data()
     context = terminal_monitor_context(request)
     context.update(_kiosk_board_context())
     return render(request, 'bus/terminal_monitor.html', context)
@@ -927,6 +1018,62 @@ def _demo_bus_for(bus_number):
     return bus
 
 
+def seed_static_demo_data():
+    """Refresh static demo buses so the kiosk shows today's current time."""
+    now = timezone.now()
+    with transaction.atomic():
+        for demo in STATIC_DEMO_BUSES:
+            terminal = _find_terminal(demo['terminal'])
+            if terminal is None:
+                continue
+            bus, _created = Bus.objects.get_or_create(
+                bus_number=demo['bus_number'],
+                defaults={
+                    'plate_number': demo['plate_number'],
+                    'capacity': demo['capacity'],
+                    'route': demo['route'],
+                    'status': Bus.STATUS_ACTIVE,
+                },
+            )
+            in_minutes = demo.get('in_minutes') or 0
+            out_minutes = demo.get('out_minutes')
+            tapped_at = now - timedelta(minutes=in_minutes)
+            left_at = (
+                now - timedelta(minutes=out_minutes)
+                if out_minutes is not None else None
+            )
+
+            tap = bus.terminal_taps.order_by('-tapped_at').first()
+            if tap is None:
+                tap = BusTerminalTap.objects.create(
+                    bus=bus,
+                    terminal_name=terminal['label'],
+                    latitude=Decimal(str(terminal['lat'])),
+                    longitude=Decimal(str(terminal['lng'])),
+                )
+            else:
+                tap.terminal_name = terminal['label']
+                tap.latitude = Decimal(str(terminal['lat']))
+                tap.longitude = Decimal(str(terminal['lng']))
+                tap.save(update_fields=['terminal_name', 'latitude', 'longitude'])
+            BusTerminalTap.objects.filter(pk=tap.pk).update(
+                tapped_at=tapped_at, left_at=left_at
+            )
+
+            if left_at is None:
+                bus.current_location = f"{terminal['label']} Terminal"
+                bus.movement_status = Bus.MOVE_AT_TERMINAL
+            else:
+                bus.current_location = f"En route from {terminal['label']} Terminal"
+                bus.movement_status = Bus.MOVE_EN_ROUTE
+            bus.latitude = Decimal(str(terminal['lat']))
+            bus.longitude = Decimal(str(terminal['lng']))
+            bus.movement_reason = ''
+            bus.status = Bus.STATUS_ACTIVE
+            bus.last_gps_update = now
+            bus.save()
+
+
 @never_cache
 def bus_tap_page(request, token):
     """Conductor check-in: the bus QR opens this page, the conductor picks the
@@ -1031,7 +1178,9 @@ def conductor_checkin_page(request):
 @never_cache
 def bus_scan_page(request):
     """Webcam QR station: scan a bus QR at a terminal to record a tap."""
-    taps = BusTerminalTap.objects.select_related('bus', 'user')[:8]
+    taps = list(BusTerminalTap.objects.select_related('bus', 'user')[:8])
+    for tap in taps:
+        tap.departure = tap.left_at or _estimated_departure(tap)
     terminal_names = {t['name'].lower() for t in TERMINALS}
     city_places = [
         p for p in CITY_PLACES if p['name'].lower() not in terminal_names
