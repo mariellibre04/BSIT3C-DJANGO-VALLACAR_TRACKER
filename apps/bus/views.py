@@ -556,6 +556,16 @@ def _kiosk_board_context():
         if when is not None and (latest_change is None or when > latest_change):
             latest_change = when
 
+        next_destination = None
+        arrival = None
+        if tap is not None:
+            next_destination = _next_destination_for_bus(bus, tap.terminal_name, tap)
+            current_terminal = _find_terminal(tap.terminal_name)
+            departure_base = time_out or estimated
+            arrival = _arrival_estimate(
+                current_terminal, next_destination, departure_base
+            )
+
         item = {
             'number': bus.bus_number,
             'plate': bus.plate_number,
@@ -567,6 +577,10 @@ def _kiosk_board_context():
             'time_in': time_in,
             'time_out': time_out,
             'estimated_departure': estimated,
+            'next_destination': next_destination['name'] if next_destination else '',
+            'estimated_arrival': arrival['eta'] if arrival else None,
+            'arrival_minutes': arrival['minutes'] if arrival else None,
+            'arrival_distance_km': arrival['distance_km'] if arrival else None,
             'status_class': KIOSK_STATUS_CLASS.get(bus.movement_status, 'is-enroute'),
             'status_label': bus.get_movement_status_display(),
             'is_at_terminal': is_at,
@@ -583,6 +597,8 @@ def _kiosk_board_context():
                 time_in.isoformat() if time_in else '',
                 time_out.isoformat() if time_out else '',
                 estimated.isoformat() if estimated else '',
+                next_destination['name'] if next_destination else '',
+                arrival['eta'].isoformat() if arrival else '',
             ])
         )
 
@@ -774,6 +790,56 @@ def _estimated_departure(tap):
     if tap is None:
         return None
     return tap.tapped_at + timedelta(minutes=ESTIMATED_STOP_MINUTES)
+
+
+def _next_destination_for_bus(bus, terminal_name, tap=None):
+    """Best-effort next stop for a bus based on its route and travel direction.
+
+    Endpoints come from the route text. For an intermediate stop (for example
+    Mabinay on Kabankalan-Dumaguete) the previous tap tells us which way the bus
+    is heading; otherwise the route's second endpoint is used.
+    """
+    route_from, route_to = route_endpoints(bus.route)
+    if not (route_from and route_to):
+        return None
+    current = _find_terminal(terminal_name)
+    if current is None:
+        return None
+    current_name = current['name'].lower()
+    from_name = route_from['name'].lower()
+    to_name = route_to['name'].lower()
+    if current_name == from_name:
+        return route_to
+    if current_name == to_name:
+        return route_from
+    if tap is not None:
+        previous = (
+            bus.terminal_taps
+            .filter(tapped_at__lt=tap.tapped_at)
+            .order_by('-tapped_at')
+            .first()
+        )
+        if previous is not None:
+            previous_name = previous.terminal_name.lower()
+            if previous_name == to_name:
+                return route_from
+    return route_to
+
+
+def _arrival_estimate(current_terminal, destination, start_time):
+    """Estimate the clock time the bus reaches its next destination."""
+    if not (current_terminal and destination and start_time):
+        return None
+    road_km = haversine_km(
+        current_terminal['lat'], current_terminal['lng'],
+        destination['lat'], destination['lng'],
+    ) * ROAD_FACTOR
+    minutes = int(round(road_km / AVG_SPEED_KMH * 60))
+    return {
+        'eta': start_time + timedelta(minutes=minutes),
+        'minutes': minutes,
+        'distance_km': round(road_km, 1),
+    }
 
 
 def _record_terminal_tap(bus, terminal, user=None):
@@ -1064,6 +1130,15 @@ def _scan_tap_payload(bus, tap, status, message):
     time_in = tap.tapped_at if tap else None
     time_out = tap.left_at if tap else None
     estimated = None if time_out else _estimated_departure(tap)
+    current_terminal = _find_terminal(tap.terminal_name) if tap else None
+    next_destination = (
+        _next_destination_for_bus(bus, tap.terminal_name, tap) if tap else None
+    )
+    departure_base = time_out or estimated
+    arrival = (
+        _arrival_estimate(current_terminal, next_destination, departure_base)
+        if current_terminal and next_destination else None
+    )
     return {
         'status': status,
         'bus': {
@@ -1078,6 +1153,10 @@ def _scan_tap_payload(bus, tap, status, message):
         'time_in': _format_clock(time_in),
         'time_out': _format_clock(time_out),
         'estimated_departure': _format_clock(estimated),
+        'next_destination': next_destination['name'] if next_destination else '',
+        'estimated_arrival': _format_clock(arrival['eta']) if arrival else None,
+        'arrival_minutes': arrival['minutes'] if arrival else None,
+        'arrival_distance_km': arrival['distance_km'] if arrival else None,
         'tapped_at': (
             timezone.localtime(tap.tapped_at).strftime('%b %d, %Y %I:%M %p')
             if tap else ''

@@ -391,9 +391,13 @@
         .then(function (data) {
           showResult(data);
           prependRecentTap(data, true);
+          var arrival = (data.next_destination && data.estimated_arrival)
+            ? ' Next destination ' + data.next_destination +
+              ', estimated arrival ' + data.estimated_arrival + '.'
+            : '';
           setStatus(
             'Time out recorded: bus ' + data.bus.bus_number + ' left ' +
-            data.place + ' Terminal at ' + data.time_out + '.',
+            data.place + ' Terminal at ' + data.time_out + '.' + arrival,
             'alert-success'
           );
           lastToken = '';
@@ -432,9 +436,13 @@
           var extra = data.estimated_departure
             ? ' Estimated departure ' + data.estimated_departure + '.'
             : '';
+          var arrival = (data.next_destination && data.estimated_arrival)
+            ? ' Next destination ' + data.next_destination +
+              ', estimated arrival ' + data.estimated_arrival + '.'
+            : '';
           setStatus(
             'Time in recorded: bus ' + data.bus.bus_number + ' at ' +
-            data.place + ' Terminal (' + data.time_in + ').' + extra,
+            data.place + ' Terminal (' + data.time_in + ').' + extra + arrival,
             'alert-success'
           );
         })
@@ -480,18 +488,31 @@
       '</div>';
     }
 
+    function arrivalLine(data) {
+      if (!data.next_destination || !data.estimated_arrival) return '';
+      var detail = '';
+      if (data.arrival_minutes != null) {
+        detail = ' (~' + data.arrival_minutes + ' min' +
+          (data.arrival_distance_km != null ? ', ' + data.arrival_distance_km + ' km' : '') +
+          ')';
+      }
+      return '<br>Next destination <strong>' + escapeHtml(data.next_destination) +
+        '</strong> &middot; Estimated arrival <strong>' +
+        escapeHtml(data.estimated_arrival) + '</strong>' + detail;
+    }
+
     function departureLine(data) {
       if (data.time_out) {
         return '<span class="badge bg-warning-lt text-warning">Time Out</span> ' +
           escapeHtml(data.time_out) + ' &middot; left <strong>' +
-          escapeHtml(data.place) + ' Terminal</strong>';
+          escapeHtml(data.place) + ' Terminal</strong>' + arrivalLine(data);
       }
       var est = data.estimated_departure
         ? 'Estimated departure <strong>' + escapeHtml(data.estimated_departure) + '</strong>'
         : 'Waiting for departure';
       return '<span class="badge bg-success-lt text-success">Time In</span> ' +
         escapeHtml(data.time_in) + ' &middot; <strong>' + escapeHtml(data.place) +
-        ' Terminal</strong><br>' + est;
+        ' Terminal</strong><br>' + est + arrivalLine(data);
     }
 
     function showResult(data) {
@@ -519,6 +540,7 @@
           (data.estimated_departure
             ? '<br>Estimated departure <strong>' + escapeHtml(data.estimated_departure) + '</strong>.'
             : '') +
+          arrivalLine(data) +
           '<br><span class="text-muted">Choose Time Out to record that this bus has left.</span>' +
         '</div>' +
         '<div class="d-flex flex-wrap gap-2 mt-3">' +

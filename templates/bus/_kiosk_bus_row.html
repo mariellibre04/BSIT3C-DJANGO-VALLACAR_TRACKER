@@ -23,6 +23,9 @@
         <span class="k-left-at-label">Est.</span> {{ b.estimated_departure|date:"g:i A" }}
       {% else %}&mdash;{% endif %}
     </span>
+    {% if b.next_destination and b.estimated_arrival %}
+    <span class="k-route-sub">Next: {{ b.next_destination }} &middot; ETA {{ b.estimated_arrival|date:"g:i A" }}</span>
+    {% endif %}
   </td>
   <td><span class="k-status {{ b.status_class }}"><span class="k-status-dot"></span> {{ b.status_label }}</span></td>
 </tr>
