@@ -251,6 +251,14 @@ body.kiosk-body::before {
   gap: 10px;
 }
 
+.k-terminal-strip.is-single {
+  grid-template-columns: minmax(0, 1fr);
+}
+
+.k-terminal-strip.is-single .k-terminal {
+  max-width: 360px;
+}
+
 .k-terminal {
   position: relative;
   padding: 9px 13px;

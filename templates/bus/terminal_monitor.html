@@ -11,7 +11,7 @@
   <link href="{% static 'css/tabler.css' %}" rel="stylesheet">
   <link href="{% static 'css/app-theme.css' %}" rel="stylesheet">
   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
-  <link href="{% static 'css/terminal-monitor.css' %}?v=4" rel="stylesheet">
+  <link href="{% static 'css/terminal-monitor.css' %}?v=5" rel="stylesheet">
   <style>@import url("https://rsms.me/inter/inter.css");</style>
 </head>
 <body class="kiosk-body" data-selected-terminal="{{ kiosk_selected_slug }}">
@@ -86,7 +86,7 @@
         </section>
 
         <!-- Featured terminal summary -->
-        <section class="k-terminal-strip" id="kioskTerminals" aria-label="Featured terminal summary">
+        <section class="k-terminal-strip{% if kiosk_selected %} is-single{% endif %}" id="kioskTerminals" aria-label="Featured terminal summary">
           {% include 'bus/_kiosk_terminals.html' %}
         </section>
 

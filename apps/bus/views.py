@@ -215,6 +215,21 @@ STATIC_DEMO_BUSES = [
     },
 ]
 
+KIOSK_BAY_COUNT = 12
+KIOSK_STATIC_BAYS = {
+    '364': 5,
+    '53': 3,
+    't76775': 7,
+    'KDM-101': 2,
+    'KDM-102': 4,
+    'BDG-201': 1,
+    'MAB-301': 6,
+    'KAB-401': 8,
+    'DUM-501': 9,
+    'SIP-601': 10,
+    'BAC-701': 11,
+}
+
 KIOSK_STATUS_CLASS = {
     Bus.MOVE_AT_TERMINAL: 'is-at',
     Bus.MOVE_EN_ROUTE: 'is-enroute',
@@ -597,6 +612,15 @@ def bus_get_ajax(request, pk):
     return JsonResponse(_bus_gps_payload(bus))
 
 
+def _kiosk_bay(bus):
+    """Static bay assignment for the kiosk board."""
+    bay = KIOSK_STATIC_BAYS.get(bus.bus_number)
+    if bay is None:
+        digits = re.sub(r'\D', '', bus.bus_number or '') or str(bus.id or 0)
+        bay = (int(digits[-3:]) % KIOSK_BAY_COUNT) + 1
+    return f'Bay {bay:02d}'
+
+
 def _kiosk_board_context(selected_terminal=None):
     """Build the live terminal-monitor board from buses and their last tap.
 
@@ -690,6 +714,7 @@ def _kiosk_board_context(selected_terminal=None):
             'time': when,
             'time_in': time_in,
             'time_out': time_out,
+            'bay': _kiosk_bay(bus),
             'estimated_departure': estimated,
             'next_destination': destination_name,
             'estimated_arrival': arrival['eta'] if arrival else None,
@@ -762,8 +787,13 @@ def _kiosk_board_context(selected_terminal=None):
     inbound.sort(key=lambda row: row['estimated_arrival'] or row['time'] or timezone.now())
     departed.sort(key=lambda row: row['time'] or timezone.now(), reverse=True)
 
+    featured_entries = (
+        [selected_terminal]
+        if selected_terminal is not None
+        else terminal_directory.featured_terminals()
+    )
     terminals = []
-    for entry in terminal_directory.featured_terminals():
+    for entry in featured_entries:
         counts = directory_counts[entry['slug']]
         terminals.append({
             'name': entry['name'],

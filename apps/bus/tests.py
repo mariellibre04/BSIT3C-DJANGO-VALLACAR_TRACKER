@@ -161,6 +161,25 @@ class KioskRefreshTests(TestCase):
         self.assertNotIn('202', data['board_html'])
         self.assertIn('Bacolod', data['sidebar_html'])
 
+    def test_terminal_kiosk_shows_only_the_selected_terminal_card(self):
+        response = self.client.get(
+            reverse('bus:bus_kiosk_terminal', args=['kabankalan'])
+        )
+
+        self.assertEqual(
+            [card['slug'] for card in response.context['kiosk_terminals']],
+            ['kabankalan'],
+        )
+
+    def test_terminal_kiosk_assigns_static_bays(self):
+        response = self.client.get(
+            reverse('bus:bus_kiosk_terminal', args=['kabankalan'])
+        )
+
+        rows = response.context['kiosk_inbound'] + response.context['kiosk_at_terminal']
+        bus = next(row for row in rows if row['number'] == '364')
+        self.assertEqual(bus['bay'], 'Bay 05')
+
     def test_unknown_terminal_kiosk_redirects_to_all_terminals(self):
         response = self.client.get(
             reverse('bus:bus_kiosk_terminal', args=['not-a-real-terminal'])
