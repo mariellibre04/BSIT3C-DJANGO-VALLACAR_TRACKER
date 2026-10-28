@@ -168,8 +168,9 @@ def welcome_view(request):
     occupied = sum(b.total_passengers or 0 for b in buses)
     free_seats = max(0, capacity - occupied)
 
-    from apps.bus.views import terminal_monitor_context
+    from apps.bus.views import _kiosk_board_context, terminal_monitor_context
     context = terminal_monitor_context(request)
+    context.update(_kiosk_board_context())
     context.update({
         'on_road': on_road,
         'free_seats': free_seats,

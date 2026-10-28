@@ -16,6 +16,11 @@
   <td><span class="k-bay">&mdash;</span></td>
   <td><span class="k-time">{% if b.time_in %}{{ b.time_in|date:"g:i A" }}{% else %}&mdash;{% endif %}</span></td>
   <td>
+    <span class="k-seats{% if b.is_full %} is-full{% endif %}" title="{{ b.passengers }} passengers of {{ b.capacity }} seats">
+      <strong>{{ b.seats_left }}</strong><span>/{{ b.capacity }}</span>
+    </span>
+  </td>
+  <td>
     <span class="k-time">
       {% if b.time_out %}
         <span class="k-left-at-label">Departed</span> {{ b.time_out|date:"g:i A" }}

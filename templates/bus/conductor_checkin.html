@@ -7,7 +7,14 @@
         <div class="col">
           <div class="page-pretitle">Conductor Check-in</div>
           <h2 class="page-title mb-0">Scan &amp; Check In</h2>
-          <div class="text-muted small">Choose your bus and terminal to record a tap.</div>
+          <div class="text-muted small">
+            {% if terminal_locked %}
+            Choose your bus. The tap is recorded automatically at
+            <strong>{{ terminal_entry.terminal }}</strong>.
+            {% else %}
+            Choose your bus and terminal to record a tap.
+            {% endif %}
+          </div>
         </div>
         <div class="col-auto d-flex gap-2">
           <a href="{% url 'bus:bus_scan' %}" class="btn btn-primary">
@@ -37,6 +44,16 @@
                 {% endfor %}
               </select>
             </div>
+            {% if terminal_locked %}
+            <input type="hidden" name="terminal_slug" value="{{ terminal_entry.slug }}">
+            <div class="alert alert-primary d-flex align-items-start gap-2 mb-0" role="status">
+              <i class="fa-solid fa-location-dot mt-1"></i>
+              <div>
+                <div class="fw-semibold">Locked to {{ terminal_entry.terminal }}</div>
+                <div class="small">This tap automatically times the bus in or out at this terminal.</div>
+              </div>
+            </div>
+            {% else %}
             <div>
               <label class="form-label required" for="checkin_terminal">Terminal</label>
               <select name="terminal" id="checkin_terminal" class="form-select form-select-lg" required>
@@ -47,7 +64,15 @@
               </select>
               <div class="form-hint mt-2">This records the bus at the selected terminal and updates its live location.</div>
             </div>
+            {% endif %}
           </div>
+          {% if terminal_locked %}
+          <div class="card-footer">
+            <button type="submit" class="btn btn-primary btn-lg w-100">
+              <i class="fa-solid fa-hand-pointer me-1"></i> Record tap at {{ terminal_entry.name }}
+            </button>
+          </div>
+          {% else %}
           <div class="card-footer d-flex justify-content-between">
             <button type="submit" name="action" value="check_in" class="btn btn-primary btn-lg w-50">
               <i class="fa-solid fa-hand-pointer me-1"></i> Check In
@@ -56,6 +81,7 @@
               <i class="fa-solid fa-hand-pointer-down me-1"></i> Time Out
             </button>
           </div>
+          {% endif %}
         </form>
       </div>
 

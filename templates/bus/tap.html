@@ -7,7 +7,13 @@
         <div class="col">
           <div class="page-pretitle">Conductor Check-in</div>
           <h2 class="page-title mb-0">Terminal Tap</h2>
-          <div class="text-muted small">Scan the bus QR, choose the terminal, and confirm the tap.</div>
+          <div class="text-muted small">
+            {% if terminal_locked %}
+            Scanned at <strong>{{ terminal_entry.terminal }}</strong>. The tap is recorded automatically.
+            {% else %}
+            Scan the bus QR, choose the terminal, and confirm the tap.
+            {% endif %}
+          </div>
         </div>
         <div class="col-auto d-flex gap-2">
           <a href="{% url 'bus:bus_scan' %}" class="btn btn-primary">
@@ -50,10 +56,50 @@
     <div class="col-12 col-lg-7">
       <div class="card">
         <div class="card-header">
-          <div class="card-title">Tap at a terminal</div>
+          <div class="card-title">{% if terminal_locked %}Automatic tap{% else %}Tap at a terminal{% endif %}</div>
+          {% if terminal_locked %}
+          <span class="badge bg-primary-lt text-primary ms-auto">
+            <i class="fa-solid fa-lock me-1"></i>{{ terminal_entry.name }}
+          </span>
+          {% endif %}
         </div>
         <form method="post">
           {% csrf_token %}
+          {% if terminal_locked %}
+          <input type="hidden" name="terminal_slug" value="{{ terminal_entry.slug }}">
+          <div class="card-body">
+            <div class="alert alert-primary d-flex align-items-start gap-2 mb-0" role="status">
+              <i class="fa-solid fa-location-dot mt-1"></i>
+              <div>
+                <div class="fw-semibold">Locked to {{ terminal_entry.terminal }}</div>
+                <div class="small">
+                  This QR belongs to the {{ terminal_entry.name }} kiosk, so the tap is
+                  recorded there without choosing a terminal.
+                </div>
+              </div>
+            </div>
+            <div class="form-hint mt-2">
+              {% if next_action == 'time_out' %}
+              <strong>{{ bus.bus_number }}</strong> is already timed in at
+              <strong>{{ terminal_entry.terminal }}</strong>. Confirming records the time out.
+              {% else %}
+              <strong>{{ bus.bus_number }}</strong> will be timed in at
+              <strong>{{ terminal_entry.terminal }}</strong> with an estimated departure
+              {% if estimated_stop_minutes %}{{ estimated_stop_minutes }} minutes later{% endif %}.
+              {% endif %}
+              {% if not user.is_authenticated %}<br>You are tapping as a guest. Sign in to attach your account to the tap.{% endif %}
+            </div>
+          </div>
+          <div class="card-footer d-flex gap-2">
+            <button type="submit" class="btn btn-lg flex-fill {% if next_action == 'time_out' %}btn-warning{% else %}btn-primary{% endif %}">
+              <i class="fa-solid {% if next_action == 'time_out' %}fa-arrow-right-from-bracket{% else %}fa-hand-pointer{% endif %} me-1"></i>
+              {{ next_action_label }} at {{ terminal_entry.name }}
+            </button>
+            <a href="{% url 'bus:bus_tap' bus.qr_token %}" class="btn btn-outline-secondary btn-lg">
+              Change
+            </a>
+          </div>
+          {% else %}
           <div class="card-body">
             <label class="form-label required" for="tap_terminal">Terminal</label>
             <select name="terminal" id="tap_terminal" class="form-select form-select-lg" required>
@@ -77,6 +123,7 @@
               <i class="fa-solid fa-hand-pointer-down me-1"></i> Time Out
             </button>
           </div>
+          {% endif %}
         </form>
       </div>
 

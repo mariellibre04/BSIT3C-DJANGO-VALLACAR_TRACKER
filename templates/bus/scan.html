@@ -90,6 +90,23 @@
           <h3 class="card-title">1. Choose terminal</h3>
         </div>
         <div class="card-body">
+          {% if locked_terminal %}
+          <div class="alert alert-primary d-flex align-items-start gap-2 mb-0" role="status">
+            <i class="fa-solid fa-location-dot mt-1"></i>
+            <div>
+              <div class="fw-semibold">Locked to {{ locked_terminal.terminal }}</div>
+              <div class="small">Every bus scan is recorded at this terminal automatically.</div>
+            </div>
+          </div>
+          <select id="scan_terminal" class="d-none" tabindex="-1" aria-hidden="true">
+            <option value="{{ locked_terminal.terminal }}" selected>{{ locked_terminal.terminal }}</option>
+          </select>
+          <div class="form-hint mt-2">
+            The first scan records the time in and an estimated departure
+            ({{ estimated_stop_minutes }} minutes after arrival). Scanning the
+            same bus again records its time out.
+          </div>
+          {% else %}
           <label class="form-label required" for="terminal_input">Terminal / City</label>
           <div class="terminal-combobox" id="terminal_combobox">
             <input type="text" id="terminal_input" class="form-control form-control-lg terminal-combobox-input"
@@ -123,6 +140,7 @@
             ({{ estimated_stop_minutes }} minutes after arrival). Tapping the same
             bus again lets you record the time out.
           </div>
+          {% endif %}
 
           <div class="d-flex gap-2 mt-3">
             <button type="button" id="scan_start" class="btn btn-primary">
@@ -200,6 +218,9 @@
       <div class="card mt-3">
         <div class="card-header">
           <h3 class="card-title">Recent taps</h3>
+          <span class="text-muted small ms-2 d-none d-sm-inline">
+            <i class="fa-regular fa-clock me-1"></i><span id="phClock">{% now "M j, Y g:i A" %}</span> PHT
+          </span>
           <a href="{% url 'bus:bus_kiosk' %}" class="btn btn-sm btn-outline-primary ms-auto" target="_blank" rel="noopener">
             <i class="fa-solid fa-tv me-1"></i> Open monitor
           </a>
@@ -207,7 +228,7 @@
         <div class="table-responsive">
           <table class="table table-vcenter card-table">
             <thead>
-              <tr><th>Bus</th><th>Stop / Place</th><th>Time In</th><th>Time Out</th><th>Status</th></tr>
+              <tr><th>Bus</th><th>Stop / Place</th><th>Time In</th><th>Departure</th><th>Time Out</th></tr>
             </thead>
             <tbody id="recent_taps">
               {% for tap in taps %}
@@ -226,7 +247,7 @@
                 </td>
                 <td>
                   {% if tap.left_at %}
-                  <span class="text-muted">En route</span>
+                  <span class="text-warning">En route</span>
                   {% else %}
                   <span class="text-success">At terminal</span>
                   {% endif %}
@@ -784,19 +805,19 @@
       } else {
         departure.textContent = '—';
       }
-      var timeOutStatus = document.createElement('td');
+      var timeOut = document.createElement('td');
       if (data.time_out) {
-        timeOutStatus.className = 'text-muted';
-        timeOutStatus.textContent = 'En route';
+        timeOut.className = 'text-warning';
+        timeOut.textContent = 'En route';
       } else {
-        timeOutStatus.className = 'text-success';
-        timeOutStatus.textContent = 'At terminal';
+        timeOut.className = 'text-success';
+        timeOut.textContent = 'At terminal';
       }
       row.appendChild(bus);
       row.appendChild(place);
       row.appendChild(timeIn);
       row.appendChild(departure);
-      row.appendChild(timeOutStatus);
+      row.appendChild(timeOut);
 
       var first = recentBody.firstElementChild;
       if (replaceFirst && first && first.children[0] &&
@@ -845,6 +866,20 @@
     window.addEventListener('beforeunload', function () {
       if (scanner && scanning) scanner.stop().catch(function () {});
     });
+  })();
+</script>
+<script>
+  (function () {
+    var clock = document.getElementById('phClock');
+    if (!clock) return;
+    function tick() {
+      clock.textContent = new Date().toLocaleString('en-PH', {
+        month: 'short', day: 'numeric', year: 'numeric',
+        hour: 'numeric', minute: '2-digit', timeZone: 'Asia/Manila'
+      });
+    }
+    tick();
+    window.setInterval(tick, 1000);
   })();
 </script>
 {% endblock %}

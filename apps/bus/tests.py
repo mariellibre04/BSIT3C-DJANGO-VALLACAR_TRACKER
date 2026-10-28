@@ -123,6 +123,147 @@ class KioskRefreshTests(TestCase):
 
         self.assertNotIn('101', data['board_html'])
 
+    def test_dedicated_terminal_kiosk_page_renders_negros_occidental_only(self):
+        response = self.client.get(
+            reverse('bus:bus_kiosk_terminal', args=['bacolod-north'])
+        )
+
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, 'Bacolod North Bus Terminal')
+        self.assertContains(response, 'id="kioskSidebarList"')
+        self.assertContains(response, 'Negros Occidental')
+        self.assertNotContains(response, 'Cebu South Bus Terminal')
+        self.assertNotContains(response, 'PITX')
+
+    def test_terminal_kiosk_filters_board_to_that_terminal(self):
+        other = Bus.objects.create(
+            bus_number='202',
+            plate_number='ABC-202',
+            capacity=49,
+            route='Mabinay - Dumaguete',
+            movement_status=Bus.MOVE_EN_ROUTE,
+        )
+        self.client.post(
+            reverse('bus:bus_scan_checkin_ajax'),
+            {'token': str(self.bus.qr_token), 'terminal': 'Bacolod'},
+        )
+        self.client.post(
+            reverse('bus:bus_scan_checkin_ajax'),
+            {'token': str(other.qr_token), 'terminal': 'San Carlos'},
+        )
+
+        data = self.client.get(
+            reverse('bus:bus_kiosk_refresh') + '?terminal=bacolod-north'
+        ).json()
+
+        self.assertEqual(data['selected'], 'bacolod-north')
+        self.assertIn('101', data['board_html'])
+        self.assertNotIn('202', data['board_html'])
+        self.assertIn('Bacolod', data['sidebar_html'])
+
+    def test_unknown_terminal_kiosk_redirects_to_all_terminals(self):
+        response = self.client.get(
+            reverse('bus:bus_kiosk_terminal', args=['not-a-real-terminal'])
+        )
+
+        self.assertEqual(response.status_code, 302)
+        self.assertEqual(response['Location'], reverse('bus:bus_kiosk'))
+
+
+class TerminalKioskQrTests(TestCase):
+    def setUp(self):
+        self.bus = Bus.objects.create(
+            bus_number='101',
+            plate_number='ABC-101',
+            capacity=50,
+            route='Bacolod - Kabankalan',
+            movement_status=Bus.MOVE_EN_ROUTE,
+        )
+
+    def test_kiosk_qr_is_locked_to_selected_terminal(self):
+        response = self.client.get(
+            reverse('bus:bus_kiosk_terminal', args=['kabankalan'])
+        )
+
+        qr_data = response.context['kiosk_qr_data']
+        self.assertTrue(qr_data['auto'])
+        self.assertEqual(qr_data['terminal_slug'], 'kabankalan')
+        self.assertIn('terminal=kabankalan', qr_data['buses']['101'])
+        self.assertIn('auto=1', qr_data['buses']['101'])
+        self.assertIn('terminal=kabankalan', qr_data['scan'])
+
+    def test_locked_bus_qr_times_in_then_out_automatically(self):
+        url = reverse('bus:bus_tap', args=[str(self.bus.qr_token)])
+
+        response = self.client.get(url, {'terminal': 'kabankalan', 'auto': '1'})
+
+        self.assertEqual(response.status_code, 302)
+        self.assertIn('done=1', response['Location'])
+        tap = BusTerminalTap.objects.get(bus=self.bus)
+        self.assertEqual(tap.terminal_name, 'Kabankalan')
+        self.assertIsNone(tap.left_at)
+        self.bus.refresh_from_db()
+        self.assertEqual(self.bus.movement_status, Bus.MOVE_AT_TERMINAL)
+
+        self.client.get(url, {'terminal': 'kabankalan', 'auto': '1'})
+
+        tap.refresh_from_db()
+        self.assertIsNotNone(tap.left_at)
+        self.bus.refresh_from_db()
+        self.assertEqual(self.bus.movement_status, Bus.MOVE_EN_ROUTE)
+
+    def test_scan_at_new_terminal_closes_previous_stop(self):
+        url = reverse('bus:bus_tap', args=[str(self.bus.qr_token)])
+
+        self.client.get(url, {'terminal': 'kabankalan', 'auto': '1'})
+        self.client.get(url, {'terminal': 'victorias', 'auto': '1'})
+
+        self.assertEqual(BusTerminalTap.objects.filter(bus=self.bus).count(), 2)
+        first = BusTerminalTap.objects.get(bus=self.bus, terminal_name='Kabankalan')
+        latest = BusTerminalTap.objects.get(bus=self.bus, terminal_name='Victorias')
+        self.assertIsNotNone(first.left_at)
+        self.assertIsNone(latest.left_at)
+        self.bus.refresh_from_db()
+        self.assertEqual(self.bus.current_location, 'Victorias Terminal')
+
+    def test_locked_tap_page_shows_the_next_automatic_action(self):
+        url = reverse('bus:bus_tap', args=[str(self.bus.qr_token)])
+
+        page = self.client.get(url, {'terminal': 'kabankalan'})
+
+        self.assertEqual(page.status_code, 200)
+        self.assertContains(page, 'Automatic tap')
+        self.assertContains(page, 'Time In at Kabankalan')
+        self.assertNotContains(page, 'id="tap_terminal"')
+
+    def test_locked_manual_checkin_automatically_times_in(self):
+        url = reverse('bus:conductor_checkin') + '?terminal=kabankalan'
+        page = self.client.get(url)
+        self.assertContains(page, 'Locked to Kabankalan Bus Terminal')
+
+        response = self.client.post(url, {'bus': self.bus.id})
+
+        self.assertEqual(response.status_code, 302)
+        tap = BusTerminalTap.objects.get(bus=self.bus)
+        self.assertEqual(tap.terminal_name, 'Kabankalan')
+        self.assertIsNone(tap.left_at)
+
+    def test_refresh_keeps_bus_qrs_locked_to_terminal(self):
+        data = self.client.get(
+            reverse('bus:bus_kiosk_refresh') + '?terminal=kabankalan'
+        ).json()
+
+        self.assertIn('terminal=kabankalan', data['buses']['101'])
+        self.assertIn('auto=1', data['buses']['101'])
+
+    def test_scan_page_locks_selected_terminal(self):
+        response = self.client.get(reverse('bus:bus_scan') + '?terminal=kabankalan')
+
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, 'Locked to Kabankalan Bus Terminal')
+        self.assertContains(response, 'value="Kabankalan Bus Terminal" selected')
+        self.assertNotContains(response, 'id="terminal_combobox"')
+
 
 class TerminalStaffScannerTests(TestCase):
     def setUp(self):

@@ -6,6 +6,9 @@
 {% for b in kiosk_inbound %}
 <span><b>{{ b.status_label|upper }}</b> &middot; Bus {{ b.number }} &middot; {{ b.terminal }}{% if b.time_out %} &middot; Left {{ b.time_out|date:"g:i A" }}{% elif b.time %} &middot; {{ b.time|date:"g:i A" }}{% endif %}{% if b.next_destination and b.estimated_arrival %} &middot; Next {{ b.next_destination }} ETA {{ b.estimated_arrival|date:"g:i A" }}{% endif %}</span>
 {% endfor %}
+{% for b in kiosk_departed %}
+<span><b>DEPARTED</b> &middot; Bus {{ b.number }} &middot; {{ b.terminal }}{% if b.time_out %} &middot; {{ b.time_out|date:"g:i A" }}{% endif %}{% if b.next_destination %} &middot; Next {{ b.next_destination }}{% endif %}</span>
+{% endfor %}
 <span><b>REMINDER</b> &middot; Keep your ticket ready and listen for boarding calls</span>
 {% for b in kiosk_at_terminal %}
 <span><b>AT TERMINAL</b> &middot; Bus {{ b.number }} &middot; {{ b.terminal }}{% if b.time_in %} &middot; In {{ b.time_in|date:"g:i A" }}{% endif %}{% if b.time_out %} &middot; Departed {{ b.time_out|date:"g:i A" }}{% elif b.estimated_departure %} &middot; Est. dep {{ b.estimated_departure|date:"g:i A" }}{% endif %}{% if b.next_destination and b.estimated_arrival %} &middot; Next {{ b.next_destination }} ETA {{ b.estimated_arrival|date:"g:i A" }}{% endif %}</span>
@@ -14,5 +17,8 @@
 {% endfor %}
 {% for b in kiosk_inbound %}
 <span><b>{{ b.status_label|upper }}</b> &middot; Bus {{ b.number }} &middot; {{ b.terminal }}{% if b.time_out %} &middot; Left {{ b.time_out|date:"g:i A" }}{% elif b.time %} &middot; {{ b.time|date:"g:i A" }}{% endif %}{% if b.next_destination and b.estimated_arrival %} &middot; Next {{ b.next_destination }} ETA {{ b.estimated_arrival|date:"g:i A" }}{% endif %}</span>
+{% endfor %}
+{% for b in kiosk_departed %}
+<span><b>DEPARTED</b> &middot; Bus {{ b.number }} &middot; {{ b.terminal }}{% if b.time_out %} &middot; {{ b.time_out|date:"g:i A" }}{% endif %}{% if b.next_destination %} &middot; Next {{ b.next_destination }}{% endif %}</span>
 {% endfor %}
 <span><b>REMINDER</b> &middot; Keep your ticket ready and listen for boarding calls</span>

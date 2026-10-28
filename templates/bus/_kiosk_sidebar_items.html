@@ -1,0 +1,39 @@
+<a href="{% url 'bus:bus_kiosk' %}"
+   class="k-side-item k-side-all{% if not kiosk_selected %} is-active{% endif %}"
+   data-side-item data-search="all terminals Negros Occidental overview philippines">
+  <span class="k-side-icon"><i class="fa-solid fa-grip"></i></span>
+  <span class="k-side-copy">
+    <strong>All terminals</strong>
+    <small>Negros Occidental overview</small>
+  </span>
+  <span class="k-side-counts" title="At terminal / inbound">
+    <span class="k-side-at">{{ kiosk_total_at }}</span>
+    <span class="k-side-in">{{ kiosk_total_inbound }}</span>
+  </span>
+</a>
+{% for group in kiosk_terminal_groups %}
+<div class="k-side-group" data-side-group>
+  <div class="k-side-group-head">
+    <span>{{ group.region }}</span>
+    <em>{{ group.island }}</em>
+  </div>
+  {% for t in group.terminals %}
+  <a href="{% url 'bus:bus_kiosk_terminal' t.slug %}"
+     class="k-side-item{% if t.is_active %} is-active{% endif %}"
+     data-side-item data-search="{{ t.search }}">
+    <span class="k-side-icon{% if t.is_hub %} hub{% endif %}">
+      <i class="fa-solid {% if t.is_hub %}fa-star{% else %}fa-location-dot{% endif %}"></i>
+    </span>
+    <span class="k-side-copy">
+      <strong>{{ t.name }}</strong>
+      <small>{{ t.terminal }}{% if t.province %} &middot; {{ t.province }}{% endif %}</small>
+    </span>
+    <span class="k-side-counts" title="At terminal / inbound">
+      <span class="k-side-at">{{ t.at_terminal }}</span>
+      <span class="k-side-in">{{ t.inbound }}</span>
+    </span>
+  </a>
+  {% endfor %}
+</div>
+{% endfor %}
+<p class="k-side-empty" id="kioskSidebarEmpty" hidden>No terminal matches your search.</p>

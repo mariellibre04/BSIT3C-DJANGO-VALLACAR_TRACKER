@@ -1,17 +1,37 @@
 <tr class="k-section">
-  <td colspan="7"><span>Now at terminal</span><span class="k-section-count">{{ kiosk_at_terminal|length }} buses</span></td>
+  <td colspan="8">
+    <span>{% if kiosk_selected %}Available buses at {{ kiosk_selected.name }}{% else %}Now at terminal{% endif %}</span>
+    <span class="k-section-count">{{ kiosk_at_terminal|length }} buses</span>
+  </td>
 </tr>
 {% for b in kiosk_at_terminal %}
   {% include 'bus/_kiosk_bus_row.html' with b=b %}
 {% empty %}
-<tr class="k-bus-row"><td colspan="7"><span class="k-empty-row">No buses checked in at a terminal yet. Scan a bus QR to check in.</span></td></tr>
+<tr class="k-bus-row"><td colspan="8"><span class="k-empty-row">{% if kiosk_selected %}No buses are checked in at {{ kiosk_selected.name }} right now.{% else %}No buses checked in at a terminal yet. Scan a bus QR to check in.{% endif %}</span></td></tr>
 {% endfor %}
 
 <tr class="k-section inbound">
-  <td colspan="7"><span>Arriving / en route</span><span class="k-section-count">{{ kiosk_inbound|length }} buses</span></td>
+  <td colspan="8">
+    <span>{% if kiosk_selected %}Arriving at {{ kiosk_selected.name }}{% else %}Arriving / en route{% endif %}</span>
+    <span class="k-section-count">{{ kiosk_inbound|length }} buses</span>
+  </td>
 </tr>
 {% for b in kiosk_inbound %}
   {% include 'bus/_kiosk_bus_row.html' with b=b %}
 {% empty %}
-<tr class="k-bus-row"><td colspan="7"><span class="k-empty-row">No other active buses right now.</span></td></tr>
+<tr class="k-bus-row"><td colspan="8"><span class="k-empty-row">{% if kiosk_selected %}No buses are currently heading to {{ kiosk_selected.name }}.{% else %}No other active buses right now.{% endif %}</span></td></tr>
 {% endfor %}
+
+{% if kiosk_selected %}
+<tr class="k-section departed">
+  <td colspan="8">
+    <span>Recently departed {{ kiosk_selected.name }}</span>
+    <span class="k-section-count">{{ kiosk_departed|length }} buses</span>
+  </td>
+</tr>
+{% for b in kiosk_departed %}
+  {% include 'bus/_kiosk_bus_row.html' with b=b %}
+{% empty %}
+<tr class="k-bus-row"><td colspan="8"><span class="k-empty-row">No departures from {{ kiosk_selected.name }} yet today.</span></td></tr>
+{% endfor %}
+{% endif %}

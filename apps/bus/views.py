@@ -26,6 +26,7 @@ from django.utils import timezone
 
 from apps.scoping import scoped_bus, scoped_buses
 from django.db.models import Count
+from . import terminal_directory
 from .models import Bus, BusTerminalTap
 
 MIN_CAPACITY = 1
@@ -596,8 +597,14 @@ def bus_get_ajax(request, pk):
     return JsonResponse(_bus_gps_payload(bus))
 
 
-def _kiosk_board_context():
-    """Build the live terminal-monitor board from buses and their last tap."""
+def _kiosk_board_context(selected_terminal=None):
+    """Build the live terminal-monitor board from buses and their last tap.
+
+    When ``selected_terminal`` is a directory entry, only that location's
+    available buses and movements are returned. Free-form tap labels are
+    matched back to the directory so a bus checked in at ``CEBU-SOUTH`` still
+    appears on the Cebu South Bus Terminal kiosk.
+    """
     latest_tap_id = (
         BusTerminalTap.objects.filter(bus_id=OuterRef('pk'))
         .order_by('-tapped_at')
@@ -605,7 +612,10 @@ def _kiosk_board_context():
     )
     buses = list(
         Bus.objects.filter(status=Bus.STATUS_ACTIVE)
-        .annotate(latest_tap_id=Subquery(latest_tap_id))
+        .annotate(
+            latest_tap_id=Subquery(latest_tap_id),
+            passenger_count=Count('passengers'),
+        )
         .order_by('bus_number')
     )
     tap_ids = [bus.latest_tap_id for bus in buses if bus.latest_tap_id]
@@ -613,9 +623,11 @@ def _kiosk_board_context():
         tap.bus_id: tap
         for tap in BusTerminalTap.objects.filter(id__in=tap_ids)
     }
-    at_counts = {name: 0 for name in KIOSK_TERMINAL_NAMES}
-    inbound_counts = {name: 0 for name in KIOSK_TERMINAL_NAMES}
-    at_terminal, inbound = [], []
+    directory_counts = {
+        entry['slug']: {'at_terminal': 0, 'inbound': 0, 'departed': 0}
+        for entry in terminal_directory.TERMINAL_DIRECTORY
+    }
+    all_rows = []
     latest_change = None
     signature_parts = []
 
@@ -656,6 +668,18 @@ def _kiosk_board_context():
                 current_terminal, next_destination, departure_base
             )
 
+        last_tap_terminal = tap.terminal_name if tap else ''
+        tap_entry = terminal_directory.match_terminal(last_tap_terminal)
+        terminal_entry = terminal_directory.match_terminal(terminal)
+        destination_name = next_destination['name'] if next_destination else ''
+        destination_entry = terminal_directory.match_terminal(destination_name)
+        if destination_entry is None and not is_at and time_out is None:
+            # An en-route bus without a known next stop is heading towards the
+            # terminal currently shown in its own row.
+            destination_entry = terminal_entry
+
+        seated = bus.passenger_count or 0
+        seats_left = max(0, (bus.capacity or 0) - seated)
         item = {
             'number': bus.bus_number,
             'plate': bus.plate_number,
@@ -667,13 +691,22 @@ def _kiosk_board_context():
             'time_in': time_in,
             'time_out': time_out,
             'estimated_departure': estimated,
-            'next_destination': next_destination['name'] if next_destination else '',
+            'next_destination': destination_name,
             'estimated_arrival': arrival['eta'] if arrival else None,
             'arrival_minutes': arrival['minutes'] if arrival else None,
             'arrival_distance_km': arrival['distance_km'] if arrival else None,
             'status_class': KIOSK_STATUS_CLASS.get(bus.movement_status, 'is-enroute'),
             'status_label': bus.get_movement_status_display(),
             'is_at_terminal': is_at,
+            'is_departed': time_out is not None,
+            'capacity': bus.capacity or 0,
+            'passengers': seated,
+            'seats_left': seats_left,
+            'is_full': seats_left <= 0,
+            'last_tap_terminal': last_tap_terminal,
+            '_terminal_slug': terminal_entry['slug'] if terminal_entry else '',
+            '_destination_slug': destination_entry['slug'] if destination_entry else '',
+            '_tap_slug': tap_entry['slug'] if tap_entry else '',
         }
         signature_parts.append(
             '|'.join([
@@ -687,30 +720,95 @@ def _kiosk_board_context():
                 time_in.isoformat() if time_in else '',
                 time_out.isoformat() if time_out else '',
                 estimated.isoformat() if estimated else '',
-                next_destination['name'] if next_destination else '',
+                destination_name,
                 arrival['eta'].isoformat() if arrival else '',
+                f'{seats_left}/{bus.capacity or 0}',
             ])
         )
 
+        all_rows.append(item)
         if is_at:
-            at_terminal.append(item)
-            if terminal in at_counts:
-                at_counts[terminal] += 1
-        else:
-            inbound.append(item)
-            if terminal in inbound_counts:
-                inbound_counts[terminal] += 1
+            if tap_entry is not None:
+                directory_counts[tap_entry['slug']]['at_terminal'] += 1
+        elif time_out is not None and tap_entry is not None:
+            directory_counts[tap_entry['slug']]['departed'] += 1
+        if not is_at and destination_entry is not None:
+            directory_counts[destination_entry['slug']]['inbound'] += 1
+
+    if selected_terminal is None:
+        at_terminal = [row for row in all_rows if row['is_at_terminal']]
+        inbound = [row for row in all_rows if not row['is_at_terminal']]
+        departed = []
+    else:
+        slug = selected_terminal['slug']
+        at_terminal = [
+            row for row in all_rows
+            if row['is_at_terminal'] and row['_terminal_slug'] == slug
+        ]
+        inbound = [
+            row for row in all_rows
+            if (not row['is_at_terminal'])
+            and row['_destination_slug'] == slug
+            and row['_tap_slug'] != slug
+        ]
+        departed = [
+            row for row in all_rows
+            if (not row['is_at_terminal'])
+            and row['is_departed']
+            and row['_tap_slug'] == slug
+        ]
 
     at_terminal.sort(key=lambda row: row['time'] or timezone.now(), reverse=True)
-    terminals = [
-        {
-            'name': name,
-            'is_hub': name == 'Bacolod',
-            'at_terminal': at_counts[name],
-            'inbound': inbound_counts[name],
-        }
-        for name in KIOSK_TERMINAL_NAMES
-    ]
+    inbound.sort(key=lambda row: row['estimated_arrival'] or row['time'] or timezone.now())
+    departed.sort(key=lambda row: row['time'] or timezone.now(), reverse=True)
+
+    terminals = []
+    for entry in terminal_directory.featured_terminals():
+        counts = directory_counts[entry['slug']]
+        terminals.append({
+            'name': entry['name'],
+            'terminal': entry['terminal'],
+            'slug': entry['slug'],
+            'is_hub': entry['hub'],
+            'at_terminal': counts['at_terminal'],
+            'inbound': counts['inbound'],
+            'is_active': bool(
+                selected_terminal and entry['slug'] == selected_terminal['slug']
+            ),
+        })
+
+    groups = []
+    for group in terminal_directory.terminal_groups():
+        group_terminals = []
+        for entry in group['terminals']:
+            counts = directory_counts[entry['slug']]
+            group_terminals.append({
+                'slug': entry['slug'],
+                'name': entry['name'],
+                'terminal': entry['terminal'],
+                'province': entry['province'],
+                'region': entry['region'],
+                'island': entry['island'],
+                'is_hub': entry['hub'],
+                'at_terminal': counts['at_terminal'],
+                'inbound': counts['inbound'],
+                'is_active': bool(
+                    selected_terminal and entry['slug'] == selected_terminal['slug']
+                ),
+                'search': ' '.join((
+                    entry['name'],
+                    entry['terminal'],
+                    entry['province'] or '',
+                    entry['region'] or '',
+                    entry['island'] or '',
+                    *entry['aliases'],
+                )).lower(),
+            })
+        groups.append({
+            'region': group['region'],
+            'island': group['island'],
+            'terminals': group_terminals,
+        })
 
     if latest_change is None:
         updated_label = 'No check-ins yet'
@@ -718,54 +816,120 @@ def _kiosk_board_context():
         clock = timezone.localtime(latest_change).strftime('%I:%M %p').lstrip('0')
         updated_label = f'Updated {clock}'
 
+    signature_parts.append(
+        f'selected:{selected_terminal["slug"] if selected_terminal else ""}'
+    )
     signature = '\n'.join(signature_parts)
     return {
         'kiosk_terminals': terminals,
         'kiosk_at_terminal': at_terminal,
         'kiosk_inbound': inbound,
+        'kiosk_departed': departed,
+        'kiosk_selected': selected_terminal,
+        'kiosk_selected_slug': selected_terminal['slug'] if selected_terminal else '',
+        'kiosk_terminal_groups': groups,
+        'kiosk_terminal_count': len(terminal_directory.TERMINAL_DIRECTORY),
+        'kiosk_region_count': len(groups),
+        'kiosk_total_at': sum(
+            counts['at_terminal'] for counts in directory_counts.values()
+        ),
+        'kiosk_total_inbound': sum(
+            counts['inbound'] for counts in directory_counts.values()
+        ),
+        'kiosk_at_count': len(at_terminal),
+        'kiosk_inbound_count': len(inbound),
+        'kiosk_departed_count': len(departed),
+        'kiosk_available_count': len(at_terminal),
         'kiosk_updated_label': updated_label,
         'kiosk_version': hashlib.sha1(signature.encode('utf-8')).hexdigest() if signature else '',
     }
 
 
-def terminal_monitor_context(request):
-    """QR targets used by the terminal monitor kiosk."""
+def terminal_monitor_context(request, selected_terminal=None):
+    """QR targets used by the terminal monitor kiosk.
+
+    When a terminal is selected the bus QR codes carry that terminal and
+    ``auto=1`` so a scan records the time in/out at that exact terminal.
+    """
+    auto_suffix = ''
+    terminal_query = ''
+    if selected_terminal is not None:
+        auto_suffix = '?' + urlencode({
+            'terminal': selected_terminal['slug'],
+            'auto': '1',
+        })
+        terminal_query = '?' + urlencode({'terminal': selected_terminal['slug']})
+
     bus_qr_map = {
         bus.bus_number: request.build_absolute_uri(
             reverse('bus:bus_tap', args=[bus.qr_token])
-        )
+        ) + auto_suffix
         for bus in Bus.objects.all()
     }
     return {
         'kiosk_qr_data': {
-            'checkin': request.build_absolute_uri(reverse('bus:conductor_checkin')),
+            'checkin': (
+                request.build_absolute_uri(reverse('bus:conductor_checkin'))
+                + terminal_query
+            ),
+            'scan': (
+                request.build_absolute_uri(reverse('bus:bus_scan'))
+                + terminal_query
+            ),
+            'terminal': selected_terminal['name'] if selected_terminal else '',
+            'terminal_slug': selected_terminal['slug'] if selected_terminal else '',
+            'auto': bool(selected_terminal),
             'buses': bus_qr_map,
         },
     }
 
 
-def bus_kiosk_page(request):
-    """Live airport-style terminal monitor board."""
+def bus_kiosk_page(request, terminal_slug=None):
+    """Live airport-style terminal monitor board.
+
+    Without a slug the board shows the nationwide overview. With a slug it is
+    a dedicated kiosk for that terminal only.
+    """
     seed_static_demo_data()
-    context = terminal_monitor_context(request)
-    context.update(_kiosk_board_context())
+    selected = None
+    if terminal_slug:
+        selected = terminal_directory.get_terminal(terminal_slug)
+        if selected is None:
+            return redirect('bus:bus_kiosk')
+    context = terminal_monitor_context(request, selected)
+    context.update(_kiosk_board_context(selected))
     return render(request, 'bus/terminal_monitor.html', context)
 
 
 @never_cache
 def bus_kiosk_refresh(request):
     """Return refreshed kiosk fragments after a terminal check-in."""
-    context = _kiosk_board_context()
-    bus_qr_map = {
-        bus.bus_number: request.build_absolute_uri(
-            reverse('bus:bus_tap', args=[bus.qr_token])
-        )
-        for bus in Bus.objects.all()
-    }
+    _advance_demo_departures()
+    selected = None
+    terminal_slug = (request.GET.get('terminal') or '').strip()
+    if terminal_slug:
+        selected = terminal_directory.get_terminal(terminal_slug)
+        if selected is None:
+            return JsonResponse({'error': 'Unknown terminal'}, status=404)
+
+    context = _kiosk_board_context(selected)
+    bus_qr_map = terminal_monitor_context(request, selected)['kiosk_qr_data']['buses']
     return JsonResponse({
         'version': context['kiosk_version'],
         'updated': context['kiosk_updated_label'],
+        'selected': context['kiosk_selected_slug'],
+        'counts': {
+            'at': context['kiosk_at_count'],
+            'inbound': context['kiosk_inbound_count'],
+            'departed': context['kiosk_departed_count'],
+            'available': context['kiosk_available_count'],
+            'total_at': context['kiosk_total_at'],
+            'total_inbound': context['kiosk_total_inbound'],
+        },
         'buses': bus_qr_map,
+        'sidebar_html': render_to_string(
+            'bus/_kiosk_sidebar_items.html', context, request=request
+        ),
         'terminals_html': render_to_string(
             'bus/_kiosk_terminals.html', context, request=request
         ),
@@ -794,6 +958,17 @@ def _find_terminal(terminal_name):
                 'lat': place['lat'],
                 'lng': place['lng'],
             }
+    entry = (
+        terminal_directory.get_terminal(name)
+        or terminal_directory.match_terminal(name)
+    )
+    if entry is not None:
+        return {
+            'name': entry['name'],
+            'label': entry['name'],
+            'lat': entry['lat'],
+            'lng': entry['lng'],
+        }
     return None
 
 
@@ -848,6 +1023,94 @@ def _record_staff_scan(bus, terminal, scan_type, user=None):
         return tap
     tap, _created = _record_terminal_tap(bus, terminal, user)
     return tap
+
+
+def _terminal_from_directory(entry):
+    """Convert a directory entry to the legacy terminal shape."""
+    if entry is None:
+        return None
+    return {
+        'name': entry['terminal'],
+        'label': entry['name'],
+        'lat': entry['lat'],
+        'lng': entry['lng'],
+        'slug': entry['slug'],
+    }
+
+
+def _terminal_matches_entry(terminal_name, entry):
+    if entry is None:
+        return False
+    matched = (
+        terminal_directory.get_terminal(terminal_name)
+        or terminal_directory.match_terminal(terminal_name)
+    )
+    if matched is not None:
+        return matched['slug'] == entry['slug']
+    return (
+        terminal_directory.normalize_name(terminal_name)
+        == terminal_directory.normalize_name(entry['name'])
+    )
+
+
+def _next_terminal_action(bus, entry):
+    """What the next tap at this terminal should do."""
+    open_tap = _open_tap_for(bus)
+    if open_tap is not None and _terminal_matches_entry(open_tap.terminal_name, entry):
+        return 'time_out'
+    return 'time_in'
+
+
+def _perform_kiosk_tap(bus, entry, user=None):
+    """Automatically time in or time out at a specific terminal.
+
+    A tap at the same terminal closes the open stop (time out). A tap at a
+    different terminal closes the previous stop and checks the bus in here.
+    """
+    terminal = _terminal_from_directory(entry)
+    open_tap = _open_tap_for(bus)
+
+    if open_tap is not None and _terminal_matches_entry(open_tap.terminal_name, entry):
+        tap, closed = _record_departure_tap(bus, terminal, user)
+        return tap, 'time_out', closed, False
+
+    switched = open_tap is not None
+    if switched:
+        _record_departure_tap(bus, None, user)
+    tap, created = _record_terminal_tap(bus, terminal, user)
+    return tap, 'time_in', created, switched
+
+
+def _announce_kiosk_tap(request, bus, entry, tap, action, created, switched):
+    label = entry['name']
+    if action == 'time_out':
+        left_at = timezone.localtime(tap.left_at)
+        messages.success(
+            request,
+            f'Time out recorded: {bus.bus_number} left {label} Terminal at '
+            f'{left_at.strftime("%I:%M %p").lstrip("0")}.',
+        )
+    elif switched:
+        departure = _estimated_departure(tap)
+        messages.success(
+            request,
+            f'{bus.bus_number} moved to {label} Terminal. '
+            f'Estimated departure '
+            f'{timezone.localtime(departure).strftime("%I:%M %p").lstrip("0")}.',
+        )
+    elif created:
+        departure = _estimated_departure(tap)
+        messages.success(
+            request,
+            f'Time in recorded: {bus.bus_number} is at {label} Terminal. '
+            f'Estimated departure '
+            f'{timezone.localtime(departure).strftime("%I:%M %p").lstrip("0")}.',
+        )
+    else:
+        messages.info(
+            request,
+            f'{bus.bus_number} is already timed in at {label} Terminal.',
+        )
 
 
 _QR_TOKEN_RE = re.compile(
@@ -1018,9 +1281,15 @@ def _demo_bus_for(bus_number):
     return bus
 
 
-def seed_static_demo_data():
-    """Refresh static demo buses so the kiosk shows today's current time."""
+def seed_static_demo_data(force=False):
+    """Create the placeholder buses and anchor their timeline to today.
+
+    Timestamps are written once from the real Philippine clock and are then
+    left untouched. A bus only changes to en route after its estimated
+    departure time has passed; it is never re-timed on every request.
+    """
     now = timezone.now()
+    today = timezone.localdate(now)
     with transaction.atomic():
         for demo in STATIC_DEMO_BUSES:
             terminal = _find_terminal(demo['terminal'])
@@ -1035,30 +1304,44 @@ def seed_static_demo_data():
                     'status': Bus.STATUS_ACTIVE,
                 },
             )
-            in_minutes = demo.get('in_minutes') or 0
-            out_minutes = demo.get('out_minutes')
-            tapped_at = now - timedelta(minutes=in_minutes)
-            left_at = (
-                now - timedelta(minutes=out_minutes)
-                if out_minutes is not None else None
+            tap = bus.terminal_taps.order_by('-tapped_at').first()
+            should_anchor = (
+                force
+                or tap is None
+                or timezone.localdate(tap.tapped_at) != today
             )
 
-            tap = bus.terminal_taps.order_by('-tapped_at').first()
-            if tap is None:
-                tap = BusTerminalTap.objects.create(
-                    bus=bus,
-                    terminal_name=terminal['label'],
-                    latitude=Decimal(str(terminal['lat'])),
-                    longitude=Decimal(str(terminal['lng'])),
+            if should_anchor:
+                in_minutes = demo.get('in_minutes') or 0
+                out_minutes = demo.get('out_minutes')
+                tapped_at = now - timedelta(minutes=in_minutes)
+                left_at = (
+                    now - timedelta(minutes=out_minutes)
+                    if out_minutes is not None else None
+                )
+                if tap is None:
+                    tap = BusTerminalTap.objects.create(
+                        bus=bus,
+                        terminal_name=terminal['label'],
+                        latitude=Decimal(str(terminal['lat'])),
+                        longitude=Decimal(str(terminal['lng'])),
+                    )
+                else:
+                    tap.terminal_name = terminal['label']
+                    tap.latitude = Decimal(str(terminal['lat']))
+                    tap.longitude = Decimal(str(terminal['lng']))
+                    tap.save(update_fields=['terminal_name', 'latitude', 'longitude'])
+                BusTerminalTap.objects.filter(pk=tap.pk).update(
+                    tapped_at=tapped_at, left_at=left_at
                 )
             else:
-                tap.terminal_name = terminal['label']
-                tap.latitude = Decimal(str(terminal['lat']))
-                tap.longitude = Decimal(str(terminal['lng']))
-                tap.save(update_fields=['terminal_name', 'latitude', 'longitude'])
-            BusTerminalTap.objects.filter(pk=tap.pk).update(
-                tapped_at=tapped_at, left_at=left_at
-            )
+                tapped_at = tap.tapped_at
+                left_at = tap.left_at
+                if left_at is None:
+                    estimated = _estimated_departure(tap)
+                    if estimated is not None and estimated <= now:
+                        left_at = estimated
+                        BusTerminalTap.objects.filter(pk=tap.pk).update(left_at=left_at)
 
             if left_at is None:
                 bus.current_location = f"{terminal['label']} Terminal"
@@ -1074,13 +1357,62 @@ def seed_static_demo_data():
             bus.save()
 
 
+def _advance_demo_departures(now=None):
+    """Switch placeholder buses to en route once their departure time passes."""
+    now = now or timezone.now()
+    demo_numbers = [demo['bus_number'] for demo in STATIC_DEMO_BUSES]
+    taps = (
+        BusTerminalTap.objects
+        .filter(bus__bus_number__in=demo_numbers, left_at__isnull=True)
+        .select_related('bus')
+    )
+    for tap in taps:
+        estimated = _estimated_departure(tap)
+        if estimated is None or estimated > now:
+            continue
+        BusTerminalTap.objects.filter(pk=tap.pk).update(left_at=estimated)
+        if tap.bus.movement_status != Bus.MOVE_EN_ROUTE:
+            Bus.objects.filter(pk=tap.bus_id).update(
+                movement_status=Bus.MOVE_EN_ROUTE,
+                current_location=f"En route from {tap.terminal_name}",
+                movement_reason='',
+            )
+
+
 @never_cache
 def bus_tap_page(request, token):
-    """Conductor check-in: the bus QR opens this page, the conductor picks the
-    terminal they are at and the tap is recorded on the bus."""
+    """Bus QR check-in.
+
+    When the QR is opened from a terminal kiosk the terminal is locked and the
+    scan automatically records a time in or time out at that terminal.
+    """
     bus = get_object_or_404(Bus, qr_token=token)
+    requested_slug = (
+        request.GET.get('terminal')
+        or request.POST.get('terminal_slug')
+        or ''
+    ).strip()
+    entry = terminal_directory.get_terminal(requested_slug) if requested_slug else None
+    auto = (request.GET.get('auto') or '').lower() in ('1', 'true', 'yes')
+    done = request.GET.get('done') == '1'
+
+    if entry is not None and request.method == 'GET' and auto and not done:
+        tap, action, created, switched = _perform_kiosk_tap(
+            bus, entry, request.user
+        )
+        _announce_kiosk_tap(request, bus, entry, tap, action, created, switched)
+        query = urlencode({'terminal': entry['slug'], 'done': '1'})
+        return redirect(f"{reverse('bus:bus_tap', args=[bus.qr_token])}?{query}")
 
     if request.method == 'POST':
+        if entry is not None:
+            tap, action, created, switched = _perform_kiosk_tap(
+                bus, entry, request.user
+            )
+            _announce_kiosk_tap(request, bus, entry, tap, action, created, switched)
+            query = urlencode({'terminal': entry['slug'], 'done': '1'})
+            return redirect(f"{reverse('bus:bus_tap', args=[bus.qr_token])}?{query}")
+
         terminal = _find_terminal(request.POST.get('terminal', '').strip())
         if terminal is None:
             messages.error(request, 'Choose a valid terminal.')
@@ -1116,6 +1448,7 @@ def bus_tap_page(request, token):
 
     open_tap = _open_tap_for(bus)
     taps = bus.terminal_taps.select_related('user')[:10]
+    next_action = _next_terminal_action(bus, entry) if entry else ''
     return render(request, 'bus/tap.html', {
         'bus': bus,
         'terminals': TERMINALS,
@@ -1123,6 +1456,11 @@ def bus_tap_page(request, token):
         'open_tap': open_tap,
         'estimated_departure': _estimated_departure(open_tap),
         'estimated_stop_minutes': ESTIMATED_STOP_MINUTES,
+        'terminal_entry': entry,
+        'terminal_locked': entry is not None,
+        'next_action': next_action,
+        'next_action_label': 'Time Out' if next_action == 'time_out' else 'Time In',
+        'tap_done': done,
     })
 
 
@@ -1131,9 +1469,21 @@ def conductor_checkin_page(request):
     buses = Bus.objects.order_by('bus_number')
     selected_number = request.GET.get('bus', '').strip()
     selected_bus = buses.filter(bus_number=selected_number).first()
+    requested_slug = (
+        request.GET.get('terminal')
+        or request.POST.get('terminal_slug')
+        or ''
+    ).strip()
+    entry = terminal_directory.get_terminal(requested_slug) if requested_slug else None
 
     if request.method == 'POST':
         bus = get_object_or_404(Bus, pk=request.POST.get('bus') or 0)
+        if entry is not None:
+            tap, action, created, switched = _perform_kiosk_tap(
+                bus, entry, request.user
+            )
+            _announce_kiosk_tap(request, bus, entry, tap, action, created, switched)
+            return redirect('bus:bus_tap', token=bus.qr_token)
         terminal = _find_terminal(request.POST.get('terminal', '').strip())
         if terminal is None:
             messages.error(request, 'Choose a valid terminal.')
@@ -1172,12 +1522,15 @@ def conductor_checkin_page(request):
         'terminals': TERMINALS,
         'selected_bus': selected_bus,
         'selected_number': selected_number,
+        'terminal_entry': entry,
+        'terminal_locked': entry is not None,
     })
 
 
 @never_cache
 def bus_scan_page(request):
     """Webcam QR station: scan a bus QR at a terminal to record a tap."""
+    seed_static_demo_data()
     taps = list(BusTerminalTap.objects.select_related('bus', 'user')[:8])
     for tap in taps:
         tap.departure = tap.left_at or _estimated_departure(tap)
@@ -1185,11 +1538,21 @@ def bus_scan_page(request):
     city_places = [
         p for p in CITY_PLACES if p['name'].lower() not in terminal_names
     ]
+    requested_terminal = request.GET.get('terminal', '').strip()
+    locked_terminal = None
+    if requested_terminal:
+        locked_terminal = (
+            terminal_directory.get_terminal(requested_terminal)
+            or terminal_directory.match_terminal(requested_terminal)
+        )
     return render(request, 'bus/scan.html', {
         'terminals': TERMINALS,
         'city_places': sorted(city_places, key=lambda p: (p['province'], p['name'])),
         'taps': taps,
-        'selected_terminal': request.GET.get('terminal', '').strip(),
+        'selected_terminal': (
+            locked_terminal['terminal'] if locked_terminal else requested_terminal
+        ),
+        'locked_terminal': locked_terminal,
         'demo_buses': STATIC_DEMO_BUSES,
         'estimated_stop_minutes': ESTIMATED_STOP_MINUTES,
     })

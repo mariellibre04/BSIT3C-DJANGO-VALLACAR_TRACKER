@@ -8,6 +8,8 @@ urlpatterns = [
     path('map/', views.bus_map_page, name='bus_map'),
     path('kiosk/', views.bus_kiosk_page, name='bus_kiosk'),
     path('kiosk/refresh/', views.bus_kiosk_refresh, name='bus_kiosk_refresh'),
+    path('kiosk/terminal/<slug:terminal_slug>/', views.bus_kiosk_page,
+         name='bus_kiosk_terminal'),
     path('tap/<uuid:token>/', views.bus_tap_page, name='bus_tap'),
     path('checkin/', views.conductor_checkin_page, name='conductor_checkin'),
     path('scan/', views.bus_scan_page, name='bus_scan'),

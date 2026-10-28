@@ -1,5 +1,6 @@
 {% for t in kiosk_terminals %}
-<button type="button" class="k-terminal" data-terminal="{{ t.name }}" aria-pressed="false">
+<a class="k-terminal{% if t.is_active %} active{% endif %}" data-terminal="{{ t.name }}"
+   href="{% url 'bus:bus_kiosk_terminal' t.slug %}" title="Open the {{ t.name }} terminal kiosk">
   <div class="k-terminal-head">
     <span class="k-terminal-dot"></span> {{ t.name }}
     {% if t.is_hub %}<span class="k-hub">HUB</span>{% endif %}
@@ -9,5 +10,5 @@
     <span class="k-sep"></span>
     <span><strong>{{ t.inbound }}</strong> inbound</span>
   </div>
-</button>
+</a>
 {% endfor %}

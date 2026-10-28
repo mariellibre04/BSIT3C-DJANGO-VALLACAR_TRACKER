@@ -1,0 +1,33 @@
+{% load static %}
+<aside class="k-sidebar" id="kioskSidebar" aria-label="Philippine bus terminal directory">
+  <div class="k-sidebar-head">
+    <div>
+      <div class="k-sidebar-kicker">Negros Occidental</div>
+      <div class="k-sidebar-title">Bus terminals</div>
+    </div>
+    <button type="button" class="k-sidebar-close" id="kioskSidebarClose" aria-label="Close terminal directory">
+      <i class="fa-solid fa-xmark"></i>
+    </button>
+  </div>
+
+  <div class="k-sidebar-search">
+    <i class="fa-solid fa-magnifying-glass"></i>
+    <input type="search" id="kioskTerminalSearch" placeholder="Search city, terminal, province..."
+           autocomplete="off" aria-label="Search bus terminal locations">
+    <button type="button" class="k-sidebar-search-clear" id="kioskTerminalSearchClear" aria-label="Clear search" hidden>
+      <i class="fa-solid fa-xmark"></i>
+    </button>
+  </div>
+
+  <div class="k-sidebar-scroll" id="kioskSidebarScroll">
+    <nav class="k-sidebar-list" id="kioskSidebarList" aria-label="Terminal locations">
+      {% include 'bus/_kiosk_sidebar_items.html' %}
+    </nav>
+  </div>
+
+  <div class="k-sidebar-foot">
+    <i class="fa-solid fa-location-dot"></i>
+    <span>{{ kiosk_terminal_count }} terminals &middot; Negros Occidental</span>
+  </div>
+</aside>
+<div class="k-sidebar-backdrop" id="kioskSidebarBackdrop" hidden></div>
