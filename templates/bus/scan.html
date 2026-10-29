@@ -228,7 +228,7 @@
         <div class="table-responsive">
           <table class="table table-vcenter card-table">
             <thead>
-              <tr><th>Bus</th><th>Stop / Place</th><th>Time In</th><th>Departure</th><th>Time Out</th></tr>
+              <tr><th>Bus</th><th>Stop / Place</th><th>Time In</th><th>Departure</th><th>Next Stop</th><th>Time Out</th></tr>
             </thead>
             <tbody id="recent_taps">
               {% for tap in taps %}
@@ -245,6 +245,16 @@
                   <span class="text-muted">&mdash;</span>
                   {% endif %}
                 </td>
+                <td class="text-muted small">
+                  {% if tap.bus.next_stop %}
+                  <strong>{{ tap.bus.next_stop }}</strong>
+                  {% if tap.bus.next_stop_eta %}
+                  <br>ETA {{ tap.bus.next_stop_eta|date:"g:i A" }}
+                  {% endif %}
+                  {% else %}
+                  &mdash;
+                  {% endif %}
+                </td>
                 <td>
                   {% if tap.left_at %}
                   <span class="text-warning">En route</span>
@@ -254,7 +264,7 @@
                 </td>
               </tr>
               {% empty %}
-              <tr><td colspan="5" class="text-muted">No taps yet.</td></tr>
+              <tr><td colspan="6" class="text-muted">No taps yet.</td></tr>
               {% endfor %}
             </tbody>
           </table>
@@ -960,6 +970,17 @@
       } else {
         departure.textContent = '—';
       }
+      var nextStop = document.createElement('td');
+      nextStop.className = 'text-muted small';
+      if (data.next_stop) {
+        var nextStopStr = '<strong>' + escapeHtml(data.next_stop) + '</strong>';
+        if (data.next_stop_eta) {
+          nextStopStr += '<br>ETA ' + escapeHtml(data.next_stop_eta);
+        }
+        nextStop.innerHTML = nextStopStr;
+      } else {
+        nextStop.textContent = '—';
+      }
       var timeOut = document.createElement('td');
       if (data.time_out) {
         timeOut.className = 'text-warning';
@@ -972,6 +993,7 @@
       row.appendChild(place);
       row.appendChild(timeIn);
       row.appendChild(departure);
+      row.appendChild(nextStop);
       row.appendChild(timeOut);
 
       var first = recentBody.firstElementChild;
