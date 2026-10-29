@@ -25,6 +25,7 @@ from django.db.models import OuterRef, Q, Subquery
 from django.utils import timezone
 
 from apps.scoping import scoped_bus, scoped_buses
+from apps.core.views import admin_required
 from django.db.models import Count
 from . import route_service, terminal_directory
 from .models import Bus, BusTerminalTap
@@ -1591,8 +1592,9 @@ def bus_tap_page(request, token):
     })
 
 
+@admin_required
 def conductor_checkin_page(request):
-    """Public conductor check-in reached from the terminal monitor kiosk QR."""
+    """Staff conductor check-in reached from the terminal monitor kiosk QR."""
     buses = Bus.objects.order_by('bus_number')
     selected_number = request.GET.get('bus', '').strip()
     selected_bus = buses.filter(bus_number=selected_number).first()

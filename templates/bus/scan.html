@@ -840,7 +840,7 @@
           '<div class="form-hint mt-2 js-next-stop-eta">' +
             'ETA uses the road distance and average speed for this route segment.' +
           '</div>' +
-          '<button type="button" class="btn btn-primary btn-sm mt-2 js-confirm-next">' +
+          '<button type="button" class="btn btn-danger btn-sm mt-2 js-confirm-next">' +
             '<i class="fa-solid fa-check me-1"></i> Confirm next stop' +
           '</button>' +
           warning +
@@ -890,17 +890,45 @@
 
     function showPrompt(data) {
       var ref = JSON.stringify(lastBusRef || {});
+      var est = data.estimated_departure
+        ? 'Est. ' + escapeHtml(data.estimated_departure)
+        : '—';
+      
+      var nextStopInfo = '—';
+      if (data.next_stop && data.next_stop_eta) {
+          var detail = data.next_stop_eta_minutes != null 
+            ? ' <br><span class="text-muted small">(~' + data.next_stop_eta_minutes + ' min, ' + 
+              (data.next_stop_distance_km || '0') + ' km)</span>' 
+            : '';
+          nextStopInfo = '<strong>' + escapeHtml(data.next_stop) + '</strong><br>' +
+                         '<span class="small text-muted">ETA ' + escapeHtml(data.next_stop_eta) + '</span>' + detail;
+      }
+
       resultEl.innerHTML = busHeader(data) +
         currentStationLine(data) +
-        '<div class="alert alert-warning mt-3 mb-0">' +
-          '<div class="fw-semibold mb-1">Bus already timed in</div>' +
-          'Time in <strong>' + escapeHtml(data.time_in) + '</strong> at <strong>' +
-          escapeHtml(data.place) + ' Terminal</strong>.' +
-          (data.estimated_departure
-            ? '<br>Estimated departure <strong>' + escapeHtml(data.estimated_departure) + '</strong>.'
-            : '') +
-          arrivalLine(data) +
-          '<br><span class="text-muted">Choose the next stop, then Time Out to record that this bus has left.</span>' +
+        '<div class="table-responsive mt-3">' +
+          '<table class="table table-vcenter card-table border rounded">' +
+            '<thead>' +
+              '<tr>' +
+                '<th>Status</th>' +
+                '<th>Time In</th>' +
+                '<th>Departure</th>' +
+                '<th>Next Stop</th>' +
+                '<th>Next Steps</th>' +
+              '</tr>' +
+            '</thead>' +
+            '<tbody>' +
+              '<tr>' +
+                '<td><span class="badge bg-warning text-warning-fg">Already In</span></td>' +
+                '<td>' + escapeHtml(data.time_in) + '<br><span class="text-muted small">' + escapeHtml(data.place) + ' Terminal</span></td>' +
+                '<td class="text-muted">' + est + '</td>' +
+                '<td>' + nextStopInfo + '</td>' +
+                '<td class="small text-muted" style="max-width:200px;">' +
+                  'Choose the next stop, then Time Out to record departure.' +
+                '</td>' +
+              '</tr>' +
+            '</tbody>' +
+          '</table>' +
         '</div>' +
         nextStopPanel(data) +
         '<div class="d-flex flex-wrap gap-2 mt-3">' +

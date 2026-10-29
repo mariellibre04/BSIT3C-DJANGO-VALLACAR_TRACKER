@@ -580,8 +580,9 @@
     };
   });
 
-  // Waiting place marker
-  if (data.waiting) {
+  // Waiting place marker. Shown to passengers only — the human icon marks
+  // where a rider is standing, so the staff operations map omits it.
+  if (data.waiting && data.show_waiting !== false) {
     const w = data.waiting;
     const wicon = L.divIcon({
       className: '', html:

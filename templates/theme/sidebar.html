@@ -27,7 +27,7 @@
     <div class="collapse navbar-collapse" id="sidebar-menu">
       <ul class="navbar-nav pt-lg-2 py-lg-2">
 
-        {% if user.is_authenticated and user.is_staff and request.resolver_match.url_name != 'dashboard' %}
+        {% if user.is_authenticated and user.is_staff and request.resolver_match.url_name != 'dashboard' and request.resolver_match.url_name != 'bus_map' %}
         <li class="nav-item">
           <span class="dh-nav-section">
             Fleet Overview
@@ -199,14 +199,6 @@
               <i class="nav-icon fas fa-tv"></i>
             </span>
             <span class="nav-link-title">Terminal Monitor</span>
-          </a>
-        </li>
-        <li class="nav-item">
-          <a class="nav-link {% if request.resolver_match.url_name == 'bus_scan' %}active{% endif %}" href="{% url 'bus:bus_scan' %}">
-            <span class="nav-link-icon d-md-none d-lg-inline-block">
-              <i class="nav-icon fas fa-qrcode"></i>
-            </span>
-            <span class="nav-link-title">Terminal Scanner</span>
           </a>
         </li>
         <li class="nav-item mt-2">
