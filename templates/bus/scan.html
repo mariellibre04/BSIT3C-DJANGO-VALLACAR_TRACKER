@@ -277,6 +277,7 @@
     var resultEl = document.getElementById('scan_result');
     var recentBody = document.getElementById('recent_taps');
     var checkinUrl = '{% url "bus:bus_scan_checkin_ajax" %}';
+    var nextStopUrl = '{% url "bus:bus_next_stop_ajax" %}';
     var mapUrl = '{% url "bus:bus_map" %}';
     var csrfInput = document.querySelector('[name=csrfmiddlewaretoken]');
     var csrfToken = csrfInput ? csrfInput.value : '{{ csrf_token }}';
@@ -592,11 +593,13 @@
       setStatus('Camera stopped.', 'alert-secondary');
     }
 
-    function postTap(busRef, action) {
+    function postTap(busRef, action, nextStop) {
       var body = new URLSearchParams({ terminal: getTerminal() });
       if (busRef.token) body.set('token', busRef.token);
       if (busRef.bus_number) body.set('bus_number', busRef.bus_number);
+      if (busRef.bus_id) body.set('bus_id', busRef.bus_id);
       if (action) body.set('action', action);
+      if (nextStop) body.set('next_stop', nextStop);
 
       return fetch(checkinUrl, {
         method: 'POST',
@@ -615,18 +618,57 @@
       });
     }
 
+    function postNextStop(busRef, nextStop) {
+      var body = new URLSearchParams({
+        current: getTerminal(),
+        next_stop: nextStop
+      });
+      if (busRef.token) body.set('token', busRef.token);
+      if (busRef.bus_number) body.set('bus_number', busRef.bus_number);
+      if (busRef.bus_id) body.set('bus_id', busRef.bus_id);
+
+      return fetch(nextStopUrl, {
+        method: 'POST',
+        headers: {
+          'X-CSRFToken': csrfToken,
+          'Content-Type': 'application/x-www-form-urlencoded'
+        },
+        body: body
+      }).then(function (response) {
+        return response.json().then(function (data) {
+          return { ok: response.ok, data: data };
+        });
+      }).then(function (result) {
+        if (!result.ok) throw new Error(result.data.error || 'Next stop failed.');
+        return result.data;
+      });
+    }
+
+    function selectedNextStop() {
+      var select = resultEl.querySelector('.js-next-stop');
+      return select ? select.value : '';
+    }
+
     function timeOut(ref, button) {
       if (busy) return;
+      var nextStop = selectedNextStop();
+      var select = resultEl.querySelector('.js-next-stop');
+      if (select && !nextStop) {
+        setStatus('Choose the next stop before recording time out.', 'alert-warning');
+        select.focus();
+        return;
+      }
       busy = true;
       if (button) button.disabled = true;
       setStatus('Recording time out…', 'alert-info');
-      postTap(ref, 'time_out')
+      postTap(ref, 'time_out', nextStop)
         .then(function (data) {
           showResult(data);
           prependRecentTap(data, true);
-          var arrival = (data.next_destination && data.estimated_arrival)
-            ? ' Next destination ' + data.next_destination +
-              ', estimated arrival ' + data.estimated_arrival + '.'
+          var arrival = data.selected_next_stop
+            ? ' Next stop ' + data.selected_next_stop +
+              ', ETA ' + data.next_stop_eta_at +
+              ' (~' + data.next_stop_eta_minutes + ' min).'
             : '';
           setStatus(
             'Time out recorded: bus ' + data.bus.bus_number + ' left ' +
@@ -722,16 +764,31 @@
     }
 
     function arrivalLine(data) {
-      if (!data.next_destination || !data.estimated_arrival) return '';
-      var detail = '';
-      if (data.arrival_minutes != null) {
-        detail = ' (~' + data.arrival_minutes + ' min' +
-          (data.arrival_distance_km != null ? ', ' + data.arrival_distance_km + ' km' : '') +
-          ')';
+      var lines = [];
+      if (data.next_stop && data.next_stop_eta) {
+        var detail = '';
+        if (data.next_stop_eta_minutes != null) {
+          detail = ' (~' + data.next_stop_eta_minutes + ' min' +
+            (data.next_stop_distance_km != null ? ', ' + data.next_stop_distance_km + ' km' : '') +
+            ')';
+        }
+        lines.push('<br>Next stop <strong>' + escapeHtml(data.next_stop) +
+          '</strong> &middot; ETA <strong>' + escapeHtml(data.next_stop_eta) +
+          '</strong>' + detail);
       }
-      return '<br>Next destination <strong>' + escapeHtml(data.next_destination) +
-        '</strong> &middot; Estimated arrival <strong>' +
-        escapeHtml(data.estimated_arrival) + '</strong>' + detail;
+      if (data.final_destination && data.final_destination_eta &&
+          data.final_destination !== data.next_stop) {
+        var finalDetail = '';
+        if (data.final_destination_eta_minutes != null) {
+          finalDetail = ' (~' + data.final_destination_eta_minutes + ' min' +
+            (data.final_destination_distance_km != null ? ', ' + data.final_destination_distance_km + ' km' : '') +
+            ')';
+        }
+        lines.push('<br>Final destination <strong>' +
+          escapeHtml(data.final_destination) + '</strong> &middot; ETA <strong>' +
+          escapeHtml(data.final_destination_eta) + '</strong>' + finalDetail);
+      }
+      return lines.join('');
     }
 
     function departureLine(data) {
@@ -748,15 +805,83 @@
         ' Terminal</strong><br>' + est + arrivalLine(data);
     }
 
+    function currentStationLine(data) {
+      if (!data.current_station_label) return '';
+      return '<div class="alert alert-info mt-3 mb-0">' +
+        '<i class="fa-solid fa-location-dot me-2"></i>' +
+        '<strong>' + escapeHtml(data.current_station_label) + '</strong>' +
+        '</div>';
+    }
+
+    function nextStopPanel(data) {
+      if (!data.next_stops || !data.next_stops.length) return '';
+      var options = '<option value="">Choose next stop…</option>';
+      data.next_stops.forEach(function (stop) {
+        options += '<option value="' + escapeHtml(stop.name) + '"' +
+          ' data-eta="' + escapeHtml(stop.eta_label) + '"' +
+          ' data-eta-at="' + escapeHtml(stop.eta_at) + '"' +
+          ' data-distance="' + escapeHtml(stop.distance_km) + '"' +
+          ' data-speed="' + escapeHtml(stop.average_speed_kmh) + '">' +
+          escapeHtml(stop.name) + ' — ' + escapeHtml(stop.eta_label) +
+          '</option>';
+      });
+      var warning = data.validation_status === 'source_compiled'
+        ? '<div class="alert alert-warning py-2 px-3 mt-2 mb-0 small">' +
+            'This route is source-compiled. Confirm the stop order with the conductor before relying on it.' +
+          '</div>'
+        : '';
+      return '<div class="card mt-3 border-primary">' +
+        '<div class="card-body">' +
+          '<div class="fw-semibold mb-1">Next stop</div>' +
+          '<div class="text-muted small mb-2">' +
+            escapeHtml(data.conductor_prompt || 'Choose the next stop before the bus leaves.') +
+          '</div>' +
+          '<select class="form-select js-next-stop" aria-label="Next stop">' + options + '</select>' +
+          '<div class="form-hint mt-2 js-next-stop-eta">' +
+            'ETA uses the road distance and average speed for this route segment.' +
+          '</div>' +
+          '<button type="button" class="btn btn-primary btn-sm mt-2 js-confirm-next">' +
+            '<i class="fa-solid fa-check me-1"></i> Confirm next stop' +
+          '</button>' +
+          warning +
+        '</div>' +
+      '</div>';
+    }
+
+    function selectedNextStopLine(data) {
+      if (!data.selected_next_stop) return '';
+      var finalLine = '';
+      if (data.final_destination &&
+          data.final_destination !== data.selected_next_stop) {
+        finalLine = '<br>Final destination <strong>' +
+          escapeHtml(data.final_destination) + '</strong>' +
+          ' &middot; ETA <strong>' + escapeHtml(data.final_destination_eta) +
+          '</strong>' +
+          ' (~' + escapeHtml(data.final_destination_eta_minutes) + ' min, ' +
+          escapeHtml(data.final_destination_distance_km) + ' km)';
+      }
+      return '<div class="alert alert-success mt-3 mb-0">' +
+        'Next stop <strong>' + escapeHtml(data.selected_next_stop) + '</strong>' +
+        ' &middot; ETA <strong>' + escapeHtml(data.next_stop_eta_at) + '</strong>' +
+        ' (~' + escapeHtml(data.next_stop_eta_minutes) + ' min, ' +
+        escapeHtml(data.next_stop_distance_km) + ' km)' +
+        finalLine +
+        '</div>';
+    }
+
     function showResult(data) {
       var ref = JSON.stringify(lastBusRef || {});
       var button = data.status === 'time_in'
         ? '<button type="button" class="btn btn-warning mt-3 js-time-out" data-ref="' +
             escapeHtml(ref) + '"><i class="fa-solid fa-hand-pointer-down me-1"></i> Time Out</button> '
         : '';
+      var panel = data.status === 'time_in' ? nextStopPanel(data) : '';
       resultEl.innerHTML = busHeader(data) +
+        currentStationLine(data) +
         '<div class="alert alert-' + (data.status === 'time_out' ? 'warning' : 'success') +
           ' mt-3 mb-0">' + departureLine(data) + '</div>' +
+        selectedNextStopLine(data) +
+        panel +
         '<div class="d-flex flex-wrap gap-2 mt-3">' + button +
           '<a class="btn btn-outline-primary" href="' + mapUrl + '" target="_blank" rel="noopener">' +
             '<i class="fa-solid fa-tv me-1"></i> View terminal monitor</a>' +
@@ -766,6 +891,7 @@
     function showPrompt(data) {
       var ref = JSON.stringify(lastBusRef || {});
       resultEl.innerHTML = busHeader(data) +
+        currentStationLine(data) +
         '<div class="alert alert-warning mt-3 mb-0">' +
           '<div class="fw-semibold mb-1">Bus already timed in</div>' +
           'Time in <strong>' + escapeHtml(data.time_in) + '</strong> at <strong>' +
@@ -774,8 +900,9 @@
             ? '<br>Estimated departure <strong>' + escapeHtml(data.estimated_departure) + '</strong>.'
             : '') +
           arrivalLine(data) +
-          '<br><span class="text-muted">Choose Time Out to record that this bus has left.</span>' +
+          '<br><span class="text-muted">Choose the next stop, then Time Out to record that this bus has left.</span>' +
         '</div>' +
+        nextStopPanel(data) +
         '<div class="d-flex flex-wrap gap-2 mt-3">' +
           '<button type="button" class="btn btn-warning js-time-out" data-ref="' +
             escapeHtml(ref) + '"><i class="fa-solid fa-hand-pointer-down me-1"></i> Time Out</button>' +
@@ -828,7 +955,71 @@
       }
     }
 
+    function confirmNextStop(ref, nextStop, button) {
+      if (busy) return;
+      busy = true;
+      if (button) button.disabled = true;
+      postNextStop(ref, nextStop)
+        .then(function (data) {
+          var hint = resultEl.querySelector('.js-next-stop-eta');
+          if (hint) {
+            hint.innerHTML = 'Confirmed next stop <strong>' +
+              escapeHtml(data.next_stop) + '</strong> &middot; ETA <strong>' +
+              escapeHtml(data.eta_label) + '</strong> (' +
+              escapeHtml(data.distance_km) + ' km, ' +
+              escapeHtml(data.average_speed_kmh) + ' km/h)';
+            if (data.final_destination &&
+                data.final_destination !== data.next_stop) {
+              hint.innerHTML += '<br>Final destination <strong>' +
+                escapeHtml(data.final_destination) + '</strong> &middot; ETA <strong>' +
+                escapeHtml(data.final_destination_eta) + '</strong> (~' +
+                escapeHtml(data.final_destination_eta_minutes) + ' min, ' +
+                escapeHtml(data.final_destination_distance_km) + ' km)';
+            }
+          }
+          setStatus(
+            'Next stop confirmed: ' + data.next_stop + ', ETA ' +
+            data.eta_label + '.',
+            'alert-success'
+          );
+        })
+        .catch(function (error) {
+          if (button) button.disabled = false;
+          setStatus(error.message || 'Next stop failed.', 'alert-danger');
+        })
+        .finally(function () {
+          busy = false;
+        });
+    }
+
+    resultEl.addEventListener('change', function (event) {
+      var select = event.target.closest('.js-next-stop');
+      if (!select) return;
+      var option = select.options[select.selectedIndex];
+      var hint = resultEl.querySelector('.js-next-stop-eta');
+      if (!hint) return;
+      if (!option || !option.value) {
+        hint.textContent = 'ETA uses the road distance and average speed for this route segment.';
+        return;
+      }
+      hint.innerHTML = 'Distance <strong>' +
+        escapeHtml(option.getAttribute('data-distance')) +
+        '</strong> km &middot; ETA <strong>' +
+        escapeHtml(option.getAttribute('data-eta')) +
+        '</strong> at ' + escapeHtml(option.getAttribute('data-eta-at'));
+    });
+
     resultEl.addEventListener('click', function (event) {
+      var confirmBtn = event.target.closest('.js-confirm-next');
+      if (confirmBtn) {
+        var nextStop = selectedNextStop();
+        if (!nextStop) {
+          setStatus('Choose the next stop first.', 'alert-warning');
+          return;
+        }
+        confirmNextStop(lastBusRef || {}, nextStop, confirmBtn);
+        return;
+      }
       var outBtn = event.target.closest('.js-time-out');
       if (outBtn) {
         var ref = {};

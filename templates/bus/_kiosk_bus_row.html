@@ -23,8 +23,11 @@
         <span class="k-left-at-label">Est.</span> {{ b.estimated_departure|date:"g:i A" }}
       {% else %}&mdash;{% endif %}
     </span>
-    {% if b.next_destination and b.estimated_arrival %}
-    <span class="k-route-sub">Next: {{ b.next_destination }} &middot; ETA {{ b.estimated_arrival|date:"g:i A" }}</span>
+    {% if b.next_stop and b.next_stop_eta %}
+    <span class="k-route-sub">Next stop: {{ b.next_stop }} &middot; ETA {{ b.next_stop_eta|date:"g:i A" }}</span>
+    {% endif %}
+    {% if b.final_destination and b.final_destination_eta and b.final_destination != b.next_stop %}
+    <span class="k-route-sub">Final: {{ b.final_destination }} &middot; ETA {{ b.final_destination_eta|date:"g:i A" }}</span>
     {% endif %}
   </td>
   <td>

@@ -92,6 +92,182 @@ class Bus(models.Model):
         return self.available_seats <= 0
 
 
+class Terminal(models.Model):
+    """A Vallacar terminal or a major stop on a Vallacar route.
+
+    Names are kept unique so route sequences and conductor scans can be
+    matched back to the master list without guessing.
+    """
+
+    name = models.CharField(max_length=255, unique=True)
+    code = models.CharField(
+        max_length=30, unique=True, blank=True,
+        help_text='Short terminal/stop code, e.g. KAB or DGT.',
+    )
+    city = models.CharField(max_length=255, blank=True)
+    province = models.CharField(max_length=255, blank=True)
+    latitude = models.DecimalField(max_digits=9, decimal_places=6)
+    longitude = models.DecimalField(max_digits=9, decimal_places=6)
+    is_owned_terminal = models.BooleanField(
+        default=False,
+        help_text='True when Vallacar owns/operates the terminal itself.',
+    )
+    is_major_stop = models.BooleanField(
+        default=True,
+        help_text='True when the place is a major stop on a Vallacar route.',
+    )
+    source = models.CharField(
+        max_length=255, blank=True,
+        help_text='Where this terminal/stop entry was verified from.',
+    )
+    aliases = models.CharField(
+        max_length=255, blank=True,
+        help_text='Comma-separated alternate names used in bus.route text.',
+    )
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        db_table = 'tblterminal'
+        ordering = ['name']
+
+    def __str__(self):
+        return self.name
+
+
+class Route(models.Model):
+    """A validated (or source-compiled) ordered bus route."""
+
+    STATUS_SOURCE_COMPILED = 'source_compiled'
+    STATUS_CONDUCTOR_VALIDATED = 'conductor_validated'
+    STATUS_PENDING = 'pending'
+    VALIDATION_CHOICES = [
+        (STATUS_SOURCE_COMPILED, 'Source compiled'),
+        (STATUS_CONDUCTOR_VALIDATED, 'Conductor validated'),
+        (STATUS_PENDING, 'Pending validation'),
+    ]
+
+    name = models.CharField(max_length=255, unique=True)
+    origin = models.ForeignKey(
+        Terminal,
+        related_name='routes_origin',
+        on_delete=models.PROTECT,
+    )
+    destination = models.ForeignKey(
+        Terminal,
+        related_name='routes_destination',
+        on_delete=models.PROTECT,
+    )
+    validation_status = models.CharField(
+        max_length=30, choices=VALIDATION_CHOICES, default=STATUS_PENDING
+    )
+    validation_note = models.TextField(blank=True)
+    source = models.CharField(max_length=255, blank=True)
+    aliases = models.CharField(
+        max_length=255, blank=True,
+        help_text='Comma-separated alternate route names.',
+    )
+    validated_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        related_name='validated_routes',
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+    )
+    validated_at = models.DateTimeField(null=True, blank=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        db_table = 'tblroute'
+        ordering = ['name']
+
+    def __str__(self):
+        return self.name
+
+    @property
+    def is_usable(self):
+        return self.validation_status in (
+            self.STATUS_SOURCE_COMPILED,
+            self.STATUS_CONDUCTOR_VALIDATED,
+        )
+
+
+class RouteStop(models.Model):
+    """One ordered stop on a route."""
+
+    route = models.ForeignKey(Route, related_name='stops', on_delete=models.CASCADE)
+    terminal = models.ForeignKey(
+        Terminal, related_name='route_stops', on_delete=models.PROTECT
+    )
+    sequence = models.PositiveIntegerField(
+        help_text='1-based order of the stop within the route.'
+    )
+    distance_from_previous_km = models.DecimalField(
+        max_digits=7, decimal_places=2, null=True, blank=True,
+        help_text='Road distance from the previous stop in kilometres.',
+    )
+    average_speed_kmh = models.PositiveIntegerField(
+        default=45,
+        help_text='Average speed for the segment ending at this stop.',
+    )
+
+    class Meta:
+        db_table = 'tblroutestop'
+        ordering = ['route', 'sequence']
+        constraints = [
+            models.UniqueConstraint(
+                fields=['route', 'terminal'], name='uniq_route_terminal'
+            ),
+            models.UniqueConstraint(
+                fields=['route', 'sequence'], name='uniq_route_sequence'
+            ),
+        ]
+
+    def __str__(self):
+        return f'{self.route.name} #{self.sequence} {self.terminal.name}'
+
+
+class BusNextStopLog(models.Model):
+    """Conductor-selected next stop with its computed ETA."""
+
+    bus = models.ForeignKey(
+        Bus, related_name='next_stop_logs', on_delete=models.CASCADE
+    )
+    route = models.ForeignKey(
+        Route, related_name='next_stop_logs', on_delete=models.SET_NULL,
+        null=True, blank=True,
+    )
+    current_station = models.ForeignKey(
+        Terminal, related_name='next_stop_from_logs', on_delete=models.PROTECT
+    )
+    next_stop = models.ForeignKey(
+        Terminal, related_name='next_stop_to_logs', on_delete=models.PROTECT
+    )
+    distance_km = models.DecimalField(max_digits=7, decimal_places=2)
+    average_speed_kmh = models.PositiveIntegerField()
+    eta_minutes = models.PositiveIntegerField()
+    eta_at = models.DateTimeField()
+    user = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        related_name='bus_next_stop_logs',
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+    )
+    logged_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        db_table = 'tblbusnextstoplog'
+        ordering = ['-logged_at']
+
+    def __str__(self):
+        return (
+            f'{self.bus.bus_number}: {self.current_station.name} -> '
+            f'{self.next_stop.name}'
+        )
+
+
 class BusTerminalTap(models.Model):
     """A conductor scan of a bus QR code at a terminal."""
 

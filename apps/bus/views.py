@@ -26,8 +26,9 @@ from django.utils import timezone
 
 from apps.scoping import scoped_bus, scoped_buses
 from django.db.models import Count
-from . import terminal_directory
+from . import route_service, terminal_directory
 from .models import Bus, BusTerminalTap
+from .route_config import TERMINAL_MASTER_LIST
 
 MIN_CAPACITY = 1
 MAX_CAPACITY = 100
@@ -81,6 +82,23 @@ TERMINALS = [
 
 for _terminal in TERMINALS:
     _terminal.setdefault('label', _terminal['name'])
+
+_known_terminal_names = {_terminal['name'].lower() for _terminal in TERMINALS}
+for _entry in TERMINAL_MASTER_LIST:
+    if _entry['name'].lower() in _known_terminal_names:
+        continue
+    _aliases = tuple(
+        alias.strip() for alias in (_entry.get('aliases') or '').split(',')
+        if alias.strip()
+    )
+    TERMINALS.append({
+        'name': _entry['name'],
+        'label': _entry['name'],
+        'keywords': _aliases + (_entry['name'].lower(),),
+        'lat': _entry['lat'],
+        'lng': _entry['lng'],
+    })
+    _known_terminal_names.add(_entry['name'].lower())
 
 DEFAULT_STAFF_TERMINAL_ID = 'CEBU-SOUTH'
 
@@ -684,18 +702,44 @@ def _kiosk_board_context(selected_terminal=None):
 
         next_destination = None
         arrival = None
+        final_destination = None
+        final_arrival = None
         if tap is not None:
-            next_destination = _next_destination_for_bus(bus, tap.terminal_name, tap)
-            current_terminal = _find_terminal(tap.terminal_name)
             departure_base = time_out or estimated
-            arrival = _arrival_estimate(
-                current_terminal, next_destination, departure_base
+            summary = route_service.route_eta_summary(
+                bus, tap.terminal_name, departure_base
             )
+            if summary is not None:
+                next_destination = {'name': summary['next_stop'].terminal.name}
+                arrival = summary['next_eta']
+                final_destination = {'name': summary['final_stop'].terminal.name}
+                final_arrival = summary['final_eta']
+            else:
+                route = route_service.find_route_for_bus(bus)
+                current_stop = (
+                    route_service.find_stop(route, tap.terminal_name)
+                    if route else None
+                )
+                if route is not None and current_stop is not None:
+                    next_destination = None
+                    arrival = None
+                    final_destination = None
+                    final_arrival = None
+                else:
+                    next_destination = _next_destination_for_bus(
+                        bus, tap.terminal_name, tap
+                    )
+                    current_terminal = _find_terminal(tap.terminal_name)
+                    arrival = _arrival_estimate(
+                        current_terminal, next_destination, departure_base
+                    )
+                    final_destination = next_destination
+                    final_arrival = arrival
 
         last_tap_terminal = tap.terminal_name if tap else ''
         tap_entry = terminal_directory.match_terminal(last_tap_terminal)
         terminal_entry = terminal_directory.match_terminal(terminal)
-        destination_name = next_destination['name'] if next_destination else ''
+        destination_name = final_destination['name'] if final_destination else ''
         destination_entry = terminal_directory.match_terminal(destination_name)
         if destination_entry is None and not is_at and time_out is None:
             # An en-route bus without a known next stop is heading towards the
@@ -720,6 +764,18 @@ def _kiosk_board_context(selected_terminal=None):
             'estimated_arrival': arrival['eta'] if arrival else None,
             'arrival_minutes': arrival['minutes'] if arrival else None,
             'arrival_distance_km': arrival['distance_km'] if arrival else None,
+            'next_stop': next_destination['name'] if next_destination else '',
+            'next_stop_eta': arrival['eta'] if arrival else None,
+            'next_stop_minutes': arrival['minutes'] if arrival else None,
+            'next_stop_distance_km': arrival['distance_km'] if arrival else None,
+            'final_destination': final_destination['name'] if final_destination else '',
+            'final_destination_eta': final_arrival['eta'] if final_arrival else None,
+            'final_destination_minutes': (
+                final_arrival['minutes'] if final_arrival else None
+            ),
+            'final_destination_distance_km': (
+                final_arrival['distance_km'] if final_arrival else None
+            ),
             'status_class': KIOSK_STATUS_CLASS.get(bus.movement_status, 'is-enroute'),
             'status_label': bus.get_movement_status_display(),
             'is_at_terminal': is_at,
@@ -1561,6 +1617,7 @@ def conductor_checkin_page(request):
 def bus_scan_page(request):
     """Webcam QR station: scan a bus QR at a terminal to record a tap."""
     seed_static_demo_data()
+    route_service.seed_transit_data()
     taps = list(BusTerminalTap.objects.select_related('bus', 'user')[:8])
     for tap in taps:
         tap.departure = tap.left_at or _estimated_departure(tap)
@@ -1681,6 +1738,32 @@ def _scan_tap_payload(bus, tap, status, message):
         _arrival_estimate(current_terminal, next_destination, departure_base)
         if current_terminal and next_destination else None
     )
+
+    route = route_service.find_route_for_bus(bus)
+    current_stop = (
+        route_service.find_stop(route, tap.terminal_name) if route and tap else None
+    )
+    stop_payload = (
+        route_service.build_stop_payload(route, current_stop)
+        if route and current_stop else None
+    )
+    summary = (
+        route_service.route_eta_summary(bus, tap.terminal_name, departure_base)
+        if tap else None
+    )
+    final_destination = next_destination
+    final_arrival = arrival
+    if summary is not None:
+        next_destination = {'name': summary['next_stop'].terminal.name}
+        arrival = summary['next_eta']
+        final_destination = {'name': summary['final_stop'].terminal.name}
+        final_arrival = summary['final_eta']
+    elif route is not None and current_stop is not None:
+        next_destination = None
+        arrival = None
+        final_destination = None
+        final_arrival = None
+    current_station = tap.terminal_name if tap else ''
     return {
         'status': status,
         'bus': {
@@ -1690,8 +1773,12 @@ def _scan_tap_payload(bus, tap, status, message):
             'route': bus.route,
             'current_location': bus.current_location,
         },
-        'terminal': tap.terminal_name if tap else '',
-        'place': tap.terminal_name if tap else '',
+        'terminal': current_station,
+        'place': current_station,
+        'current_station': current_station,
+        'current_station_label': (
+            f'Current Bus Station: {current_station}.' if current_station else ''
+        ),
         'time_in': _format_clock(time_in),
         'time_out': _format_clock(time_out),
         'estimated_departure': _format_clock(estimated),
@@ -1699,12 +1786,162 @@ def _scan_tap_payload(bus, tap, status, message):
         'estimated_arrival': _format_clock(arrival['eta']) if arrival else None,
         'arrival_minutes': arrival['minutes'] if arrival else None,
         'arrival_distance_km': arrival['distance_km'] if arrival else None,
+        'next_stop': next_destination['name'] if next_destination else '',
+        'next_stop_eta': _format_clock(arrival['eta']) if arrival else None,
+        'next_stop_eta_minutes': arrival['minutes'] if arrival else None,
+        'next_stop_distance_km': arrival['distance_km'] if arrival else None,
+        'final_destination': final_destination['name'] if final_destination else '',
+        'final_destination_eta': (
+            _format_clock(final_arrival['eta']) if final_arrival else None
+        ),
+        'final_destination_eta_minutes': (
+            final_arrival['minutes'] if final_arrival else None
+        ),
+        'final_destination_distance_km': (
+            final_arrival['distance_km'] if final_arrival else None
+        ),
+        'route_configured': route is not None,
+        'route_stops': stop_payload['all_stops'] if stop_payload else [],
+        'next_stops': stop_payload['next_stops'] if stop_payload else [],
+        'conductor_prompt': (
+            stop_payload['prompt'] if stop_payload
+            else route_service.FIXED_CONDUCTOR_PROMPT
+        ),
+        'validation_status': (
+            stop_payload['validation_status'] if stop_payload else ''
+        ),
+        'validation_note': stop_payload['validation_note'] if stop_payload else '',
         'tapped_at': (
             timezone.localtime(tap.tapped_at).strftime('%b %d, %Y %I:%M %p')
             if tap else ''
         ),
         'message': message,
     }
+
+
+def _resolve_next_stop(bus, current_name, raw_next_stop):
+    """Return (route, current_stop, next_stop_or_False).
+
+    ``next_stop`` is False when the submitted stop is not later in the route.
+    """
+    route = route_service.find_route_for_bus(bus)
+    if route is None:
+        return None, None, None
+    current_stop = route_service.find_stop(route, current_name)
+    if current_stop is None:
+        return route, None, None
+    if not raw_next_stop:
+        return route, current_stop, None
+    next_stop = route_service.find_stop(route, raw_next_stop)
+    if next_stop is None or next_stop.sequence <= current_stop.sequence:
+        return route, current_stop, False
+    return route, current_stop, next_stop
+
+
+@never_cache
+def bus_route_stops_ajax(request):
+    """Return the validated route stops and ETA options after the current stop."""
+    route_service.seed_transit_data()
+    raw_bus = (
+        request.GET.get('token') or request.GET.get('bus_id')
+        or request.GET.get('bus_number') or ''
+    )
+    bus = _resolve_scanned_bus(raw_bus) if raw_bus else None
+    if bus is None:
+        return JsonResponse({'error': 'That QR code does not match a registered bus.'}, status=404)
+
+    current_name = (
+        request.GET.get('current') or request.GET.get('terminal') or ''
+    ).strip()
+    route = route_service.find_route_for_bus(bus)
+    if route is None:
+        return JsonResponse({
+            'error': 'No validated route is configured for this bus.',
+            'next_stops': [],
+        }, status=404)
+
+    current_stop = route_service.find_stop(route, current_name)
+    if current_stop is None:
+        return JsonResponse({
+            'error': route_service.INVALID_STOP_MESSAGE,
+            'next_stops': [],
+        }, status=400)
+
+    payload = route_service.build_stop_payload(route, current_stop)
+    return JsonResponse({
+        'bus': bus.bus_number,
+        'route': route.name,
+        'current_station': current_stop.terminal.name,
+        'current_station_label': (
+            f'Current Bus Station: {current_stop.terminal.name}.'
+        ),
+        'all_stops': payload['all_stops'],
+        'next_stops': payload['next_stops'],
+        'conductor_prompt': payload['prompt'],
+        'validation_status': payload['validation_status'],
+        'validation_note': payload['validation_note'],
+    })
+
+
+@never_cache
+@require_POST
+def bus_next_stop_ajax(request):
+    """Validate and log the conductor's chosen next stop with its ETA."""
+    route_service.seed_transit_data()
+    raw_bus = (
+        request.POST.get('token') or request.POST.get('bus_id')
+        or request.POST.get('bus_number') or ''
+    )
+    bus = _resolve_scanned_bus(raw_bus) if raw_bus else None
+    if bus is None:
+        return JsonResponse({'error': 'That QR code does not match a registered bus.'}, status=404)
+
+    current_name = (
+        request.POST.get('current') or request.POST.get('terminal') or ''
+    ).strip()
+    next_name = (request.POST.get('next_stop') or '').strip()
+    route, current_stop, next_stop = _resolve_next_stop(bus, current_name, next_name)
+    if route is None:
+        return JsonResponse({'error': 'No validated route is configured for this bus.'}, status=404)
+    if current_stop is None:
+        return JsonResponse({'error': route_service.INVALID_STOP_MESSAGE}, status=400)
+    if next_stop is False or next_stop is None:
+        return JsonResponse({'error': route_service.INVALID_STOP_MESSAGE}, status=400)
+
+    log = route_service.record_next_stop(
+        bus, route, current_stop, next_stop, request.user
+    )
+    summary = route_service.route_eta_summary(
+        bus, current_stop.terminal.name, log.logged_at
+    )
+    final_stop = summary['final_stop'] if summary else None
+    final_eta = summary['final_eta'] if summary else None
+    return JsonResponse({
+        'status': 'ok',
+        'bus': bus.bus_number,
+        'route': route.name,
+        'current_station': current_stop.terminal.name,
+        'current_station_label': (
+            f'Current Bus Station: {current_stop.terminal.name}.'
+        ),
+        'next_stop': next_stop.terminal.name,
+        'distance_km': str(log.distance_km),
+        'average_speed_kmh': log.average_speed_kmh,
+        'eta_minutes': log.eta_minutes,
+        'eta_at': log.eta_at.isoformat(),
+        'eta_label': route_service.format_eta_label(log.eta_minutes),
+        'final_destination': final_stop.terminal.name if final_stop else '',
+        'final_destination_eta': (
+            _format_clock(final_eta['eta']) if final_eta else None
+        ),
+        'final_destination_eta_minutes': (
+            final_eta['minutes'] if final_eta else None
+        ),
+        'final_destination_distance_km': (
+            final_eta['distance_km'] if final_eta else None
+        ),
+        'logged_at': log.logged_at.isoformat(),
+    })
 
 
 @never_cache
@@ -1715,6 +1952,7 @@ def bus_scan_checkin_ajax(request):
     The first scan of a bus at a terminal records an automatic time-in. Scanning
     the same bus again returns a prompt so the conductor can choose "Time Out".
     """
+    route_service.seed_transit_data()
     raw_token = request.POST.get('token', '')
     token = _extract_qr_token(raw_token)
     if token is not None:
@@ -1742,18 +1980,36 @@ def bus_scan_checkin_ajax(request):
     action = (request.POST.get('action') or '').strip().lower()
 
     if action == 'time_out':
+        next_name = (request.POST.get('next_stop') or '').strip()
+        route, current_stop, next_stop = _resolve_next_stop(
+            bus, terminal['label'], next_name
+        )
+        if next_name and (current_stop is None or next_stop is False):
+            return JsonResponse(
+                {'error': route_service.INVALID_STOP_MESSAGE}, status=400
+            )
         tap, closed = _record_departure_tap(bus, terminal, request.user)
         if not closed:
             return JsonResponse(
                 {'error': f'{bus.bus_number} has no open time-in at {terminal["label"]} Terminal.'},
                 status=400,
             )
-        return JsonResponse(_scan_tap_payload(
+        payload = _scan_tap_payload(
             bus,
             tap,
             'time_out',
             f'Time out: {bus.bus_number} left {tap.terminal_name} Terminal.',
-        ))
+        )
+        if next_stop and next_stop is not False:
+            log = route_service.record_next_stop(
+                bus, route, current_stop, next_stop, request.user
+            )
+            if log is not None:
+                payload['selected_next_stop'] = next_stop.terminal.name
+                payload['next_stop_eta_minutes'] = log.eta_minutes
+                payload['next_stop_eta_at'] = _format_clock(log.eta_at)
+                payload['next_stop_distance_km'] = str(log.distance_km)
+        return JsonResponse(payload)
 
     open_tap = _open_tap_for(bus)
     if open_tap is not None:

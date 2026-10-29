@@ -3,7 +3,15 @@ import json
 from django.test import TestCase
 from django.urls import reverse
 
-from .models import Bus, BusTerminalTap
+from .models import (
+    Bus,
+    BusNextStopLog,
+    BusTerminalTap,
+    Route,
+    Terminal,
+)
+from .route_config import ROUTE_DEFINITIONS, TERMINAL_MASTER_LIST
+from .route_service import INVALID_STOP_MESSAGE, seed_transit_data
 
 
 class TerminalScanTests(TestCase):
@@ -403,3 +411,173 @@ class TerminalStaffScannerTests(TestCase):
 
         self.assertEqual(response.status_code, 404)
         self.assertFalse(BusTerminalTap.objects.exists())
+
+
+class RouteNextStopTests(TestCase):
+    def setUp(self):
+        seed_transit_data(force=True)
+        self.bus = Bus.objects.create(
+            bus_number='KDM-900',
+            plate_number='VTI 9900',
+            capacity=49,
+            route='Kabankalan-Dumaguete',
+            movement_status=Bus.MOVE_EN_ROUTE,
+        )
+
+    def test_seed_creates_every_master_list_terminal_and_route(self):
+        self.assertEqual(Terminal.objects.count(), len(TERMINAL_MASTER_LIST))
+        self.assertEqual(Route.objects.count(), len(ROUTE_DEFINITIONS))
+
+    def test_route_stops_only_returns_stops_after_current(self):
+        response = self.client.get(
+            reverse('bus:bus_route_stops_ajax'),
+            {'token': str(self.bus.qr_token), 'current': 'Kabankalan'},
+        )
+
+        self.assertEqual(response.status_code, 200)
+        data = response.json()
+        self.assertEqual(data['current_station'], 'Kabankalan')
+        self.assertEqual(
+            data['current_station_label'], 'Current Bus Station: Kabankalan.'
+        )
+        self.assertEqual(
+            [stop['name'] for stop in data['next_stops']],
+            ['Mabinay', 'Bais', 'Tanjay', 'Sibulan', 'Dumaguete'],
+        )
+        self.assertTrue(all(stop['eta_minutes'] > 0 for stop in data['next_stops']))
+
+    def test_route_stops_rejects_stop_not_on_route(self):
+        response = self.client.get(
+            reverse('bus:bus_route_stops_ajax'),
+            {'token': str(self.bus.qr_token), 'current': 'Bacolod'},
+        )
+
+        self.assertEqual(response.status_code, 400)
+        self.assertEqual(response.json()['error'], INVALID_STOP_MESSAGE)
+
+    def test_next_stop_logs_distance_speed_and_eta(self):
+        response = self.client.post(
+            reverse('bus:bus_next_stop_ajax'),
+            {
+                'token': str(self.bus.qr_token),
+                'current': 'Kabankalan',
+                'next_stop': 'Bais',
+            },
+        )
+
+        self.assertEqual(response.status_code, 200)
+        data = response.json()
+        self.assertEqual(data['next_stop'], 'Bais')
+        self.assertAlmostEqual(float(data['distance_km']), 81.4, places=2)
+        self.assertGreater(data['eta_minutes'], 0)
+        self.assertEqual(data['final_destination'], 'Dumaguete')
+        self.assertIsNotNone(data['final_destination_eta'])
+        self.assertGreater(
+            data['final_destination_eta_minutes'], data['eta_minutes']
+        )
+        log = BusNextStopLog.objects.get(bus=self.bus)
+        self.assertEqual(log.current_station.name, 'Kabankalan')
+        self.assertEqual(log.next_stop.name, 'Bais')
+        self.assertAlmostEqual(float(log.distance_km), 81.4, places=2)
+
+    def test_next_stop_rejects_stop_before_current(self):
+        response = self.client.post(
+            reverse('bus:bus_next_stop_ajax'),
+            {
+                'token': str(self.bus.qr_token),
+                'current': 'Bais',
+                'next_stop': 'Mabinay',
+            },
+        )
+
+        self.assertEqual(response.status_code, 400)
+        self.assertEqual(response.json()['error'], INVALID_STOP_MESSAGE)
+        self.assertFalse(BusNextStopLog.objects.exists())
+
+    def test_time_out_records_selected_next_stop(self):
+        self.client.post(
+            reverse('bus:bus_scan_checkin_ajax'),
+            {'token': str(self.bus.qr_token), 'terminal': 'Kabankalan'},
+        )
+        response = self.client.post(
+            reverse('bus:bus_scan_checkin_ajax'),
+            {
+                'token': str(self.bus.qr_token),
+                'terminal': 'Kabankalan',
+                'action': 'time_out',
+                'next_stop': 'Mabinay',
+            },
+        )
+
+        self.assertEqual(response.status_code, 200)
+        data = response.json()
+        self.assertEqual(data['selected_next_stop'], 'Mabinay')
+        self.assertIsNotNone(data['next_stop_eta_at'])
+        log = BusNextStopLog.objects.get(bus=self.bus)
+        self.assertEqual(log.next_stop.name, 'Mabinay')
+
+    def test_time_out_rejects_invalid_next_stop(self):
+        self.client.post(
+            reverse('bus:bus_scan_checkin_ajax'),
+            {'token': str(self.bus.qr_token), 'terminal': 'Kabankalan'},
+        )
+        response = self.client.post(
+            reverse('bus:bus_scan_checkin_ajax'),
+            {
+                'token': str(self.bus.qr_token),
+                'terminal': 'Kabankalan',
+                'action': 'time_out',
+                'next_stop': 'Bacolod',
+            },
+        )
+
+        self.assertEqual(response.status_code, 400)
+        self.assertEqual(response.json()['error'], INVALID_STOP_MESSAGE)
+        self.assertFalse(BusNextStopLog.objects.exists())
+        tap = BusTerminalTap.objects.get(bus=self.bus)
+        self.assertIsNone(tap.left_at)
+
+    def test_time_in_payload_includes_current_station_label_and_next_stops(self):
+        response = self.client.post(
+            reverse('bus:bus_scan_checkin_ajax'),
+            {'token': str(self.bus.qr_token), 'terminal': 'Kabankalan'},
+        )
+
+        self.assertEqual(response.status_code, 200)
+        data = response.json()
+        self.assertEqual(
+            data['current_station_label'], 'Current Bus Station: Kabankalan.'
+        )
+        self.assertEqual(
+            [stop['name'] for stop in data['next_stops']],
+            ['Mabinay', 'Bais', 'Tanjay', 'Sibulan', 'Dumaguete'],
+        )
+
+    def test_scan_payload_has_different_next_stop_and_final_destination_etas(self):
+        response = self.client.post(
+            reverse('bus:bus_scan_checkin_ajax'),
+            {'token': str(self.bus.qr_token), 'terminal': 'Kabankalan'},
+        )
+
+        self.assertEqual(response.status_code, 200)
+        data = response.json()
+        self.assertEqual(data['next_stop'], 'Mabinay')
+        self.assertEqual(data['final_destination'], 'Dumaguete')
+        self.assertIsNotNone(data['next_stop_eta'])
+        self.assertIsNotNone(data['final_destination_eta'])
+        self.assertLess(
+            data['next_stop_eta_minutes'],
+            data['final_destination_eta_minutes'],
+        )
+
+    def test_kiosk_shows_next_stop_and_final_destination_etas(self):
+        self.client.post(
+            reverse('bus:bus_scan_checkin_ajax'),
+            {'token': str(self.bus.qr_token), 'terminal': 'Kabankalan'},
+        )
+        data = self.client.get(reverse('bus:bus_kiosk_refresh')).json()
+
+        self.assertIn('Next stop Mabinay ETA', data['ticker_html'])
+        self.assertIn('Final Dumaguete ETA', data['ticker_html'])
+        self.assertIn('Next stop: Mabinay', data['board_html'])
+        self.assertIn('Final: Dumaguete', data['board_html'])
