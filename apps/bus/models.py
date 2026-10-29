@@ -32,6 +32,7 @@ class Bus(models.Model):
 
     bus_number = models.CharField(max_length=50, unique=True)
     plate_number = models.CharField(max_length=20, unique=True)
+    operator = models.CharField(max_length=100, blank=True, default='Ceres Liner')
     qr_token = models.UUIDField(
         default=uuid.uuid4, unique=True, editable=False,
         help_text='Unique token embedded in this bus QR code.',
@@ -40,12 +41,18 @@ class Bus(models.Model):
         validators=[MinValueValidator(1), MaxValueValidator(100)]
     )
     route = models.CharField(max_length=255)
+    scheduled_time = models.TimeField(null=True, blank=True)
+    actual_departure = models.TimeField(null=True, blank=True)
     status = models.CharField(max_length=20, choices=STATUS_CHOICES, default=STATUS_ACTIVE)
+    
     # 1. Real-Time GPS Tracking: current location + coordinates + movement
     current_location = models.CharField(
         max_length=255, blank=True, default='',
         help_text='Latest known location, e.g. Bacolod North Terminal - Bay 3',
     )
+    current_terminal = models.CharField(max_length=255, blank=True, default='')
+    bay = models.CharField(max_length=50, blank=True, default='')
+    
     latitude = models.DecimalField(
         max_digits=9, decimal_places=6, null=True, blank=True,
         help_text='GPS latitude, e.g. 10.676500',
@@ -54,6 +61,12 @@ class Bus(models.Model):
         max_digits=9, decimal_places=6, null=True, blank=True,
         help_text='GPS longitude, e.g. 122.950900',
     )
+    
+    next_stop = models.CharField(max_length=255, blank=True, default='')
+    next_stop_eta = models.TimeField(null=True, blank=True)
+    final_destination = models.CharField(max_length=255, blank=True, default='')
+    final_destination_eta = models.TimeField(null=True, blank=True)
+    
     movement_status = models.CharField(
         max_length=20, choices=MOVEMENT_CHOICES, default=MOVE_AT_TERMINAL
     )

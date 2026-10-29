@@ -533,17 +533,17 @@ REGION_SEEDS = [
 ]
 
 
-# The kiosk directory is scoped to Negros Occidental terminals only.
-SCOPE_PROVINCE = 'Negros Occidental'
+# The kiosk directory is scoped to Negros Occidental and Negros Oriental terminals.
+SCOPE_PROVINCES = {'Negros Occidental', 'Negros Oriental'}
 
 TERMINAL_DIRECTORY = []
 TERMINAL_BY_SLUG = {}
 for _group in REGION_SEEDS:
     for _entry in _group['terminals']:
-        if _entry['province'] != SCOPE_PROVINCE:
+        if _entry['province'] not in SCOPE_PROVINCES:
             continue
         _entry = dict(_entry)
-        _entry['region'] = SCOPE_PROVINCE
+        # Keep the original province for matching, but island is shared
         _entry['island'] = 'Negros Island'
         TERMINAL_DIRECTORY.append(_entry)
         TERMINAL_BY_SLUG[_entry['slug']] = _entry
@@ -593,8 +593,8 @@ def terminal_groups():
     """Static groups used to render the kiosk sidebar."""
     return [
         {
-            'region': SCOPE_PROVINCE,
-            'island': 'Negros Island',
+            'region': 'Negros Island',
+            'island': 'Visayas',
             'terminals': sorted(
                 TERMINAL_DIRECTORY,
                 key=lambda entry: (not entry['hub'], entry['name']),

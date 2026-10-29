@@ -40,33 +40,45 @@
     <div class="table-responsive">
       <table class="table table-vcenter table-hover card-table text-nowrap" id="busTable">
         <thead>
-          <tr><th>#</th><th>Bus No</th><th>Plate No</th><th>Capacity</th><th>Passengers</th><th>Available Seats</th><th>Route</th><th>GPS Location</th><th>Movement</th><th>Status</th><th class="w-1">Actions</th></tr>
+          <tr><th>#</th><th>Bus No</th><th>Operator</th><th>Plate No</th><th>Capacity</th><th>Seats Left</th><th>Route</th><th>Terminal/Bay</th><th>Movement</th><th>Status</th><th class="w-1">Actions</th></tr>
         </thead>
         <tbody id="busTableBody">
         {% for bus in buses %}
         <tr data-row-id="{{ bus.id }}">
             <td class="text-muted">{{ forloop.counter0|add:buses.start_index }}</td>
             <td class="fw-semibold">{{ bus.bus_number }}</td>
+            <td class="text-muted small">{{ bus.operator|default:"Ceres Liner" }}</td>
             <td class="text-muted">{{ bus.plate_number }}</td>
             <td><span class="badge bg-primary-lt text-primary">{{ bus.capacity }}</span></td>
-            <td><span class="badge bg-info-lt text-info">{{ bus.total_passengers }}</span></td>
             <td>
-              {% if bus.seats_left <= 0 %}
-                <span class="badge bg-danger-lt text-danger">Full (0 left)</span>
+              {% if bus.available_seats <= 0 %}
+                <span class="badge bg-danger-lt text-danger">Full</span>
               {% else %}
-                <span class="badge bg-success-lt text-success">{{ bus.seats_left }} seats left</span>
+                <span class="badge bg-success-lt text-success">{{ bus.available_seats }}</span>
               {% endif %}
             </td>
-            <td class="text-muted">{{ bus.route }}</td>
-            <td class="text-muted"><i class="fa-solid fa-location-dot me-1" style="color:#C1121F;"></i>{{ bus.current_location|default:"—" }}</td>
-            <td><span class="badge bg-secondary-lt text-secondary">{{ bus.get_movement_status_display }}</span></td>
+            <td class="text-muted small">{{ bus.route }}</td>
+            <td class="text-muted small">
+              {% if bus.current_terminal %}
+                <span class="badge bg-blue-lt text-blue">{{ bus.current_terminal }}</span>
+                {% if bus.bay %}<span class="badge bg-dark-lt text-dark ms-1">{{ bus.bay }}</span>{% endif %}
+              {% else %}
+                <i class="fa-solid fa-location-dot me-1" style="color:#C1121F;"></i>{{ bus.current_location|default:"—" }}
+              {% endif %}
+            </td>
+            <td>
+              <div class="small">
+                <span class="badge bg-secondary-lt text-secondary">{{ bus.get_movement_status_display }}</span>
+                {% if bus.actual_departure %}<div class="text-muted mt-1" style="font-size: 0.7rem;">Dep: {{ bus.actual_departure|time:"g:i A" }}</div>{% endif %}
+              </div>
+            </td>
             <td><span class="badge bg-success-lt text-success">{{ bus.get_status_display }}</span></td>
             <td>
               <div class="d-flex gap-1">
                 <button type="button" class="btn btn-ghost-secondary btn-icon btn-sm" data-bs-toggle="modal" data-bs-target="#busQrModal" data-qr-url="{{ request.scheme }}://{{ request.get_host }}{% url 'bus:bus_tap' bus.qr_token %}" data-bus-number="{{ bus.bus_number }}" title="Bus QR code">
                   <i class="fas fa-qrcode text-secondary"></i>
                 </button>
-                <button type="button" class="btn btn-ghost-secondary btn-icon btn-sm" data-bs-toggle="modal" data-bs-target="#busModal" data-mode="edit" data-id="{{ bus.id }}" data-bus_number="{{ bus.bus_number }}" data-plate_number="{{ bus.plate_number }}" data-capacity="{{ bus.capacity }}" data-route="{{ bus.route }}" data-status="{{ bus.status }}" data-current_location="{{ bus.current_location }}" data-latitude="{{ bus.latitude|default:'' }}" data-longitude="{{ bus.longitude|default:'' }}" data-movement_status="{{ bus.movement_status }}" data-movement_reason="{{ bus.movement_reason }}" title="Edit">
+                <button type="button" class="btn btn-ghost-secondary btn-icon btn-sm" data-bs-toggle="modal" data-bs-target="#busModal" data-mode="edit" data-id="{{ bus.id }}" data-bus_number="{{ bus.bus_number }}" data-plate_number="{{ bus.plate_number }}" data-operator="{{ bus.operator }}" data-capacity="{{ bus.capacity }}" data-route="{{ bus.route }}" data-scheduled_time="{{ bus.scheduled_time|time:'H:i' }}" data-actual_departure="{{ bus.actual_departure|time:'H:i' }}" data-status="{{ bus.status }}" data-current_terminal="{{ bus.current_terminal }}" data-bay="{{ bus.bay }}" data-current_location="{{ bus.current_location }}" data-latitude="{{ bus.latitude|default:'' }}" data-longitude="{{ bus.longitude|default:'' }}" data-next_stop="{{ bus.next_stop }}" data-next_stop_eta="{{ bus.next_stop_eta|time:'H:i' }}" data-final_destination="{{ bus.final_destination }}" data-final_destination_eta="{{ bus.final_destination_eta|time:'H:i' }}" data-movement_status="{{ bus.movement_status }}" data-movement_reason="{{ bus.movement_reason }}" title="Edit">
                   <i class="fas fa-edit text-primary"></i>
                 </button>
                 <button type="button" class="btn btn-ghost-secondary btn-icon btn-sm" data-bs-toggle="modal" data-bs-target="#deleteBusModal" data-id="{{ bus.id }}" data-name="{{ bus.bus_number }}" title="Delete">
@@ -100,16 +112,25 @@
     <form id="busForm">{% csrf_token %}<input type="hidden" name="id" id="bus_id">
       <div class="modal-body"><div id="busFormError" class="alert alert-danger d-none"></div>
         <div class="row g-3">
-          <div class="col-6"><label class="form-label">Bus Number</label><input type="text" name="bus_number" id="bus_bus_number" class="form-control" required></div>
-          <div class="col-6"><label class="form-label">Plate Number</label><input type="text" name="plate_number" id="bus_plate_number" class="form-control" required></div>
+          <div class="col-6"><label class="form-label">Bus Number</label><input type="text" name="bus_number" id="bus_bus_number" class="form-control" placeholder="e.g. DUM-501" required></div>
+          <div class="col-6"><label class="form-label">Plate Number</label><input type="text" name="plate_number" id="bus_plate_number" class="form-control" placeholder="e.g. VTI 5501" required></div>
+          
           <div class="col-6"><label class="form-label">Capacity</label><input type="number" name="capacity" id="bus_capacity" class="form-control" min="1" max="100" required></div>
-          <div class="col-6"><label class="form-label">Status</label><select name="status" id="bus_status" class="form-select"><option value="active">Active</option><option value="maintenance">Maintenance</option><option value="inactive">Inactive</option></select></div>
+          <div class="col-6"><label class="form-label">Scheduled Time</label><input type="time" name="scheduled_time" id="bus_scheduled_time" class="form-control"></div>
+          
           <div class="col-12"><label class="form-label">Route</label><input type="text" name="route" id="bus_route" class="form-control" placeholder="e.g. Bacolod - Dumaguete" required></div>
-          <div class="col-12"><label class="form-label">Current GPS location</label><input type="text" name="current_location" id="bus_current_location" class="form-control" placeholder="e.g. Bacolod North Terminal - Bay 3"></div>
-          <div class="col-6"><label class="form-label">Latitude</label><input type="number" step="0.000001" min="-90" max="90" name="latitude" id="bus_latitude" class="form-control" placeholder="10.676500"></div>
-          <div class="col-6"><label class="form-label">Longitude</label><input type="number" step="0.000001" min="-180" max="180" name="longitude" id="bus_longitude" class="form-control" placeholder="122.950900"></div>
-          <div class="col-12"><label class="form-label">Movement status</label><select name="movement_status" id="bus_movement_status" class="form-select"><option value="at_terminal">At Terminal</option><option value="en_route">En Route</option><option value="stopped">Stopped</option><option value="delayed">Delayed</option><option value="off_route">Off Route</option></select></div>
-          <div class="col-12"><label class="form-label">Reason for delay / stop</label><input type="text" name="movement_reason" id="bus_movement_reason" class="form-control" maxlength="255" placeholder="e.g. Heavy traffic along Bacolod North Road"><div class="form-hint">Shown to passengers when the movement status is Delayed or Stopped.</div></div>
+          
+          <div class="col-6"><label class="form-label">Current Terminal</label><input type="text" name="current_terminal" id="bus_current_terminal" class="form-control" placeholder="e.g. Dumaguete"></div>
+          <div class="col-6"><label class="form-label">Bay</label><input type="text" name="bay" id="bus_bay" class="form-control" placeholder="e.g. Bay 09"></div>
+          
+          <div class="col-6"><label class="form-label">Movement status</label><select name="movement_status" id="bus_movement_status" class="form-select"><option value="at_terminal">At Terminal</option><option value="en_route">En Route</option><option value="stopped">Stopped</option><option value="delayed">Delayed</option><option value="off_route">Off Route</option></select></div>
+          <div class="col-6"><label class="form-label">Actual Departure</label><input type="time" name="actual_departure" id="bus_actual_departure" class="form-control"></div>
+          
+          <div class="col-6"><label class="form-label">Next Stop</label><input type="text" name="next_stop" id="bus_next_stop" class="form-control" placeholder="e.g. Sibulan"></div>
+          <div class="col-6"><label class="form-label">Next Stop ETA</label><input type="time" name="next_stop_eta" id="bus_next_stop_eta" class="form-control"></div>
+          
+          <div class="col-6"><label class="form-label">Final Destination</label><input type="text" name="final_destination" id="bus_final_destination" class="form-control" placeholder="e.g. Bais"></div>
+          <div class="col-6"><label class="form-label">Final Destination ETA</label><input type="time" name="final_destination_eta" id="bus_final_destination_eta" class="form-control"></div>
         </div>
       </div>
       <div class="modal-footer"><button type="button" class="btn btn-ghost-secondary" data-bs-dismiss="modal">Cancel</button><button type="submit" class="btn btn-primary" id="busSubmitBtn">Save Bus</button></div>
@@ -158,6 +179,7 @@
   function resetForm() {
     form.reset(); document.getElementById('bus_id').value = '';
     document.getElementById('bus_movement_status').value = 'at_terminal';
+    document.getElementById('bus_operator').value = 'Ceres Liner';
     title.textContent = 'Add Bus'; submitBtn.textContent = 'Save Bus';
     alertBox.classList.add('d-none'); alertBox.textContent = ''; currentId = null;
   }
@@ -170,12 +192,21 @@
       document.getElementById('bus_id').value = currentId;
       document.getElementById('bus_bus_number').value = button.getAttribute('data-bus_number');
       document.getElementById('bus_plate_number').value = button.getAttribute('data-plate_number');
+      document.getElementById('bus_operator').value = button.getAttribute('data-operator') || '';
       document.getElementById('bus_capacity').value = button.getAttribute('data-capacity');
       document.getElementById('bus_route').value = button.getAttribute('data-route');
+      document.getElementById('bus_scheduled_time').value = button.getAttribute('data-scheduled_time') || '';
+      document.getElementById('bus_actual_departure').value = button.getAttribute('data-actual_departure') || '';
       document.getElementById('bus_status').value = button.getAttribute('data-status');
+      document.getElementById('bus_current_terminal').value = button.getAttribute('data-current_terminal') || '';
+      document.getElementById('bus_bay').value = button.getAttribute('data-bay') || '';
       document.getElementById('bus_current_location').value = button.getAttribute('data-current_location') || '';
       document.getElementById('bus_latitude').value = button.getAttribute('data-latitude') || '';
       document.getElementById('bus_longitude').value = button.getAttribute('data-longitude') || '';
+      document.getElementById('bus_next_stop').value = button.getAttribute('data-next_stop') || '';
+      document.getElementById('bus_next_stop_eta').value = button.getAttribute('data-next_stop_eta') || '';
+      document.getElementById('bus_final_destination').value = button.getAttribute('data-final_destination') || '';
+      document.getElementById('bus_final_destination_eta').value = button.getAttribute('data-final_destination_eta') || '';
       document.getElementById('bus_movement_status').value = button.getAttribute('data-movement_status') || 'at_terminal';
       document.getElementById('bus_movement_reason').value = button.getAttribute('data-movement_reason') || '';
     } else { resetForm(); }

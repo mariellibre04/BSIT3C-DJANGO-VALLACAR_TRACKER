@@ -61,11 +61,11 @@
         </li>
 
         <li class="nav-item">
-          <a class="nav-link {% if request.resolver_match.app_name == 'passengers' %}active{% endif %}" href="{% url 'passengers:passenger_list' %}">
+          <a class="nav-link {% if request.resolver_match.app_name == 'bus' and request.resolver_match.url_name == 'bus_list' %}active{% endif %}" href="{% url 'bus:bus_list' %}">
             <span class="nav-link-icon d-md-none d-lg-inline-block">
-              <i class="nav-icon fas fa-users"></i>
+              <i class="nav-icon fas fa-bus"></i>
             </span>
-            <span class="nav-link-title">Passengers</span>
+            <span class="nav-link-title">Buses</span>
           </a>
         </li>
 

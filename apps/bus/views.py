@@ -2,7 +2,7 @@ import hashlib
 import json
 import math
 import re
-from datetime import timedelta
+from datetime import datetime, time, timedelta
 from decimal import Decimal, InvalidOperation
 from pathlib import Path
 from urllib.error import URLError
@@ -52,6 +52,30 @@ def _parse_coord(raw, low, high):
     if value < low or value > high:
         return None, f'Coordinate out of range ({low} to {high}).'
     return value, None
+
+
+def _parse_time(raw):
+    raw = (raw or '').strip()
+    if not raw:
+        return None
+    from datetime import datetime
+    formats = ['%H:%M', '%I:%M %p', '%I:%M%p']
+    for fmt in formats:
+        try:
+            return datetime.strptime(raw, fmt).time()
+        except ValueError:
+            continue
+    return None
+
+
+def _to_datetime(t):
+    """Convert a time object to a datetime object for today."""
+    if not t:
+        return None
+    now = timezone.localtime(timezone.now())
+    return now.replace(
+        hour=t.hour, minute=t.minute, second=t.second, microsecond=t.microsecond
+    )
 
 
 # Vallacar / Ceres terminals (Negros / Cebu corridors). Used both for the
@@ -631,7 +655,9 @@ def bus_get_ajax(request, pk):
 
 
 def _kiosk_bay(bus):
-    """Static bay assignment for the kiosk board."""
+    """Static bay assignment for the kiosk board, or the bus's own bay field."""
+    if bus.bay:
+        return bus.bay
     bay = KIOSK_STATIC_BAYS.get(bus.bus_number)
     if bay is None:
         digits = re.sub(r'\D', '', bus.bus_number or '') or str(bus.id or 0)
@@ -679,22 +705,29 @@ def _kiosk_board_context(selected_terminal=None):
         route_from, route_to = route_endpoints(bus.route)
         dest = route_to['name'] if route_to else ''
 
-        time_in = tap.tapped_at if tap else None
-        time_out = tap.left_at if tap else None
+        time_in = tap.tapped_at if tap else _to_datetime(bus.scheduled_time)
+        time_out = tap.left_at if tap else _to_datetime(bus.actual_departure)
 
         if is_at:
-            terminal = tap.terminal_name if tap else (bus.current_location or '')
+            # Prioritize: 1. Tap location, 2. Manual terminal field, 3. Generic location text
+            terminal = tap.terminal_name if tap else (bus.current_terminal or bus.current_location or '')
             when = time_in or (bus.last_gps_update or bus.updated_at)
             estimated = _estimated_departure(tap)
+            # If no tap exists, use the actual departure time as the estimated departure
+            if not estimated and not tap and bus.actual_departure:
+                estimated = _to_datetime(bus.actual_departure)
         elif time_out is not None:
-            # The bus has timed out: keep showing the stop it just left.
-            terminal = tap.terminal_name
+            # The bus has timed out or departed: keep showing the stop it just left.
+            terminal = tap.terminal_name if tap else (bus.current_terminal or bus.current_location or '')
             when = time_out
             estimated = None
         else:
-            terminal = dest or (tap.terminal_name if tap else '') or (bus.current_location or '')
+            # En route: prioritize the next destination from route logic, then manual fields
+            terminal = dest or (tap.terminal_name if tap else '') or (bus.current_terminal or bus.current_location or '')
             when = bus.last_gps_update or bus.updated_at or time_in
             estimated = _estimated_departure(tap)
+            if not estimated and not tap and bus.actual_departure:
+                estimated = _to_datetime(bus.actual_departure)
 
         terminal = terminal.replace(' Terminal', '').strip()
         if when is not None and (latest_change is None or when > latest_change):
@@ -736,6 +769,14 @@ def _kiosk_board_context(selected_terminal=None):
                     final_destination = next_destination
                     final_arrival = arrival
 
+        if next_destination is None and bus.next_stop:
+            next_destination = {'name': bus.next_stop}
+            arrival = {'eta': _to_datetime(bus.next_stop_eta)}
+
+        if final_destination is None and bus.final_destination:
+            final_destination = {'name': bus.final_destination}
+            final_arrival = {'eta': _to_datetime(bus.final_destination_eta)}
+
         last_tap_terminal = tap.terminal_name if tap else ''
         tap_entry = terminal_directory.match_terminal(last_tap_terminal)
         terminal_entry = terminal_directory.match_terminal(terminal)
@@ -761,20 +802,20 @@ def _kiosk_board_context(selected_terminal=None):
             'bay': _kiosk_bay(bus),
             'estimated_departure': estimated,
             'next_destination': destination_name,
-            'estimated_arrival': arrival['eta'] if arrival else None,
-            'arrival_minutes': arrival['minutes'] if arrival else None,
-            'arrival_distance_km': arrival['distance_km'] if arrival else None,
+            'estimated_arrival': arrival.get('eta') if arrival else None,
+            'arrival_minutes': arrival.get('minutes') if arrival else None,
+            'arrival_distance_km': arrival.get('distance_km') if arrival else None,
             'next_stop': next_destination['name'] if next_destination else '',
-            'next_stop_eta': arrival['eta'] if arrival else None,
-            'next_stop_minutes': arrival['minutes'] if arrival else None,
-            'next_stop_distance_km': arrival['distance_km'] if arrival else None,
+            'next_stop_eta': arrival.get('eta') if arrival else None,
+            'next_stop_minutes': arrival.get('minutes') if arrival else None,
+            'next_stop_distance_km': arrival.get('distance_km') if arrival else None,
             'final_destination': final_destination['name'] if final_destination else '',
-            'final_destination_eta': final_arrival['eta'] if final_arrival else None,
+            'final_destination_eta': final_arrival.get('eta') if final_arrival else None,
             'final_destination_minutes': (
-                final_arrival['minutes'] if final_arrival else None
+                final_arrival.get('minutes') if final_arrival else None
             ),
             'final_destination_distance_km': (
-                final_arrival['distance_km'] if final_arrival else None
+                final_arrival.get('distance_km') if final_arrival else None
             ),
             'status_class': KIOSK_STATUS_CLASS.get(bus.movement_status, 'is-enroute'),
             'status_label': bus.get_movement_status_display(),
@@ -802,7 +843,7 @@ def _kiosk_board_context(selected_terminal=None):
                 time_out.isoformat() if time_out else '',
                 estimated.isoformat() if estimated else '',
                 destination_name,
-                arrival['eta'].isoformat() if arrival else '',
+                arrival.get('eta').isoformat() if arrival and arrival.get('eta') else '',
                 f'{seats_left}/{bus.capacity or 0}',
             ])
         )
@@ -2051,12 +2092,22 @@ def bus_save_ajax(request):
 
     bus_number = request.POST.get('bus_number', '').strip()
     plate_number = request.POST.get('plate_number', '').strip()
+    operator = request.POST.get('operator', 'Ceres Liner').strip()
     capacity = request.POST.get('capacity', '').strip()
     route = request.POST.get('route', '').strip()
+    scheduled_time = request.POST.get('scheduled_time', '').strip()
+    actual_departure = request.POST.get('actual_departure', '').strip()
     status = request.POST.get('status', Bus.STATUS_ACTIVE).strip()
     current_location = request.POST.get('current_location', '').strip()
+    current_terminal = request.POST.get('current_terminal', '').strip()
+    bay = request.POST.get('bay', '').strip()
     movement_status = request.POST.get('movement_status', Bus.MOVE_AT_TERMINAL).strip()
     movement_reason = request.POST.get('movement_reason', '').strip()
+    next_stop = request.POST.get('next_stop', '').strip()
+    next_stop_eta = request.POST.get('next_stop_eta', '').strip()
+    final_destination = request.POST.get('final_destination', '').strip()
+    final_destination_eta = request.POST.get('final_destination_eta', '').strip()
+    
     latitude, lat_error = _parse_coord(request.POST.get('latitude', ''), Decimal('-90'), Decimal('90'))
     longitude, lng_error = _parse_coord(request.POST.get('longitude', ''), Decimal('-180'), Decimal('180'))
 
@@ -2113,12 +2164,21 @@ def bus_save_ajax(request):
     )
     bus.bus_number = bus_number
     bus.plate_number = plate_number
+    bus.operator = operator
     bus.capacity = capacity_value
     bus.route = route
+    bus.scheduled_time = _parse_time(scheduled_time)
+    bus.actual_departure = _parse_time(actual_departure)
     bus.status = status
     bus.current_location = current_location
+    bus.current_terminal = current_terminal
+    bus.bay = bay
     bus.latitude = latitude
     bus.longitude = longitude
+    bus.next_stop = next_stop
+    bus.next_stop_eta = _parse_time(next_stop_eta)
+    bus.final_destination = final_destination
+    bus.final_destination_eta = _parse_time(final_destination_eta)
     bus.movement_status = movement_status
     bus.movement_reason = movement_reason
     if gps_changed:
@@ -2235,8 +2295,12 @@ def _find_search_place(query):
     return None
 
 
-def map_all_buses_json(buses, waiting, search_target=None):
-    """Map payload listing every active bus with its movement status label."""
+def map_all_buses_json(buses, waiting, search_target=None, show_waiting=True):
+    """Map payload listing every active bus with its movement status label.
+
+    ``show_waiting`` controls the passenger waiting pin: it is drawn on the
+    public passenger map but suppressed on the staff operations map.
+    """
     items = []
     now = timezone.now()
     for b in buses:
@@ -2274,6 +2338,7 @@ def map_all_buses_json(buses, waiting, search_target=None):
         })
     return json.dumps({
         'waiting': {'name': waiting['name'], 'lat': waiting['lat'], 'lng': waiting['lng']} if waiting else None,
+        'show_waiting': bool(show_waiting),
         'buses': items,
         'terminals': [terminal_json(t) for t in TERMINALS],
         'places': _search_places_json(),
@@ -2297,6 +2362,7 @@ def bus_map_page(request):
     estimated arrival time and seat availability. Staff keep GPS editing.
     """
     is_admin = request.user.is_authenticated
+    is_staff = request.user.is_staff or request.user.is_superuser
     origin_name, dest_name, waiting_name = _resolve_trip_params(request)
     origin = terminal_by_name(origin_name)
     dest = terminal_by_name(dest_name)
@@ -2318,6 +2384,14 @@ def bus_map_page(request):
     else:
         results = build_eta_results(active_buses, origin, dest, waiting, today, now)
 
+    # The staff live map is an operations view: only moving (en-route) buses
+    # are drawn, and the passenger waiting pin is omitted. That human icon
+    # marks where a passenger stands, which is meaningful to riders only.
+    map_buses = active_buses
+    if is_staff:
+        results = [r for r in results if r['movement_status'] == Bus.MOVE_EN_ROUTE]
+        map_buses = [b for b in active_buses if b.movement_status == Bus.MOVE_EN_ROUTE]
+
     search_query = request.GET.get('place', '').strip()
     search_place = _find_search_place(search_query)
     search_target = None
@@ -2335,7 +2409,7 @@ def bus_map_page(request):
         'waiting_name': waiting.get('label', waiting['name']) if waiting else waiting_name,
         'results': results, 'error': error,
         'today': today, 'now': timezone.localtime(now),
-        'map_json': map_all_buses_json(active_buses, waiting, search_target),
+        'map_json': map_all_buses_json(map_buses, waiting, search_target, show_waiting=not is_staff),
         'movement_choices': Bus.MOVEMENT_CHOICES,
         'is_admin': is_admin,
         'search_query': search_query,
