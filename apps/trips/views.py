@@ -2,7 +2,6 @@ import csv
 from datetime import datetime
 
 from django.contrib import messages
-from django.contrib.auth.decorators import login_required
 from django.core.paginator import Paginator
 from django.db import IntegrityError
 from django.db.models import Avg, Count, Q, Sum
@@ -19,6 +18,7 @@ from apps.bus.models import Bus
 from apps.incidents.models import Incident
 from apps.maintenance.models import MaintenanceRecord
 from .models import Trip
+from apps.core.permissions import admin_required
 
 
 def _parse_dt(raw):
@@ -38,7 +38,7 @@ def _parse_dt(raw):
         return None
 
 
-@login_required(login_url='login')
+@admin_required
 def trip_list_page(request):
     query = request.GET.get('q', '').strip()
     status_filter = request.GET.get('status', '').strip()
@@ -59,7 +59,7 @@ def trip_list_page(request):
     })
 
 
-@login_required(login_url='login')
+@admin_required
 def trip_get_ajax(request, pk):
     t = scoped_trip(request.user, pk)
     fmt = lambda v: timezone.localtime(v).strftime('%Y-%m-%dT%H:%M') if v else ''
@@ -73,7 +73,7 @@ def trip_get_ajax(request, pk):
     })
 
 
-@login_required(login_url='login')
+@admin_required
 @require_POST
 def trip_save_ajax(request):
     tid = request.POST.get('id')
@@ -151,7 +151,7 @@ def trip_save_ajax(request):
     return JsonResponse({'status': 'success', 'id': trip.id, 'is_alert': trip.is_alert})
 
 
-@login_required(login_url='login')
+@admin_required
 @require_POST
 def trip_delete_ajax(request, pk):
     trip = scoped_trip(request.user, pk)
@@ -161,7 +161,7 @@ def trip_delete_ajax(request, pk):
     return JsonResponse({'status': 'deleted'})
 
 
-@login_required(login_url='login')
+@admin_required
 def alerts_page(request):
     """Trip and Delay Alerts operations board: KPIs, delays chart, fleet status, recent delays."""
     from datetime import timedelta
@@ -230,7 +230,7 @@ def alerts_page(request):
     })
 
 
-@login_required(login_url='login')
+@admin_required
 def reports_page(request):
     """4. Trip Analytics and Reports: completed trips, delays, utilization, route performance."""
     trips_qs = scoped_trips(request.user).select_related('bus')

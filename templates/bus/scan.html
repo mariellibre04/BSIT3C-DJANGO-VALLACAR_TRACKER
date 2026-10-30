@@ -288,7 +288,7 @@
     var recentBody = document.getElementById('recent_taps');
     var checkinUrl = '{% url "bus:bus_scan_checkin_ajax" %}';
     var nextStopUrl = '{% url "bus:bus_next_stop_ajax" %}';
-    var mapUrl = '{% url "bus:bus_map" %}';
+    var mapUrl = '{% url "bus:bus_kiosk" %}';
     var csrfInput = document.querySelector('[name=csrfmiddlewaretoken]');
     var csrfToken = csrfInput ? csrfInput.value : '{{ csrf_token }}';
     var scanner = null;

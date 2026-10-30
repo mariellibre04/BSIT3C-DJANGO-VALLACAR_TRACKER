@@ -14,7 +14,6 @@ from django.shortcuts import get_object_or_404, redirect, render
 from django.urls import reverse
 from django.http import JsonResponse
 from django.contrib import messages
-from django.contrib.auth.decorators import login_required
 from django.views.decorators.http import require_POST
 from django.core.cache import cache
 from django.core.paginator import Paginator
@@ -25,7 +24,8 @@ from django.db.models import OuterRef, Q, Subquery
 from django.utils import timezone
 
 from apps.scoping import scoped_bus, scoped_buses
-from apps.core.views import admin_required
+from apps.core.permissions import admin_required
+from apps.core.roles import ROLE_CONDUCTOR, get_role
 from django.db.models import Count
 from . import route_service, terminal_directory
 from .models import Bus, BusTerminalTap
@@ -598,7 +598,7 @@ def _bus_gps_payload(bus, occupied=None, use_fallback=False):
     }
 
 
-@login_required(login_url='login')
+@admin_required
 def bus_list_page(request):
     query = request.GET.get('q', '').strip()
     buses_list = scoped_buses(request.user).annotate(
@@ -618,7 +618,7 @@ def bus_list_page(request):
     return render(request, 'bus/list.html', {'buses': buses, 'query': query})
 
 
-@login_required(login_url='login')
+@admin_required
 def bus_list_ajax(request):
     query = request.GET.get('q', '').strip()
     buses_list = scoped_buses(request.user).annotate(
@@ -647,6 +647,7 @@ def bus_list_ajax(request):
     })
 
 
+@admin_required
 def bus_get_ajax(request, pk):
     if request.user.is_authenticated:
         bus = scoped_bus(request.user, pk)
@@ -1592,7 +1593,6 @@ def bus_tap_page(request, token):
     })
 
 
-@admin_required
 def conductor_checkin_page(request):
     """Staff conductor check-in reached from the terminal monitor kiosk QR."""
     buses = Bus.objects.order_by('bus_number')
@@ -2081,7 +2081,7 @@ def bus_scan_checkin_ajax(request):
     return JsonResponse(_scan_tap_payload(bus, tap, 'time_in', message))
 
 
-@login_required(login_url='login')
+@admin_required
 @require_POST
 def bus_save_ajax(request):
     bus_id = request.POST.get('id')
@@ -2202,7 +2202,7 @@ def bus_save_ajax(request):
     return JsonResponse(payload)
 
 
-@login_required(login_url='login')
+@admin_required
 @require_POST
 def bus_delete_ajax(request, pk):
     bus = scoped_bus(request.user, pk)
@@ -2363,6 +2363,8 @@ def bus_map_page(request):
     Ceres liners approach the waiting terminal on the live map, with an
     estimated arrival time and seat availability. Staff keep GPS editing.
     """
+    if request.user.is_authenticated and get_role(request.user) == ROLE_CONDUCTOR:
+        return redirect('conductor_dashboard')
     is_admin = request.user.is_authenticated
     is_staff = request.user.is_staff or request.user.is_superuser
     origin_name, dest_name, waiting_name = _resolve_trip_params(request)
@@ -2549,7 +2551,7 @@ def geocode_ajax(request):
     return JsonResponse({'results': unique, 'local_only': remote_failed})
 
 
-@login_required(login_url='login')
+@admin_required
 @require_POST
 def bus_gps_update_ajax(request, pk):
     """Quick GPS ping: update location / coordinates / movement from the map."""

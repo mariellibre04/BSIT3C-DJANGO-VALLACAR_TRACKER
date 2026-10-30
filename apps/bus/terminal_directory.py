@@ -1,15 +1,18 @@
-"""Directory of bus terminal locations in Negros Occidental.
+"""Directory of bus terminal locations served by Vallacar Transit.
 
 The terminal monitor kiosk uses this catalogue for its sidebar so a display
 can be locked to one terminal location and only show that terminal's
-movements and available buses. The catalogue is scoped to Negros Occidental
-cities and municipalities.
+movements and available buses. The local Negros Occidental/Negros Oriental
+coverage is kept for everyday operations, while every terminal Vallacar owns
+nationwide is merged in from the terminal master list.
 """
 
 import json
 import re
 import unicodedata
 from pathlib import Path
+
+from .route_config import TERMINAL_MASTER_LIST
 
 _CITY_DATA_PATH = Path(__file__).with_name('data') / 'ph_cities.json'
 
@@ -132,6 +135,17 @@ def _seed(city, province, terminal, slug, aliases=(), hub=False,
             key for key in (normalize_name(name) for name in match_names) if key
         ),
     }
+
+
+_PROVINCE_META = {
+    'Metro Manila': ('NCR', 'Luzon'),
+    'Batangas': ('Region IV-A', 'Luzon'),
+    'Cebu': ('Region VII', 'Visayas'),
+    'Aklan': ('Region VI', 'Visayas'),
+    'Iloilo': ('Region VI', 'Visayas'),
+    'Negros Occidental': ('Region VI', 'Negros Island'),
+    'Negros Oriental': ('Region VII', 'Negros Island'),
+}
 
 
 # Region groups are ordered north to south so the sidebar reads like a
@@ -533,7 +547,7 @@ REGION_SEEDS = [
 ]
 
 
-# The kiosk directory is scoped to Negros Occidental and Negros Oriental terminals.
+# Everyday kiosk coverage: Negros Occidental and Negros Oriental terminals.
 SCOPE_PROVINCES = {'Negros Occidental', 'Negros Oriental'}
 
 TERMINAL_DIRECTORY = []
@@ -545,6 +559,7 @@ for _group in REGION_SEEDS:
         _entry = dict(_entry)
         # Keep the original province for matching, but island is shared
         _entry['island'] = 'Negros Island'
+        _entry['owned'] = False
         TERMINAL_DIRECTORY.append(_entry)
         TERMINAL_BY_SLUG[_entry['slug']] = _entry
 
@@ -554,6 +569,86 @@ _DISPLAY_NAMES = {
 }
 for _entry in TERMINAL_DIRECTORY:
     _entry['name'] = _DISPLAY_NAMES.get(_entry['slug'], _entry['name'])
+
+
+def _owned_match_keys(master):
+    name_key = normalize_name(master.get('name'))
+    alias_keys = {
+        key for key in (
+            normalize_name(alias)
+            for alias in (master.get('aliases') or '').split(',')
+        ) if key
+    }
+    keys = {key for key in ({name_key} | alias_keys) if key}
+    return name_key, keys
+
+
+def _merge_owned_terminal(master):
+    """Mark the matching directory entry as owned, or add it nationwide."""
+    name_key, keys = _owned_match_keys(master)
+
+    candidate = None
+    for entry in TERMINAL_DIRECTORY:
+        if name_key and name_key in entry['match_keys']:
+            candidate = entry
+            break
+
+    if candidate is None:
+        for entry in TERMINAL_DIRECTORY:
+            for key in keys:
+                # Skip generic one-word city aliases so Iloilo Jaro/Molo stay distinct.
+                if len(key.split()) >= 2 and key in entry['match_keys']:
+                    candidate = entry
+                    break
+            if candidate is not None:
+                break
+
+    master_aliases = tuple(
+        alias.strip()
+        for alias in (master.get('aliases') or '').split(',')
+        if alias.strip()
+    )
+
+    if candidate is not None:
+        candidate['owned'] = True
+        candidate['hub'] = True
+        candidate['aliases'] = tuple(dict.fromkeys(
+            (*candidate['aliases'], master.get('name', ''), *master_aliases)
+        ))
+        candidate['match_keys'] = tuple(dict.fromkeys(
+            (*candidate['match_keys'], *keys)
+        ))
+        return candidate
+
+    city = master.get('city', '')
+    province = master.get('province', '')
+    region, island = _PROVINCE_META.get(province, ('Philippines', 'Philippines'))
+    label = master.get('name') or city
+    preferred = master_aliases[0] if master_aliases else label
+    if 'terminal' in preferred.lower() or 'exchange' in preferred.lower():
+        terminal = preferred
+    elif 'terminal' in label.lower():
+        terminal = label
+    else:
+        terminal = f'{preferred} Terminal'
+    entry = _seed(
+        city, province, terminal, _slug(label),
+        aliases=master_aliases, hub=True, featured=False,
+        lat=master.get('lat'), lng=master.get('lng'),
+        region=region, island=island,
+    )
+    entry['owned'] = True
+    entry['master_name'] = label
+    entry['name'] = label or entry['name']
+    entry['match_keys'] = tuple(dict.fromkeys((name_key, *keys)))
+    TERMINAL_DIRECTORY.append(entry)
+    TERMINAL_BY_SLUG[entry['slug']] = entry
+    return entry
+
+
+for _master in TERMINAL_MASTER_LIST:
+    if _master.get('is_owned_terminal'):
+        _merge_owned_terminal(_master)
 
 _MATCH_INDEX = {}
 for _entry in TERMINAL_DIRECTORY:
@@ -589,18 +684,39 @@ def match_terminal(value):
     return best_entry
 
 
+_GROUP_ORDER = ['Negros Island', 'Luzon', 'Visayas', 'Mindanao']
+_GROUP_SUBTITLES = {
+    'Negros Island': 'Negros Occidental & Oriental',
+    'Luzon': 'Vallacar-owned terminals',
+    'Visayas': 'Vallacar-owned terminals',
+    'Mindanao': 'Vallacar-owned terminals',
+}
+
+
 def terminal_groups():
-    """Static groups used to render the kiosk sidebar."""
-    return [
-        {
-            'region': 'Negros Island',
-            'island': 'Visayas',
-            'terminals': sorted(
-                TERMINAL_DIRECTORY,
-                key=lambda entry: (not entry['hub'], entry['name']),
-            ),
-        }
-    ]
+    """Group the directory by island so the kiosk sidebar reads nationwide."""
+    grouped = {}
+    for entry in TERMINAL_DIRECTORY:
+        island = entry.get('island') or 'Philippines'
+        group = grouped.setdefault(island, {
+            'region': island,
+            'island': _GROUP_SUBTITLES.get(island, 'Vallacar-owned terminals'),
+            'terminals': [],
+        })
+        group['terminals'].append(entry)
+
+    def _order(group):
+        island = group['region']
+        index = _GROUP_ORDER.index(island) if island in _GROUP_ORDER else len(_GROUP_ORDER)
+        return index, island
+
+    groups = sorted(grouped.values(), key=_order)
+    for group in groups:
+        group['terminals'] = sorted(
+            group['terminals'],
+            key=lambda entry: (not entry['hub'], entry['name']),
+        )
+    return groups
 
 
 def featured_terminals():

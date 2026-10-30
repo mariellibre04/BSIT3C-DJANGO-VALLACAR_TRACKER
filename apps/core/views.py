@@ -1,5 +1,4 @@
 from datetime import timedelta
-from functools import wraps
 
 from django.contrib import messages
 from django.contrib.auth import authenticate, get_user_model, login, logout
@@ -7,9 +6,11 @@ from django.contrib.auth.password_validation import validate_password
 from django.core.exceptions import ValidationError
 from django.core.validators import validate_email
 from django.shortcuts import redirect, render
-from django.urls import reverse
 from django.utils import timezone
 from django.views.decorators.http import require_http_methods
+
+from .permissions import admin_required, conductor_required
+from .roles import ROLE_ADMIN, ROLE_CONDUCTOR, get_role, landing_url_name
 
 User = get_user_model()
 
@@ -100,23 +101,6 @@ def _validate_registration_data(data):
     return errors
 
 
-def admin_required(view):
-    """Gate staff-only pages.
-
-    Anonymous visitors are sent to the admin sign-in page; signed-in
-    passengers (non-staff) are bounced to the public passenger dashboard.
-    """
-    @wraps(view)
-    def _wrapped(request, *args, **kwargs):
-        if not request.user.is_authenticated:
-            return redirect(f"{reverse('login')}?next={request.get_full_path()}")
-        if not (request.user.is_staff or request.user.is_superuser):
-            messages.error(request, 'Administrator access only. Please sign in with an admin account.')
-            return redirect('dashboard')
-        return view(request, *args, **kwargs)
-    return _wrapped
-
-
 @require_http_methods(['GET', 'POST'])
 def login_view(request):
     failed_attempts, remaining = _get_lock_state(request)
@@ -134,10 +118,14 @@ def login_view(request):
     if user is not None:
         _reset_lock_state(request)
         login(request, user)
-        if user.is_staff or user.is_superuser:
-            return redirect('admin_dashboard')
-        messages.info(request, 'Signed in as a passenger.')
-        return redirect('dashboard')
+        role = get_role(user)
+        if role == ROLE_ADMIN:
+            messages.info(request, 'Signed in as an administrator.')
+        elif role == ROLE_CONDUCTOR:
+            messages.info(request, 'Signed in as a conductor.')
+        else:
+            messages.info(request, 'Signed in as a passenger.')
+        return redirect(landing_url_name(role))
 
     failed_attempts += 1
     request.session['failed_attempts'] = failed_attempts
@@ -185,6 +173,9 @@ def dashboard(request):
     No login needed: riders see the live fleet, free seats and estimated
     arrivals, and can jump straight into the ETA board to plan a trip.
     """
+    if request.user.is_authenticated and get_role(request.user) == ROLE_CONDUCTOR:
+        return redirect('conductor_dashboard')
+
     from django.db.models import Count
     from apps.bus.models import Bus
     from apps.bus.views import (
@@ -347,10 +338,32 @@ def admin_dashboard(request):
     return render(request, 'home.html', context)
 
 
+@conductor_required
+def conductor_dashboard(request):
+    """Conductor point of view: terminal QR scanner and terminal monitor only."""
+    from apps.bus import terminal_directory
+    from apps.bus.models import Bus
+    from apps.bus.views import _staff_terminal, _staff_terminal_id_for_user
+
+    terminal = _staff_terminal(_staff_terminal_id_for_user(request.user))
+    if terminal:
+        entry = terminal_directory.match_terminal(terminal.get('name'))
+        if entry is not None:
+            terminal['slug'] = entry['slug']
+    recent_scans = (
+        Bus.objects.filter(status=Bus.STATUS_ACTIVE)
+        .order_by('-updated_at')[:6]
+    )
+    return render(request, 'conductor_dashboard.html', {
+        'terminal': terminal,
+        'recent_buses': recent_scans,
+    })
+
+
 @require_http_methods(['GET', 'POST'])
 def register_view(request):
     if request.user.is_authenticated:
-        return redirect('admin_dashboard' if request.user.is_staff else 'dashboard')
+        return redirect(landing_url_name(get_role(request.user)))
 
     if request.method == 'GET':
         return render(request, 'auth/register.html')

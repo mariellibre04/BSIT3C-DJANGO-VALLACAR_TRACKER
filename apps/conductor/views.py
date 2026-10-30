@@ -1,7 +1,6 @@
 from django.shortcuts import render
 from django.http import JsonResponse
 from django.contrib import messages
-from django.contrib.auth.decorators import login_required
 from django.views.decorators.http import require_POST
 from django.core.paginator import Paginator
 from django.db import IntegrityError
@@ -9,9 +8,10 @@ from django.db.models import Q
 
 from apps.scoping import scoped_conductor, scoped_conductors, scoped_buses
 from .models import Conductor
+from apps.core.permissions import admin_required
 
 
-@login_required(login_url='login')
+@admin_required
 def conductor_list_page(request):
     query = request.GET.get('q', '').strip()
     conductors_list = scoped_conductors(request.user).select_related('bus').order_by('name')
@@ -30,7 +30,7 @@ def conductor_list_page(request):
     })
 
 
-@login_required(login_url='login')
+@admin_required
 def conductor_list_ajax(request):
     query = request.GET.get('q', '').strip()
     conductors_list = scoped_conductors(request.user).order_by('name')
@@ -64,7 +64,7 @@ def conductor_list_ajax(request):
     })
 
 
-@login_required(login_url='login')
+@admin_required
 def conductor_get_ajax(request, pk):
     conductor = scoped_conductor(request.user, pk)
     return JsonResponse({
@@ -77,7 +77,7 @@ def conductor_get_ajax(request, pk):
     })
 
 
-@login_required(login_url='login')
+@admin_required
 @require_POST
 def conductor_save_ajax(request):
     conductor_id = request.POST.get('id')
@@ -142,7 +142,7 @@ def conductor_save_ajax(request):
     })
 
 
-@login_required(login_url='login')
+@admin_required
 @require_POST
 def conductor_delete_ajax(request, pk):
     conductor = scoped_conductor(request.user, pk)

@@ -1,5 +1,4 @@
 from django.contrib import messages
-from django.contrib.auth.decorators import login_required
 from django.core.paginator import Paginator
 from django.db import IntegrityError
 from django.db.models import Q
@@ -10,9 +9,10 @@ from django.views.decorators.http import require_POST
 
 from apps.scoping import scoped_buses, scoped_incident, scoped_incidents
 from .models import Incident
+from apps.core.permissions import admin_required
 
 
-@login_required(login_url='login')
+@admin_required
 def incident_list_page(request):
     query = request.GET.get('q', '').strip()
     status_filter = request.GET.get('status', '').strip()
@@ -47,7 +47,7 @@ def incident_list_page(request):
     })
 
 
-@login_required(login_url='login')
+@admin_required
 def incident_get_ajax(request, pk):
     i = scoped_incident(request.user, pk)
     return JsonResponse({
@@ -57,7 +57,7 @@ def incident_get_ajax(request, pk):
     })
 
 
-@login_required(login_url='login')
+@admin_required
 @require_POST
 def incident_save_ajax(request):
     iid = request.POST.get('id')
@@ -106,7 +106,7 @@ def incident_save_ajax(request):
     return JsonResponse({'status': 'success', 'id': incident.id})
 
 
-@login_required(login_url='login')
+@admin_required
 @require_POST
 def incident_resolve_ajax(request, pk):
     incident = scoped_incident(request.user, pk)
@@ -117,7 +117,7 @@ def incident_resolve_ajax(request, pk):
     return JsonResponse({'status': 'resolved'})
 
 
-@login_required(login_url='login')
+@admin_required
 @require_POST
 def incident_delete_ajax(request, pk):
     incident = scoped_incident(request.user, pk)

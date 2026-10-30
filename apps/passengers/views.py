@@ -1,7 +1,6 @@
 from django.shortcuts import render
 from django.http import JsonResponse
 from django.contrib import messages
-from django.contrib.auth.decorators import login_required
 from django.views.decorators.http import require_POST
 from django.core.paginator import Paginator
 from django.core.exceptions import ValidationError
@@ -12,6 +11,7 @@ from django.db.models import Q
 from apps.scoping import scoped_passenger, scoped_passengers, scoped_buses
 from apps.bus.models import Bus
 from .models import Passenger
+from apps.core.permissions import admin_required
 
 MIN_AGE = 1
 MAX_AGE = 150
@@ -24,7 +24,7 @@ def _parse_age(raw_age):
         return None
 
 
-@login_required(login_url='login')
+@admin_required
 def passenger_list_page(request):
     query = request.GET.get('q', '').strip()
     type_filter = request.GET.get('type', '').strip()
@@ -51,7 +51,7 @@ def passenger_list_page(request):
     })
 
 
-@login_required(login_url='login')
+@admin_required
 def passenger_list_ajax(request):
     query = request.GET.get('q', '').strip()
     passengers_list = scoped_passengers(request.user).order_by('name')
@@ -89,7 +89,7 @@ def passenger_list_ajax(request):
     })
 
 
-@login_required(login_url='login')
+@admin_required
 def passenger_get_ajax(request, pk):
     passenger = scoped_passenger(request.user, pk)
     return JsonResponse({
@@ -104,7 +104,7 @@ def passenger_get_ajax(request, pk):
     })
 
 
-@login_required(login_url='login')
+@admin_required
 @require_POST
 def passenger_save_ajax(request):
     passenger_id = request.POST.get('id')
@@ -188,7 +188,7 @@ def passenger_save_ajax(request):
     })
 
 
-@login_required(login_url='login')
+@admin_required
 @require_POST
 def passenger_delete_ajax(request, pk):
     passenger = scoped_passenger(request.user, pk)

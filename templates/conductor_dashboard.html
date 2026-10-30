@@ -1,0 +1,111 @@
+{% extends "theme/base.html" %}
+{% block content %}
+<div class="container-xl">
+  <div class="page-header d-print-none" aria-label="Page header">
+    <div class="container-xl">
+      <div class="row align-items-center">
+        <div class="col">
+          <div class="page-pretitle">Conductor</div>
+          <h2 class="page-title mb-0">Terminal Operations</h2>
+          <div class="text-muted small">
+            Scan bus QR codes and monitor the live terminal board.
+            {% if terminal %}<strong>{{ terminal.label }}</strong>{% endif %}
+          </div>
+        </div>
+        <div class="col-auto">
+          <a href="{% url 'bus:bus_kiosk' %}" class="btn btn-outline-primary">
+            <i class="fa-solid fa-tv me-1"></i> Open Terminal Monitor
+          </a>
+        </div>
+      </div>
+    </div>
+  </div>
+  <br>
+
+  <div class="row g-3">
+    <div class="col-12 col-lg-6">
+      <div class="card h-100">
+        <div class="card-body">
+          <div class="d-flex align-items-center gap-3 mb-3">
+            <span class="avatar avatar-lg bg-primary-lt text-primary"><i class="fa-solid fa-qrcode fa-lg"></i></span>
+            <div>
+              <h3 class="mb-0">Terminal Scanner</h3>
+              <div class="text-muted small">Scan a bus QR to time in or time out.</div>
+            </div>
+          </div>
+          <p class="text-muted">
+            Use the camera scanner at your assigned terminal. The terminal is locked automatically when you open the scanner from a terminal kiosk.
+          </p>
+          <div class="d-flex gap-2 flex-wrap">
+            <a href="{% url 'bus:bus_scan' %}" class="btn btn-primary">
+              <i class="fa-solid fa-camera me-1"></i> Start Scanner
+            </a>
+            <a href="{% url 'bus:conductor_checkin' %}" class="btn btn-outline-secondary">
+              <i class="fa-solid fa-keyboard me-1"></i> Manual Check-in
+            </a>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="col-12 col-lg-6">
+      <div class="card h-100">
+        <div class="card-body">
+          <div class="d-flex align-items-center gap-3 mb-3">
+            <span class="avatar avatar-lg bg-azure-lt text-azure"><i class="fa-solid fa-tv fa-lg"></i></span>
+            <div>
+              <h3 class="mb-0">Terminal Monitor</h3>
+              <div class="text-muted small">Live arrivals, departures and bay assignments.</div>
+            </div>
+          </div>
+          <p class="text-muted">
+            Open the nationwide board or jump straight to your terminal's dedicated kiosk.
+          </p>
+          <div class="d-flex gap-2 flex-wrap">
+            <a href="{% url 'bus:bus_kiosk' %}" class="btn btn-primary">
+              <i class="fa-solid fa-grip me-1"></i> Nationwide Board
+            </a>
+            {% if terminal.slug %}
+            <a href="{% url 'bus:bus_kiosk_terminal' terminal.slug %}" class="btn btn-outline-primary">
+              <i class="fa-solid fa-location-dot me-1"></i> My Terminal
+            </a>
+            {% endif %}
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="card mt-3">
+    <div class="card-header">
+      <div class="card-title">Recently Active Buses</div>
+    </div>
+    <div class="table-responsive">
+      <table class="table table-vcenter card-table">
+        <thead>
+          <tr>
+            <th>Bus</th>
+            <th>Plate</th>
+            <th>Route</th>
+            <th>Status</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for bus in recent_buses %}
+          <tr>
+            <td class="fw-medium">{{ bus.bus_number }}</td>
+            <td class="text-muted">{{ bus.plate_number }}</td>
+            <td class="text-muted">{{ bus.route }}</td>
+            <td><span class="badge bg-secondary-lt">{{ bus.get_status_display }}</span></td>
+          </tr>
+          {% empty %}
+          <tr>
+            <td colspan="4" class="text-muted">No active buses yet.</td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </div>
+</div>
+{% endblock %}

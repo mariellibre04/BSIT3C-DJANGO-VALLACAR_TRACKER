@@ -1,7 +1,10 @@
 import json
 
+from django.contrib.auth import get_user_model
 from django.test import TestCase
 from django.urls import reverse
+
+from apps.core.roles import ROLE_CONDUCTOR, set_role
 
 from .models import (
     Bus,
@@ -14,8 +17,17 @@ from .route_config import ROUTE_DEFINITIONS, TERMINAL_MASTER_LIST
 from .route_service import INVALID_STOP_MESSAGE, seed_transit_data
 
 
+def make_conductor(username='conductor'):
+    user = get_user_model().objects.create_user(
+        username=username, password='secret1234'
+    )
+    set_role(user, ROLE_CONDUCTOR)
+    return user
+
+
 class TerminalScanTests(TestCase):
     def setUp(self):
+        self.client.force_login(make_conductor())
         self.bus = Bus.objects.create(
             bus_number='101',
             plate_number='ABC-101',
@@ -77,6 +89,7 @@ class TerminalScanTests(TestCase):
 
 class KioskRefreshTests(TestCase):
     def setUp(self):
+        self.client.force_login(make_conductor())
         self.bus = Bus.objects.create(
             bus_number='101',
             plate_number='ABC-101',
@@ -131,7 +144,7 @@ class KioskRefreshTests(TestCase):
 
         self.assertNotIn('101', data['board_html'])
 
-    def test_dedicated_terminal_kiosk_page_renders_negros_occidental_only(self):
+    def test_dedicated_terminal_kiosk_lists_owned_terminals_nationwide(self):
         response = self.client.get(
             reverse('bus:bus_kiosk_terminal', args=['bacolod-north'])
         )
@@ -140,8 +153,8 @@ class KioskRefreshTests(TestCase):
         self.assertContains(response, 'Bacolod North Bus Terminal')
         self.assertContains(response, 'id="kioskSidebarList"')
         self.assertContains(response, 'Negros Occidental')
-        self.assertNotContains(response, 'Cebu South Bus Terminal')
-        self.assertNotContains(response, 'PITX')
+        self.assertContains(response, 'Cebu South Bus Terminal')
+        self.assertContains(response, 'PITX')
 
     def test_terminal_kiosk_filters_board_to_that_terminal(self):
         other = Bus.objects.create(
@@ -199,6 +212,7 @@ class KioskRefreshTests(TestCase):
 
 class TerminalKioskQrTests(TestCase):
     def setUp(self):
+        self.client.force_login(make_conductor())
         self.bus = Bus.objects.create(
             bus_number='101',
             plate_number='ABC-101',
@@ -294,6 +308,7 @@ class TerminalKioskQrTests(TestCase):
 
 class TerminalStaffScannerTests(TestCase):
     def setUp(self):
+        self.client.force_login(make_conductor())
         self.bus = Bus.objects.create(
             bus_number='909',
             plate_number='CEB-909',
@@ -415,6 +430,7 @@ class TerminalStaffScannerTests(TestCase):
 
 class RouteNextStopTests(TestCase):
     def setUp(self):
+        self.client.force_login(make_conductor())
         seed_transit_data(force=True)
         self.bus = Bus.objects.create(
             bus_number='KDM-900',

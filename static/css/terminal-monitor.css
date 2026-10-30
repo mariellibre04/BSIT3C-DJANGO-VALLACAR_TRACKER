@@ -676,7 +676,7 @@ body.kiosk-body::before {
   display: inline-flex;
   gap: 48px;
   white-space: nowrap;
-  animation: k-marquee 48s linear infinite;
+  animation: k-marquee 80s linear infinite;
 }
 
 .k-ticker-track span {

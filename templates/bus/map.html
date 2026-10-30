@@ -175,13 +175,6 @@
                 <span class="badge bg-secondary-lt text-secondary">{{ r.movement_display }}</span>
               </div>
               <div class="live-track-bus-plate">{{ r.plate_number }} &bull; {{ r.route }}</div>
-              <div class="live-track-bus-seats" id="seats-{{ r.bus_id }}">
-                {% if r.seats_free > 0 %}
-                <span class="live-track-seats-badge seats-available"><i class="fa-solid fa-chair" aria-hidden="true"></i>{{ r.seats_free }} seat{{ r.seats_free|pluralize }} free</span>
-                {% else %}
-                <span class="live-track-seats-badge seats-full"><i class="fa-solid fa-chair" aria-hidden="true"></i>Full</span>
-                {% endif %}
-              </div>
               {% if r.eta_wait %}
               <div class="live-track-bus-eta">
                 <span class="live-track-eta-time" id="eta-time-{{ r.bus_id }}">
@@ -558,14 +551,13 @@
     const statusNote = b.movement_status === 'at_terminal' && b.departure
       ? `<br>Departs ${escapeHtml(b.departure.label)}`
       : (b.reason ? `<br>Reason: ${escapeHtml(b.reason)}` : '');
-    m.bindPopup(`<b>${escapeHtml(b.bus_number)}</b><br>${escapeHtml(b.route)}<br>Status: ${escapeHtml(b.movement_display || 'At Terminal')}<br>${escapeHtml(b.seats_free)} seats free${statusNote}`);
+    m.bindPopup(`<b>${escapeHtml(b.bus_number)}</b><br>${escapeHtml(b.route)}<br>Status: ${escapeHtml(b.movement_display || 'At Terminal')}${statusNote}`);
 
     busMarkers[b.bus_number] = {
       id: b.bus_id,
       number: b.bus_number,
       marker: m,
       route: b.route,
-      seats: b.seats_free,
       movement_status: b.movement_status,
       movement_display: b.movement_display,
       departure: b.departure,
@@ -657,14 +649,7 @@
         const bus = busMarkers[b.bus_number];
         if (!bus) return;
 
-        bus.seats = b.available_seats != null ? b.available_seats : b.seats_free;
         bus.route = b.route || bus.route;
-        const seatsEl = document.getElementById('seats-' + b.bus_id);
-        if (seatsEl) {
-          seatsEl.innerHTML = bus.seats > 0
-            ? '<span class="live-track-seats-badge seats-available"><i class="fa-solid fa-chair" aria-hidden="true"></i>' + bus.seats + ' seat' + (bus.seats === 1 ? '' : 's') + ' free</span>'
-            : '<span class="live-track-seats-badge seats-full"><i class="fa-solid fa-chair" aria-hidden="true"></i>Full</span>';
-        }
         const prevStatus = bus.movement_status;
         bus.movement_status = b.movement_status || bus.movement_status;
         bus.movement_display = b.movement_display || bus.movement_display;

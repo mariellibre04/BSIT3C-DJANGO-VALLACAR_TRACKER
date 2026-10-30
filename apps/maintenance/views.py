@@ -1,7 +1,6 @@
 from datetime import date
 
 from django.contrib import messages
-from django.contrib.auth.decorators import login_required
 from django.core.paginator import Paginator
 from django.db import IntegrityError
 from django.db.models import Q
@@ -12,6 +11,7 @@ from django.views.decorators.http import require_POST
 
 from apps.scoping import scoped_buses, scoped_maintenance, scoped_maintenances
 from .models import MaintenanceRecord
+from apps.core.permissions import admin_required
 
 
 def _parse_date(raw):
@@ -30,7 +30,7 @@ def _parse_date(raw):
         return None
 
 
-@login_required(login_url='login')
+@admin_required
 def maintenance_list_page(request):
     query = request.GET.get('q', '').strip()
     status_filter = request.GET.get('status', '').strip()
@@ -62,7 +62,7 @@ def maintenance_list_page(request):
     })
 
 
-@login_required(login_url='login')
+@admin_required
 def maintenance_get_ajax(request, pk):
     r = scoped_maintenance(request.user, pk)
     return JsonResponse({
@@ -74,7 +74,7 @@ def maintenance_get_ajax(request, pk):
     })
 
 
-@login_required(login_url='login')
+@admin_required
 @require_POST
 def maintenance_save_ajax(request):
     rid = request.POST.get('id')
@@ -128,7 +128,7 @@ def maintenance_save_ajax(request):
     return JsonResponse({'status': 'success', 'id': record.id})
 
 
-@login_required(login_url='login')
+@admin_required
 @require_POST
 def maintenance_delete_ajax(request, pk):
     record = scoped_maintenance(request.user, pk)

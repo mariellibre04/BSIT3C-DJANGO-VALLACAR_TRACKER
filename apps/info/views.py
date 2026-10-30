@@ -1,7 +1,6 @@
 from django.shortcuts import render
 from django.http import JsonResponse
 from django.contrib import messages
-from django.contrib.auth.decorators import login_required
 from django.views.decorators.http import require_POST
 from django.core.paginator import Paginator
 from django.core.exceptions import ValidationError
@@ -11,6 +10,7 @@ from django.db.models import Q
 
 from apps.scoping import scoped_info, scoped_infos
 from .models import Info
+from apps.core.permissions import admin_required
 
 MIN_AGE = 1
 MAX_AGE = 150
@@ -24,7 +24,7 @@ def _parse_age(raw_age):
         return None
 
 
-@login_required(login_url='login')
+@admin_required
 def info_list_page(request):
     """Render the searchable, paginated info list for the signed-in user."""
     query = request.GET.get('q', '').strip()
@@ -48,7 +48,7 @@ def info_list_page(request):
     })
 
 
-@login_required(login_url='login')
+@admin_required
 def info_list_ajax(request):
     """Return the signed-in user's filtered info records as paginated JSON."""
     query = request.GET.get('q', '').strip()
@@ -76,7 +76,7 @@ def info_list_ajax(request):
     })
 
 
-@login_required(login_url='login')
+@admin_required
 def info_get_ajax(request, pk):
     """Return one of the signed-in user's info records as JSON."""
     info = scoped_info(request.user, pk)
@@ -89,7 +89,7 @@ def info_get_ajax(request, pk):
     })
 
 
-@login_required(login_url='login')
+@admin_required
 @require_POST
 def info_save_ajax(request):
     """Validate and create or update an info record, returning its data as JSON."""
@@ -161,7 +161,7 @@ def info_save_ajax(request):
     })
 
 
-@login_required(login_url='login')
+@admin_required
 @require_POST
 def info_delete_ajax(request, pk):
     """Delete the specified signed-in user's info record and confirm as JSON."""

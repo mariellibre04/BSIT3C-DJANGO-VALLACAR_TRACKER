@@ -11,7 +11,7 @@
   <link href="{% static 'css/tabler.css' %}" rel="stylesheet">
   <link href="{% static 'css/app-theme.css' %}" rel="stylesheet">
   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
-  <link href="{% static 'css/terminal-monitor.css' %}?v=5" rel="stylesheet">
+  <link href="{% static 'css/terminal-monitor.css' %}?v=6" rel="stylesheet">
   <style>@import url("https://rsms.me/inter/inter.css");</style>
 </head>
 <body class="kiosk-body" data-selected-terminal="{{ kiosk_selected_slug }}">
@@ -36,12 +36,25 @@
                 title="Browse terminal locations" aria-label="Browse terminal locations" aria-expanded="false">
           <i class="fa-solid fa-bars-staggered"></i>
         </button>
+        {% if not is_conductor_user %}
         <a class="k-icon-btn" href="{% url 'bus:bus_map' %}" title="Open live map" aria-label="Open live map">
           <i class="fa-solid fa-map-location-dot"></i>
         </a>
-        <a class="k-icon-btn" href="{% url 'login' %}" title="Admin sign in" aria-label="Admin sign in">
+        {% endif %}
+        {% if is_conductor_user or is_admin_user %}
+        <a class="k-icon-btn" href="{% url 'bus:bus_scan' %}" title="Open terminal scanner" aria-label="Open terminal scanner">
+          <i class="fa-solid fa-qrcode"></i>
+        </a>
+        {% endif %}
+        {% if user.is_authenticated %}
+        <a class="k-icon-btn" href="{% if is_admin_user %}{% url 'admin_dashboard' %}{% elif is_conductor_user %}{% url 'conductor_dashboard' %}{% else %}{% url 'dashboard' %}{% endif %}" title="Go to dashboard" aria-label="Go to dashboard">
           <i class="fa-solid fa-user-shield"></i>
         </a>
+        {% else %}
+        <a class="k-icon-btn" href="{% url 'login' %}" title="Staff sign in" aria-label="Staff sign in">
+          <i class="fa-solid fa-user-shield"></i>
+        </a>
+        {% endif %}
         <button class="k-icon-btn" id="kioskFullscreen" type="button" title="Toggle fullscreen" aria-label="Toggle fullscreen">
           <i class="fa-solid fa-expand"></i>
         </button>
@@ -73,13 +86,13 @@
           <div>
             <div class="k-eyebrow">Live terminal status</div>
             <h1>Terminal <span>Monitor</span></h1>
-            <p>Pick any bus terminal location in Negros Occidental from the directory, or browse the provincial board.</p>
+            <p>Pick any Vallacar-owned bus terminal location nationwide from the directory, or browse the live board.</p>
           </div>
           <div class="k-hero-badge">
             <i class="fa-solid fa-location-dot"></i>
             <div>
               <strong id="kioskBadgePrimary">{{ kiosk_terminal_count }} terminals</strong>
-              <span id="kioskBadgeSecondary">{{ kiosk_total_inbound }} inbound across Negros Occidental</span>
+              <span id="kioskBadgeSecondary">{{ kiosk_total_inbound }} inbound nationwide</span>
             </div>
           </div>
           {% endif %}
@@ -107,7 +120,7 @@
           <div class="k-board-head">
             <div>
               <div class="k-board-kicker">
-                {% if kiosk_selected %}{{ kiosk_selected.region }} &middot; {{ kiosk_selected.island }}{% else %}All terminals &middot; Negros Occidental{% endif %}
+                {% if kiosk_selected %}{{ kiosk_selected.region }} &middot; {{ kiosk_selected.island }}{% else %}All terminals &middot; Nationwide{% endif %}
               </div>
               <h2>{% if kiosk_selected %}{{ kiosk_selected.name }} terminal board{% else %}Bus status board{% endif %}</h2>
             </div>
@@ -401,7 +414,7 @@
           secondary.textContent = counts.inbound + ' inbound \u00b7 ' + counts.departed + ' departed';
         } else {
           primary.textContent = counts.total_at + ' buses at terminals';
-          secondary.textContent = counts.total_inbound + ' inbound across Negros Occidental';
+          secondary.textContent = counts.total_inbound + ' inbound nationwide';
         }
       }
 

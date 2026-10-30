@@ -1,7 +1,7 @@
 <aside class="navbar navbar-vertical navbar-expand-lg navbar-dark dh-sidebar">
   <div class="container-fluid">
     <div class="navbar-brand navbar-brand-autodark dh-brand">
-      <a href="{% if user.is_authenticated %}{% url 'admin_dashboard' %}{% else %}{% url 'dashboard' %}{% endif %}" class="d-flex align-items-center gap-2 text-decoration-none">
+      <a href="{% if is_admin_user %}{% url 'admin_dashboard' %}{% elif is_conductor_user %}{% url 'conductor_dashboard' %}{% else %}{% url 'dashboard' %}{% endif %}" class="d-flex align-items-center gap-2 text-decoration-none">
         <span class="dh-brand-mark" style="background:linear-gradient(135deg,#C1121F 0%,#F4A100 100%);">
           <i class="fa-solid fa-bus"></i>
         </span>
@@ -27,7 +27,7 @@
     <div class="collapse navbar-collapse" id="sidebar-menu">
       <ul class="navbar-nav pt-lg-2 py-lg-2">
 
-        {% if user.is_authenticated and user.is_staff and request.resolver_match.url_name != 'dashboard' and request.resolver_match.url_name != 'bus_map' %}
+        {% if is_admin_user %}
         <li class="nav-item">
           <span class="dh-nav-section">
             Fleet Overview
@@ -38,7 +38,7 @@
             <span class="nav-link-icon d-md-none d-lg-inline-block">
               <i class="fa fa-dashboard"></i>
             </span>
-            <span class="nav-link-title">Dashboard</span>
+            <span class="nav-link-title">Admin Dashboard</span>
           </a>
         </li>
 
@@ -153,22 +153,43 @@
           </a>
         </li>
 
-        {% if user.is_authenticated %}
-        <li class="nav-item d-lg-none">
-          <a class="nav-link" href="{% url 'logout' %}">
+        {% elif is_conductor_user %}
+        <li class="nav-item">
+          <span class="dh-nav-section">
+            Conductor
+          </span>
+        </li>
+        <li class="nav-item mb-1">
+          <a class="nav-link {% if request.resolver_match.url_name == 'conductor_dashboard' %}active{% endif %}" href="{% url 'conductor_dashboard' %}">
             <span class="nav-link-icon d-md-none d-lg-inline-block">
-              <i class="nav-icon fas fa-sign-out-alt"></i>
+              <i class="fa fa-dashboard"></i>
             </span>
-            <span class="nav-link-title">Logout</span>
+            <span class="nav-link-title">Conductor Dashboard</span>
           </a>
         </li>
-        {% endif %}
-
-        <li class="nav-item mt-2">
-          <div class="mx-3 px-3 py-2 rounded-3 d-flex align-items-center gap-2" style="background:rgba(34,197,94,.12);border:1px solid rgba(34,197,94,.25);">
-            <span class="d-inline-block rounded-circle" style="width:.6rem;height:.6rem;background:#22c55e;box-shadow:0 0 0 4px rgba(34,197,94,.2);"></span>
-            <span class="small fw-semibold text-white">System Status: Online</span>
-          </div>
+        <li class="nav-item">
+          <a class="nav-link {% if request.resolver_match.url_name == 'bus_scan' %}active{% endif %}" href="{% url 'bus:bus_scan' %}">
+            <span class="nav-link-icon d-md-none d-lg-inline-block">
+              <i class="nav-icon fas fa-qrcode"></i>
+            </span>
+            <span class="nav-link-title">Terminal Scanner</span>
+          </a>
+        </li>
+        <li class="nav-item">
+          <a class="nav-link {% if request.resolver_match.url_name == 'bus_kiosk' %}active{% endif %}" href="{% url 'bus:bus_kiosk' %}">
+            <span class="nav-link-icon d-md-none d-lg-inline-block">
+              <i class="nav-icon fas fa-tv"></i>
+            </span>
+            <span class="nav-link-title">Terminal Monitor</span>
+          </a>
+        </li>
+        <li class="nav-item">
+          <a class="nav-link {% if request.resolver_match.url_name == 'conductor_checkin' %}active{% endif %}" href="{% url 'bus:conductor_checkin' %}">
+            <span class="nav-link-icon d-md-none d-lg-inline-block">
+              <i class="nav-icon fas fa-right-to-bracket"></i>
+            </span>
+            <span class="nav-link-title">Manual Check-in</span>
+          </a>
         </li>
 
         {% else %}
@@ -182,7 +203,7 @@
             <span class="nav-link-icon d-md-none d-lg-inline-block">
               <i class="fa fa-dashboard"></i>
             </span>
-            <span class="nav-link-title">Dashboard</span>
+            <span class="nav-link-title">Passenger Dashboard</span>
           </a>
         </li>
         <li class="nav-item">
@@ -201,26 +222,33 @@
             <span class="nav-link-title">Terminal Monitor</span>
           </a>
         </li>
+        {% endif %}
+
         <li class="nav-item mt-2">
           <div class="mx-3 px-3 py-2 rounded-3 d-flex align-items-center gap-2" style="background:rgba(34,197,94,.12);border:1px solid rgba(34,197,94,.25);">
             <span class="d-inline-block rounded-circle" style="width:.6rem;height:.6rem;background:#22c55e;box-shadow:0 0 0 4px rgba(34,197,94,.2);"></span>
             <span class="small fw-semibold text-white">System Status: Online</span>
           </div>
         </li>
-        {% endif %}
 
         <li class="nav-item mt-auto dh-nav-sidebar-footer">
           {% if user.is_authenticated %}
           <div class="dh-user-card">
+            {% if is_admin_user %}
             <a href="{% url 'users:user_list' %}" class="d-flex align-items-center gap-2 text-decoration-none text-white min-w-0 w-100">
+            {% else %}
+            <span class="d-flex align-items-center gap-2 text-white min-w-0 w-100">
+            {% endif %}
               <span class="dh-avatar">{{ user.username|first|upper }}</span>
               <span class="min-w-0 flex-grow-1">
                 <span class="dh-user-name">{{ user.username }}</span>
-                <span class="dh-user-role">
-                  {% if user.is_superuser %}Administrator{% else %}Dispatcher{% endif %}
-                </span>
+                <span class="dh-user-role">{{ user_role_label }}</span>
               </span>
+            {% if is_admin_user %}
             </a>
+            {% else %}
+            </span>
+            {% endif %}
             <a href="{% url 'logout' %}" class="dh-user-logout" title="Logout">
               <i class="fas fa-sign-out-alt"></i>
             </a>

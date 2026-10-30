@@ -2,20 +2,17 @@ from django.shortcuts import render, get_object_or_404
 from django.http import JsonResponse
 from django.contrib import messages
 from django.contrib.auth.models import User
-from django.contrib.auth.decorators import login_required, user_passes_test
 from django.views.decorators.http import require_POST
 from django.core.paginator import Paginator
 from django.db import IntegrityError
 from django.db.models import Q
 
-
-def _is_superuser(user):
-    return user.is_superuser
+from apps.core.permissions import admin_required
+from apps.core.roles import ROLE_ADMIN, ROLE_LABELS, get_role, set_role
 
 
 # PAGE
-@login_required(login_url='login')
-@user_passes_test(_is_superuser, login_url='dashboard')
+@admin_required
 def user_list_page(request):
     query = request.GET.get('q', '').strip()
 
@@ -32,6 +29,9 @@ def user_list_page(request):
     paginator = Paginator(users_list, 10)
     page_number = request.GET.get('page', 1)
     users = paginator.get_page(page_number)
+    for account in users:
+        account.role = get_role(account)
+        account.role_label = ROLE_LABELS[account.role]
 
     return render(request, 'users/list.html', {
         'users': users,
@@ -40,23 +40,27 @@ def user_list_page(request):
 
 
 # LIST USERS (AJAX)
-@login_required(login_url='login')
-@user_passes_test(_is_superuser, login_url='dashboard')
+@admin_required
 def user_list_ajax(request):
     users_list = User.objects.all().order_by('-date_joined')
     paginator = Paginator(users_list, 10)
     page_number = request.GET.get('page', 1)
     users = paginator.get_page(page_number)
-    data = list(users.object_list.values(
-        'id',
-        'username',
-        'first_name',
-        'last_name',
-        'email',
-        'is_staff',
-        'is_active',
-        'date_joined',
-    ))
+    data = []
+    for account in users.object_list:
+        role = get_role(account)
+        data.append({
+            'id': account.id,
+            'username': account.username,
+            'first_name': account.first_name,
+            'last_name': account.last_name,
+            'email': account.email,
+            'is_staff': account.is_staff,
+            'is_active': account.is_active,
+            'date_joined': account.date_joined,
+            'role': role,
+            'role_label': ROLE_LABELS[role],
+        })
     return JsonResponse({
         "data":     data,
         "has_next": users.has_next(),
@@ -68,10 +72,10 @@ def user_list_ajax(request):
 
 
 # GET SINGLE USER (AJAX)
-@login_required(login_url='login')
-@user_passes_test(_is_superuser, login_url='dashboard')
+@admin_required
 def user_get_ajax(request, pk):
     user = get_object_or_404(User, pk=pk)
+    role = get_role(user)
     return JsonResponse({
         "id":         user.id,
         "username":   user.username,
@@ -80,12 +84,13 @@ def user_get_ajax(request, pk):
         "email":      user.email,
         "is_staff":   user.is_staff,
         "is_active":  user.is_active,
+        "role":       role,
+        "role_label": ROLE_LABELS[role],
     })
 
 
 # CREATE / UPDATE USER (AJAX)
-@login_required(login_url='login')
-@user_passes_test(_is_superuser, login_url='dashboard')
+@admin_required
 @require_POST
 def user_save_ajax(request):
     user_id = request.POST.get("id")
@@ -115,7 +120,6 @@ def user_save_ajax(request):
     user.first_name = request.POST.get("first_name", "")
     user.last_name  = request.POST.get("last_name", "")
     user.email      = email
-    user.is_staff   = request.POST.get("is_staff") == "true"
     user.is_active  = request.POST.get("is_active") == "true"
 
     password = request.POST.get("password")
@@ -128,6 +132,11 @@ def user_save_ajax(request):
         user.save()
     except IntegrityError:
         return JsonResponse({"error": "Could not save user due to a conflict (duplicate username/email)."}, status=400)
+
+    role = request.POST.get("role", "").strip()
+    if role not in ROLE_LABELS:
+        role = ROLE_ADMIN if request.POST.get("is_staff") == "true" else "passenger"
+    role = set_role(user, role)
 
     messages.success(
         request,
@@ -143,12 +152,13 @@ def user_save_ajax(request):
         "email": user.email,
         "is_staff": user.is_staff,
         "is_active": user.is_active,
+        "role": role,
+        "role_label": ROLE_LABELS[role],
     })
 
 
 # DELETE USER (AJAX)
-@login_required(login_url='login')
-@user_passes_test(_is_superuser, login_url='dashboard')
+@admin_required
 @require_POST
 def user_delete_ajax(request, pk):
     user = get_object_or_404(User, pk=pk)
