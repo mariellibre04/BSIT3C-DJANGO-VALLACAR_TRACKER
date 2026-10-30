@@ -198,14 +198,7 @@
             Passenger
           </span>
         </li>
-        <li class="nav-item mb-1">
-          <a class="nav-link {% if request.resolver_match.url_name == 'dashboard' %}active{% endif %}" href="{% url 'dashboard' %}">
-            <span class="nav-link-icon d-md-none d-lg-inline-block">
-              <i class="fa fa-dashboard"></i>
-            </span>
-            <span class="nav-link-title">Passenger Dashboard</span>
-          </a>
-        </li>
+        
         <li class="nav-item">
           <a class="nav-link {% if request.resolver_match.url_name == 'bus_map' %}active{% endif %}" href="{% url 'bus:bus_map' %}">
             <span class="nav-link-icon d-md-none d-lg-inline-block">

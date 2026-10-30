@@ -228,7 +228,7 @@
         <div class="table-responsive">
           <table class="table table-vcenter card-table">
             <thead>
-              <tr><th>Bus</th><th>Stop / Place</th><th>Time In</th><th>Departure</th><th>Next Stop</th><th>Time Out</th></tr>
+              <tr><th>Bus</th><th>Stop / Place</th><th>Time In</th><th>Departure</th><th>Time Out</th></tr>
             </thead>
             <tbody id="recent_taps">
               {% for tap in taps %}
@@ -245,16 +245,6 @@
                   <span class="text-muted">&mdash;</span>
                   {% endif %}
                 </td>
-                <td class="text-muted small">
-                  {% if tap.bus.next_stop %}
-                  <strong>{{ tap.bus.next_stop }}</strong>
-                  {% if tap.bus.next_stop_eta %}
-                  <br>ETA {{ tap.bus.next_stop_eta|date:"g:i A" }}
-                  {% endif %}
-                  {% else %}
-                  &mdash;
-                  {% endif %}
-                </td>
                 <td>
                   {% if tap.left_at %}
                   <span class="text-warning">En route</span>
@@ -264,7 +254,7 @@
                 </td>
               </tr>
               {% empty %}
-              <tr><td colspan="6" class="text-muted">No taps yet.</td></tr>
+              <tr><td colspan="5" class="text-muted">No taps yet.</td></tr>
               {% endfor %}
             </tbody>
           </table>
@@ -288,7 +278,7 @@
     var recentBody = document.getElementById('recent_taps');
     var checkinUrl = '{% url "bus:bus_scan_checkin_ajax" %}';
     var nextStopUrl = '{% url "bus:bus_next_stop_ajax" %}';
-    var mapUrl = '{% url "bus:bus_kiosk" %}';
+    var mapUrl = '{% url "bus:bus_map" %}';
     var csrfInput = document.querySelector('[name=csrfmiddlewaretoken]');
     var csrfToken = csrfInput ? csrfInput.value : '{{ csrf_token }}';
     var scanner = null;
@@ -778,41 +768,44 @@
       if (data.next_stop && data.next_stop_eta) {
         var detail = '';
         if (data.next_stop_eta_minutes != null) {
-          detail = ' (~' + data.next_stop_eta_minutes + ' min' +
+          detail = ' <span class="text-muted">(~' + data.next_stop_eta_minutes + ' min' +
             (data.next_stop_distance_km != null ? ', ' + data.next_stop_distance_km + ' km' : '') +
-            ')';
+            ')</span>';
         }
-        lines.push('<br>Next stop <strong>' + escapeHtml(data.next_stop) +
-          '</strong> &middot; ETA <strong>' + escapeHtml(data.next_stop_eta) +
-          '</strong>' + detail);
+        lines.push('<div class="mt-2 d-flex justify-content-between align-items-center">' +
+          '<span>Next stop <strong>' + escapeHtml(data.next_stop) + '</strong></span>' +
+          '<span>ETA <strong>' + escapeHtml(data.next_stop_eta) + '</strong>' + detail + '</span>' +
+          '</div>');
       }
       if (data.final_destination && data.final_destination_eta &&
           data.final_destination !== data.next_stop) {
         var finalDetail = '';
         if (data.final_destination_eta_minutes != null) {
-          finalDetail = ' (~' + data.final_destination_eta_minutes + ' min' +
+          finalDetail = ' <span class="text-muted">(~' + data.final_destination_eta_minutes + ' min' +
             (data.final_destination_distance_km != null ? ', ' + data.final_destination_distance_km + ' km' : '') +
-            ')';
+            ')</span>';
         }
-        lines.push('<br>Final destination <strong>' +
-          escapeHtml(data.final_destination) + '</strong> &middot; ETA <strong>' +
-          escapeHtml(data.final_destination_eta) + '</strong>' + finalDetail);
+        lines.push('<div class="mt-1 d-flex justify-content-between align-items-center">' +
+          '<span>Final destination <strong>' + escapeHtml(data.final_destination) + '</strong></span>' +
+          '<span>ETA <strong>' + escapeHtml(data.final_destination_eta) + '</strong>' + finalDetail + '</span>' +
+          '</div>');
       }
       return lines.join('');
     }
 
     function departureLine(data) {
       if (data.time_out) {
-        return '<span class="badge bg-warning-lt text-warning">Time Out</span> ' +
+        return '<div><span class="badge bg-warning-lt text-warning">Time Out</span> ' +
           escapeHtml(data.time_out) + ' &middot; left <strong>' +
-          escapeHtml(data.place) + ' Terminal</strong>' + arrivalLine(data);
+          escapeHtml(data.place) + ' Terminal</strong></div>' + arrivalLine(data);
       }
       var est = data.estimated_departure
         ? 'Estimated departure <strong>' + escapeHtml(data.estimated_departure) + '</strong>'
         : 'Waiting for departure';
-      return '<span class="badge bg-success-lt text-success">Time In</span> ' +
+      return '<div><span class="badge bg-success-lt text-success">Time In</span> ' +
         escapeHtml(data.time_in) + ' &middot; <strong>' + escapeHtml(data.place) +
-        ' Terminal</strong><br>' + est + arrivalLine(data);
+        ' Terminal</strong></div>' +
+        '<div class="mt-1">' + est + '</div>' + arrivalLine(data);
     }
 
     function currentStationLine(data) {
@@ -850,7 +843,7 @@
           '<div class="form-hint mt-2 js-next-stop-eta">' +
             'ETA uses the road distance and average speed for this route segment.' +
           '</div>' +
-          '<button type="button" class="btn btn-danger btn-sm mt-2 js-confirm-next">' +
+          '<button type="button" class="btn btn-primary btn-sm mt-2 js-confirm-next">' +
             '<i class="fa-solid fa-check me-1"></i> Confirm next stop' +
           '</button>' +
           warning +
@@ -900,45 +893,19 @@
 
     function showPrompt(data) {
       var ref = JSON.stringify(lastBusRef || {});
-      var est = data.estimated_departure
-        ? 'Est. ' + escapeHtml(data.estimated_departure)
-        : '—';
-      
-      var nextStopInfo = '—';
-      if (data.next_stop && data.next_stop_eta) {
-          var detail = data.next_stop_eta_minutes != null 
-            ? ' <br><span class="text-muted small">(~' + data.next_stop_eta_minutes + ' min, ' + 
-              (data.next_stop_distance_km || '0') + ' km)</span>' 
-            : '';
-          nextStopInfo = '<strong>' + escapeHtml(data.next_stop) + '</strong><br>' +
-                         '<span class="small text-muted">ETA ' + escapeHtml(data.next_stop_eta) + '</span>' + detail;
-      }
-
+      var estLine = data.estimated_departure
+        ? '<div class="mt-1">Estimated departure <strong>' + escapeHtml(data.estimated_departure) + '</strong></div>'
+        : '';
       resultEl.innerHTML = busHeader(data) +
         currentStationLine(data) +
-        '<div class="table-responsive mt-3">' +
-          '<table class="table table-vcenter card-table border rounded">' +
-            '<thead>' +
-              '<tr>' +
-                '<th>Status</th>' +
-                '<th>Time In</th>' +
-                '<th>Departure</th>' +
-                '<th>Next Stop</th>' +
-                '<th>Next Steps</th>' +
-              '</tr>' +
-            '</thead>' +
-            '<tbody>' +
-              '<tr>' +
-                '<td><span class="badge bg-warning text-warning-fg">Already In</span></td>' +
-                '<td>' + escapeHtml(data.time_in) + '<br><span class="text-muted small">' + escapeHtml(data.place) + ' Terminal</span></td>' +
-                '<td class="text-muted">' + est + '</td>' +
-                '<td>' + nextStopInfo + '</td>' +
-                '<td class="small text-muted" style="max-width:200px;">' +
-                  'Choose the next stop, then Time Out to record departure.' +
-                '</td>' +
-              '</tr>' +
-            '</tbody>' +
-          '</table>' +
+        '<div class="alert alert-warning mt-3 mb-0">' +
+          '<div class="h3 fw-bold mb-2">Bus already timed in</div>' +
+          '<div>Time in <strong>' + escapeHtml(data.time_in) + '</strong> at <strong>' +
+          escapeHtml(data.place) + ' Terminal</strong></div>' +
+          estLine +
+          arrivalLine(data) +
+          '<div class="hr-text hr-text-left mt-3 mb-2 text-muted">Next Steps</div>' +
+          '<div class="small text-muted">Choose the next stop, then Time Out to record that this bus has left.</div>' +
         '</div>' +
         nextStopPanel(data) +
         '<div class="d-flex flex-wrap gap-2 mt-3">' +
@@ -970,17 +937,6 @@
       } else {
         departure.textContent = '—';
       }
-      var nextStop = document.createElement('td');
-      nextStop.className = 'text-muted small';
-      if (data.next_stop) {
-        var nextStopStr = '<strong>' + escapeHtml(data.next_stop) + '</strong>';
-        if (data.next_stop_eta) {
-          nextStopStr += '<br>ETA ' + escapeHtml(data.next_stop_eta);
-        }
-        nextStop.innerHTML = nextStopStr;
-      } else {
-        nextStop.textContent = '—';
-      }
       var timeOut = document.createElement('td');
       if (data.time_out) {
         timeOut.className = 'text-warning';
@@ -993,7 +949,6 @@
       row.appendChild(place);
       row.appendChild(timeIn);
       row.appendChild(departure);
-      row.appendChild(nextStop);
       row.appendChild(timeOut);
 
       var first = recentBody.firstElementChild;

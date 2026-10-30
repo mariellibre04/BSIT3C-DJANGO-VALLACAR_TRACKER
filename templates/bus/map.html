@@ -558,6 +558,7 @@
       number: b.bus_number,
       marker: m,
       route: b.route,
+      seats: b.seats_free,
       movement_status: b.movement_status,
       movement_display: b.movement_display,
       departure: b.departure,
@@ -649,7 +650,14 @@
         const bus = busMarkers[b.bus_number];
         if (!bus) return;
 
+        bus.seats = b.available_seats != null ? b.available_seats : b.seats_free;
         bus.route = b.route || bus.route;
+        const seatsEl = document.getElementById('seats-' + b.bus_id);
+        if (seatsEl) {
+          seatsEl.innerHTML = bus.seats > 0
+            ? '<span class="live-track-seats-badge seats-available"><i class="fa-solid fa-chair" aria-hidden="true"></i>' + bus.seats + ' seat' + (bus.seats === 1 ? '' : 's') + ' free</span>'
+            : '<span class="live-track-seats-badge seats-full"><i class="fa-solid fa-chair" aria-hidden="true"></i>Full</span>';
+        }
         const prevStatus = bus.movement_status;
         bus.movement_status = b.movement_status || bus.movement_status;
         bus.movement_display = b.movement_display || bus.movement_display;

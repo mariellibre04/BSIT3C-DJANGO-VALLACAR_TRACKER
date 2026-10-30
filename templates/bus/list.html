@@ -7,7 +7,7 @@
         <div class="col">
           <div class="page-pretitle">Fleet</div>
           <h2 class="page-title mb-0">Bus Management</h2>
-          <div class="text-muted small">Buses with GPS location, movement status, and route.</div>
+          <div class="text-muted small">Buses with GPS location, movement status, route, and seat availability.</div>
         </div>
         <div class="col-auto">
           <a href="{% url 'bus:bus_map' %}" class="btn btn-outline-primary"><i class="fa-solid fa-satellite-dish me-1"></i> Live Tracking</a>
@@ -81,7 +81,7 @@
             </td>
         </tr>
         {% empty %}
-        <tr><td colspan="10"><div class="empty py-5"><p class="empty-title">No buses found</p><p class="empty-subtitle">Try adjusting your search or add a new bus.</p></div></td></tr>
+        <tr><td colspan="11"><div class="empty py-5"><p class="empty-title">No buses found</p><p class="empty-subtitle">Try adjusting your search or add a new bus.</p></div></td></tr>
         {% endfor %}
         </tbody>
       </table>

@@ -23,6 +23,42 @@
   <br>
 
   <div class="row g-3">
+    <div class="col-12 col-lg-4">
+      <aside class="dh-sidebar">
+        <div class="container-fluid">
+          <div class="navbar-brand">
+            <span class="dh-brand-mark"><i class="fa-solid fa-bus"></i></span>
+            <span class="lh-1">Terminal Ops</span>
+          </div>
+          <div class="collapse navbar-collapse" id="terminal-ops-sidebar">
+            <ul class="navbar-nav pt-lg-2 py-lg-2">
+              <li class="nav-item mb-1">
+                <a class="nav-link" href="{% url 'bus:bus_scan' %}">
+                  <span class="nav-link-icon d-md-none d-lg-inline-block"><i class="fa-solid fa-camera"></i></span>
+                  <span class="nav-link-title">Terminal Scanner</span>
+                </a>
+              </li>
+              <li class="nav-item mb-1">
+                <a class="nav-link" href="{% url 'bus:conductor_checkin' %}">
+                  <span class="nav-link-icon d-md-none d-lg-inline-block"><i class="fa-solid fa-keyboard"></i></span>
+                  <span class="nav-link-title">Manual Check-in</span>
+                </a>
+              </li>
+            </ul>
+          </div>
+        </div>
+      </aside>
+    </div>
+    <div class="col-12 col-lg-8">
+      <div class="card">
+        <div class="card-body">
+          <div class="text-muted">Terminal scanner and check-in shortcuts will appear here.</div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="row g-3">
     <div class="col-12 col-lg-6">
       <div class="card h-100">
         <div class="card-body">

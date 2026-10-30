@@ -10,7 +10,7 @@
   <div class="card mb-3">
     <div class="card-header"><div class="card-title">Available Buses</div></div>
     <div class="table-responsive"><table class="table table-vcenter card-table text-nowrap">
-      <thead><tr><th>Bus No</th><th>Route</th><th>Capacity</th><th>Passengers</th></tr></thead>
+      <thead><tr><th>Bus No</th><th>Route</th><th>Capacity</th><th>Passengers</th><th>Available Seats</th></tr></thead>
       <tbody>
       {% for b in available_buses %}
       <tr>
@@ -18,8 +18,15 @@
         <td class="text-muted">{{ b.route }}</td>
         <td><span class="badge bg-primary-lt text-primary">{{ b.capacity }}</span></td>
         <td><span class="badge bg-info-lt text-info">{{ b.passengers.count }}</span></td>
+        <td>
+          {% if b.is_full %}
+            <span class="badge bg-danger-lt text-danger">Full (0 left)</span>
+          {% else %}
+            <span class="badge bg-success-lt text-success">{{ b.available_seats }} seats left</span>
+          {% endif %}
+        </td>
       </tr>
-      {% empty %}<tr><td colspan="4"><div class="empty py-3"><p class="empty-title">No available buses</p></div></td></tr>{% endfor %}
+      {% empty %}<tr><td colspan="5"><div class="empty py-3"><p class="empty-title">No available buses</p></div></td></tr>{% endfor %}
       </tbody>
     </table></div>
   </div>
@@ -100,7 +107,7 @@
               <option value="pwd">PWD</option>
             </select>
           </div>
-          <div class="col-6"><label class="form-label">Assigned Bus</label><select name="bus" id="passenger_bus" class="form-select"><option value="">— No bus —</option>{% for b in available_buses %}<option value="{{ b.id }}">{{ b.bus_number }} ({{ b.route }})</option>{% endfor %}</select></div>
+          <div class="col-6"><label class="form-label">Assigned Bus</label><select name="bus" id="passenger_bus" class="form-select"><option value="">— No bus —</option>{% for b in available_buses %}<option value="{{ b.id }}">{{ b.bus_number }} ({{ b.route }}) — {{ b.available_seats }} left</option>{% endfor %}</select></div>
           <div class="col-6"><label class="form-label">Contact</label><input type="text" name="contact" id="passenger_contact" class="form-control"></div>
           <div class="col-6"><label class="form-label">Email (optional)</label><input type="email" name="email" id="passenger_email" class="form-control"></div>
           <div class="col-12"><label class="form-label">Address</label><input type="text" name="address" id="passenger_address" class="form-control" required></div>

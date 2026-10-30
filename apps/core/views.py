@@ -250,15 +250,6 @@ def admin_dashboard(request):
 
     capacity_sum = buses_qs.aggregate(total=Sum('capacity'))['total'] or 0
     occupied_sum = 0
-    available_seats = 0
-    available_buses = 0
-    for b in buses_qs:
-        occupied = b.total_passengers or 0
-        occupied_sum += occupied
-        left = max(0, (b.capacity or 0) - occupied)
-        available_seats += left
-        if b.status == Bus.STATUS_ACTIVE and left > 0:
-            available_buses += 1
 
     recent_buses = list(
         buses_qs.prefetch_related('drivers').order_by('-updated_at')[:8]
@@ -315,13 +306,11 @@ def admin_dashboard(request):
         'total_buses': total_buses,
         'active_buses': active_buses,
         'maintenance_buses': maintenance_buses,
-        'available_buses': available_buses,
         'total_drivers': total_drivers,
         'total_routes': total_routes,
         'gps_tracked': gps_tracked,
         'capacity_sum': capacity_sum,
         'occupied_sum': occupied_sum,
-        'available_seats': available_seats,
         'recent_buses': recent_buses,
         'total_trips': total_trips,
         'delayed_trips': delayed_trips,
