@@ -1,0 +1,42 @@
+<tr class="k-bus-row">
+  <td>
+    <div class="k-bus">
+      <span class="k-bus-icon"><i class="fa-solid fa-bus"></i></span>
+      <span>
+        <span class="k-bus-no">{{ b.number }}</span>
+        <span class="k-bus-plate">Plate {{ b.plate }}</span>
+        <span class="k-bus-plate">{{ b.terminal }}</span>
+      </span>
+    </div>
+  </td>
+  <td>
+    <span class="k-route">{{ b.route_from }}{% if b.route_to %} to {{ b.route_to }}{% endif %}</span>
+  </td>
+  <td>
+    <span class="k-time">
+      {% if b.is_at_terminal and b.estimated_departure %}
+        <span class="k-left-at-label">Est.</span> {{ b.estimated_departure|date:"g:i A" }}
+      {% elif b.time_out %}
+        {{ b.time_out|date:"g:i A" }}
+      {% elif b.time %}
+        {{ b.time|date:"g:i A" }}
+      {% else %}&mdash;{% endif %}
+    </span>
+    {% if b.time_in %}<span class="k-route-sub">Time in {{ b.time_in|date:"g:i A" }}</span>{% endif %}
+    {% if b.area_name %}
+    <span class="k-route-sub k-area-eta">
+      {% if b.area_role == 'departs' %}Departs {{ b.area_name }} now
+      {% elif b.area_role == 'arrives' %}Destination {{ b.area_name }}{% if b.area_eta %} &middot; ETA {{ b.area_eta|date:"g:i A" }}{% endif %}
+      {% else %}Passes {{ b.area_name }}{% if b.area_eta %} &middot; ETA {{ b.area_eta|date:"g:i A" }}{% endif %}{% endif %}
+    </span>
+    {% endif %}
+    {% if b.next_stop and b.next_stop_eta %}
+    <span class="k-route-sub">Next stop: {{ b.next_stop }} &middot; ETA {{ b.next_stop_eta|date:"g:i A" }}</span>
+    {% endif %}
+    {% if b.final_destination and b.final_destination_eta and b.final_destination != b.next_stop %}
+    <span class="k-route-sub">Final: {{ b.final_destination }} &middot; ETA {{ b.final_destination_eta|date:"g:i A" }}</span>
+    {% endif %}
+  </td>
+  <td><span class="k-bay">{{ b.bay }}</span></td>
+  <td><span class="k-status {{ b.status_class }}"><span class="k-status-dot"></span> {{ b.status_label }}</span></td>
+</tr>

@@ -4,17 +4,17 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-  <meta name="description" content="Vallacar Tracker terminal monitor — pick a Philippine bus terminal and see its live movements and available buses.">
+  <meta name="description" content="Vallacar Tracker passenger terminal monitor — choose your area and see every bus that departs from, passes through, or ends there.">
   <title>{% if kiosk_selected %}{{ kiosk_selected.name }} Terminal — {% endif %}Terminal Monitor — Vallacar Tracker</title>
   <link rel="icon" href="{% static 'favicon-dev.ico' %}" type="image/x-icon">
   <link rel="shortcut icon" href="{% static 'favicon-dev.ico' %}" type="image/x-icon">
   <link href="{% static 'css/tabler.css' %}" rel="stylesheet">
   <link href="{% static 'css/app-theme.css' %}" rel="stylesheet">
   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
-  <link href="{% static 'css/terminal-monitor.css' %}?v=6" rel="stylesheet">
+  <link href="{% static 'css/terminal-monitor.css' %}?v=9" rel="stylesheet">
   <style>@import url("https://rsms.me/inter/inter.css");</style>
 </head>
-<body class="kiosk-body" data-selected-terminal="{{ kiosk_selected_slug }}">
+<body class="kiosk-body" data-selected-terminal="{{ kiosk_selected_slug }}" data-destination="{{ kiosk_destination }}">
   <div class="kiosk" id="kioskRoot">
 
     <!-- Top bar -->
@@ -32,26 +32,24 @@
           <span id="kioskTime">6:42 PM</span>
           <span id="kioskDate">Friday, October 23, 2026</span>
         </span>
+        {% if kiosk_selected %}
         <button class="k-icon-btn k-sidebar-toggle" id="kioskSidebarToggle" type="button"
                 title="Browse terminal locations" aria-label="Browse terminal locations" aria-expanded="false">
           <i class="fa-solid fa-bars-staggered"></i>
         </button>
-        {% if not is_conductor_user %}
+        {% endif %}
         <a class="k-icon-btn" href="{% url 'bus:bus_map' %}" title="Open live map" aria-label="Open live map">
           <i class="fa-solid fa-map-location-dot"></i>
         </a>
-        {% endif %}
-        {% if is_conductor_user or is_admin_user %}
-        <a class="k-icon-btn" href="{% url 'bus:bus_scan' %}" title="Open terminal scanner" aria-label="Open terminal scanner">
+        <button class="k-icon-btn k-qr-open" id="kioskQrButton" type="button" title="Conductor QR check-in" aria-label="Open conductor QR check-in">
           <i class="fa-solid fa-qrcode"></i>
-        </a>
-        {% endif %}
+        </button>
         {% if user.is_authenticated %}
-        <a class="k-icon-btn" href="{% if is_admin_user %}{% url 'admin_dashboard' %}{% elif is_conductor_user %}{% url 'conductor_dashboard' %}{% else %}{% url 'dashboard' %}{% endif %}" title="Go to dashboard" aria-label="Go to dashboard">
+        <a class="k-icon-btn k-admin-btn" href="{% if is_admin_user %}{% url 'admin_dashboard' %}{% elif is_conductor_user %}{% url 'conductor_dashboard' %}{% else %}{% url 'dashboard' %}{% endif %}" title="Open dashboard" aria-label="Open dashboard">
           <i class="fa-solid fa-user-shield"></i>
         </a>
         {% else %}
-        <a class="k-icon-btn" href="{% url 'login' %}" title="Staff sign in" aria-label="Staff sign in">
+        <a class="k-icon-btn k-admin-btn" href="{% url 'login' %}" title="Admin sign in" aria-label="Admin sign in">
           <i class="fa-solid fa-user-shield"></i>
         </a>
         {% endif %}
@@ -84,45 +82,75 @@
           </div>
           {% else %}
           <div>
-            <div class="k-eyebrow">Live terminal status</div>
-            <h1>Terminal <span>Monitor</span></h1>
-            <p>Pick any Vallacar-owned bus terminal location nationwide from the directory, or browse the live board.</p>
+            <div class="k-eyebrow">Passenger terminal monitor &middot; Negros Occidental</div>
+            <h1>{% if kiosk_area %}Buses to <span>{{ kiosk_area_label }}</span>{% else %}Find your <span>bus</span>{% endif %}</h1>
+            <p>
+              {% if kiosk_area %}
+              Every Vallacar bus that departs from, passes through, or ends at
+              {{ kiosk_area_label }}. Pick another area anytime &mdash; no ticket
+              or account needed.
+              {% else %}
+              Search your city or terminal to see every Vallacar bus that
+              departs from, passes through, or ends there. No ticket or account
+              needed.
+              {% endif %}
+            </p>
+            <div class="k-area-picker" id="kioskAreaPicker">
+              <button type="button" class="k-area-current" id="kioskAreaButton" aria-expanded="false" aria-controls="kioskAreaPanel">
+                <span class="k-area-current-icon"><i class="fa-solid fa-magnifying-glass"></i></span>
+                <span class="k-area-current-copy">
+                  <small>{% if kiosk_area %}Your area{% else %}Search your area{% endif %}</small>
+                  <strong>{% if kiosk_area %}{{ kiosk_area_label }}{% else %}All areas &middot; type to search{% endif %}</strong>
+                </span>
+                <i class="fa-solid fa-chevron-down k-area-caret"></i>
+              </button>
+              <div class="k-area-panel" id="kioskAreaPanel" hidden>
+                <label class="k-area-search">
+                  <i class="fa-solid fa-magnifying-glass"></i>
+                  <input type="search" id="kioskAreaSearch" placeholder="Search city, terminal or stop (e.g. Kabankalan)" autocomplete="off">
+                </label>
+                <div class="k-area-list" id="kioskAreaList">
+                  <a href="{% url 'bus:bus_kiosk' %}?area=" class="k-area-option{% if not kiosk_area %} is-active{% endif %}" data-area-key="" data-search="all areas">
+                    <strong>All areas</strong>
+                    <small>Every bus on the board</small>
+                  </a>
+                  {% for area in kiosk_area_options %}
+                  <a href="{% url 'bus:bus_kiosk' %}?area={{ area.key }}" class="k-area-option{% if area.key == kiosk_area_key %} is-active{% endif %}" data-area-key="{{ area.key }}" data-search="{{ area.search }}">
+                    <strong>{{ area.name }}</strong>
+                    <small>{{ area.province|default:"Negros Island" }}</small>
+                  </a>
+                  {% endfor %}
+                  <div class="k-area-empty" id="kioskAreaEmpty" hidden>No matching terminal or stop.</div>
+                </div>
+              </div>
+            </div>
+            <div class="k-hero-links">
+              <a class="k-map-link" href="{% url 'bus:bus_map' %}">
+                <i class="fa-solid fa-map-location-dot"></i> Open live tracking map
+              </a>
+              <button class="k-conductor-hint" type="button" id="kioskQrHint">
+                <i class="fa-solid fa-qrcode"></i> Conductor? Tap the QR icon above to check in
+              </button>
+            </div>
           </div>
           <div class="k-hero-badge">
-            <i class="fa-solid fa-location-dot"></i>
+            <i class="fa-solid fa-bus"></i>
             <div>
-              <strong id="kioskBadgePrimary">{{ kiosk_terminal_count }} terminals</strong>
-              <span id="kioskBadgeSecondary">{{ kiosk_total_inbound }} inbound nationwide</span>
+              <strong id="kioskBadgePrimary">{{ kiosk_departure_count }} buses</strong>
+              <span id="kioskBadgeSecondary">{{ kiosk_at_count }} now boarding &middot; {{ kiosk_inbound_count }} en route</span>
             </div>
           </div>
           {% endif %}
         </section>
 
-        <!-- Featured terminal summary -->
-        <section class="k-terminal-strip{% if kiosk_selected %} is-single{% endif %}" id="kioskTerminals" aria-label="Featured terminal summary">
-          {% include 'bus/_kiosk_terminals.html' %}
-        </section>
-
-        <!-- Scan to connect -->
-        <section class="k-qr-strip" aria-label="Conductor check-in">
-          <button type="button" class="k-qr-card k-qr-card-note" id="conductorQrCard">
-            <span class="k-qr-note-icon"><i class="fa-solid fa-qrcode"></i></span>
-            <div class="k-qr-copy">
-              <div class="k-qr-kicker">Conductors</div>
-              <strong>{% if kiosk_selected %}Scan to time in / out at {{ kiosk_selected.name }}{% else %}Scan to check in your bus{% endif %}</strong>
-              <span>{% if kiosk_selected %}Every bus QR on this kiosk is locked to {{ kiosk_selected.name }} and records automatically.{% else %}Open the conductor check-in QR for any bus on this board.{% endif %}</span>
-            </div>
-          </button>
-        </section>
-
-        <!-- Status board -->
-        <section class="k-board" aria-label="Bus status board">
+        <!-- Departure board -->
+        <section class="k-board" aria-label="Bus departure board">
           <div class="k-board-head">
             <div>
               <div class="k-board-kicker">
-                {% if kiosk_selected %}{{ kiosk_selected.region }} &middot; {{ kiosk_selected.island }}{% else %}All terminals &middot; Nationwide{% endif %}
+                {% if kiosk_selected %}{{ kiosk_selected.region }} &middot; {{ kiosk_selected.island }}{% else %}Passenger board &middot; Negros Occidental{% endif %}
               </div>
-              <h2>{% if kiosk_selected %}{{ kiosk_selected.name }} terminal board{% else %}Bus status board{% endif %}</h2>
+              <h2>{% if kiosk_selected %}{{ kiosk_selected.name }} terminal board{% elif kiosk_area %}Buses to {{ kiosk_area_label }}{% else %}All buses &middot; Negros Occidental{% endif %}</h2>
             </div>
             <div class="k-board-meta">
               <span class="k-live"><span class="k-live-dot"></span> Live</span>
@@ -133,6 +161,7 @@
           <div class="k-table-wrap" id="kioskTableWrap">
             <table class="k-table">
               <thead>
+                {% if kiosk_selected %}
                 <tr>
                   <th scope="col">Bus</th>
                   <th scope="col">Route</th>
@@ -140,19 +169,31 @@
                   <th scope="col">Bay</th>
                   <th scope="col">Time In</th>
                   <th scope="col">Departure</th>
-                  <th scope="col">Seats</th>
                   <th scope="col">Status</th>
                 </tr>
+                {% else %}
+                <tr>
+                  <th scope="col">Bus</th>
+                  <th scope="col">Route</th>
+                  <th scope="col">Departure</th>
+                  <th scope="col">Bay</th>
+                  <th scope="col">Status</th>
+                </tr>
+                {% endif %}
               </thead>
               <tbody>
-                {% include 'bus/_kiosk_board_body.html' %}
+                {% if kiosk_selected %}
+                  {% include 'bus/_kiosk_board_body.html' %}
+                {% else %}
+                  {% include 'bus/_kiosk_departures_body.html' %}
+                {% endif %}
               </tbody>
             </table>
           </div>
         </section>
       </main>
 
-      {% include 'bus/_kiosk_sidebar.html' %}
+      {% if kiosk_selected %}{% include 'bus/_kiosk_sidebar.html' %}{% endif %}
     </div>
 
     <!-- Footer -->
@@ -178,7 +219,7 @@
       <button type="button" class="k-qr-modal-close" data-qr-close aria-label="Close">
         <i class="fa-solid fa-xmark"></i>
       </button>
-      <div class="k-qr-kicker">Conductor check-in</div>
+      <div class="k-qr-kicker">Conductor QR check-in</div>
       <h2 id="busQrTitle">Bus</h2>
       <label class="k-qr-select-label" for="busQrSelect">Choose a bus</label>
       <select class="k-qr-select" id="busQrSelect"></select>
@@ -188,7 +229,8 @@
         Scan with your phone. The bus is timed in or out automatically at
         <strong>{{ kiosk_selected.name }}</strong>.
         {% else %}
-        Scan with your phone, then choose the terminal you are at.
+        Scan with your phone, then choose the terminal the bus is at. Passengers
+        do not need to scan anything.
         {% endif %}
       </p>
       <div class="k-qr-modal-links">
@@ -307,6 +349,54 @@
         if (event.key === 'Escape') setSidebarOpen(false);
       });
 
+      /* ---------- Passenger area picker ---------- */
+      var areaPicker = document.getElementById('kioskAreaPicker');
+      var areaButton = document.getElementById('kioskAreaButton');
+      var areaPanel = document.getElementById('kioskAreaPanel');
+      var areaSearch = document.getElementById('kioskAreaSearch');
+      var areaList = document.getElementById('kioskAreaList');
+      var areaEmpty = document.getElementById('kioskAreaEmpty');
+
+      function setAreaOpen(open) {
+        if (!areaPicker || !areaButton || !areaPanel) return;
+        areaPicker.classList.toggle('is-open', open);
+        areaPanel.hidden = !open;
+        areaButton.setAttribute('aria-expanded', open ? 'true' : 'false');
+        if (open && areaSearch) {
+          areaSearch.value = '';
+          filterAreas('');
+          window.setTimeout(function () { areaSearch.focus(); }, 30);
+        }
+      }
+
+      function filterAreas(query) {
+        if (!areaList) return;
+        var needle = (query || '').trim().toLowerCase();
+        var visible = 0;
+        areaList.querySelectorAll('[data-area-key]').forEach(function (option) {
+          var haystack = (option.getAttribute('data-search') || '').toLowerCase();
+          var show = !needle || haystack.indexOf(needle) !== -1;
+          option.hidden = !show;
+          if (show) visible += 1;
+        });
+        if (areaEmpty) areaEmpty.hidden = visible !== 0;
+      }
+
+      if (areaButton) {
+        areaButton.addEventListener('click', function () {
+          setAreaOpen(!areaPicker.classList.contains('is-open'));
+        });
+      }
+      if (areaSearch) {
+        areaSearch.addEventListener('input', function () { filterAreas(areaSearch.value); });
+      }
+      document.addEventListener('click', function (event) {
+        if (areaPicker && !areaPicker.contains(event.target)) setAreaOpen(false);
+      });
+      document.addEventListener('keydown', function (event) {
+        if (event.key === 'Escape') setAreaOpen(false);
+      });
+
       /* ---------- Conductor QR ---------- */
       var qrDataEl = document.getElementById('kioskQrData');
       var qrData = (qrDataEl ? JSON.parse(qrDataEl.textContent) : null) || { checkin: '', buses: {} };
@@ -373,25 +463,31 @@
         knownBuses = [];
         busSelect.innerHTML = '';
         Object.keys(qrData.buses || {}).forEach(addBusOption);
-        document.querySelectorAll('.k-qr-btn[data-bus-number]').forEach(function (trigger) {
-          addBusOption(trigger.getAttribute('data-bus-number'));
-        });
       }
 
       syncBusOptions();
 
-      document.addEventListener('click', function (event) {
-        var trigger = event.target.closest('.k-qr-btn[data-bus-number]');
-        if (!trigger) return;
-        showBusQr(trigger.getAttribute('data-bus-number') || '');
-      });
+      function openQrModal() {
+        syncBusOptions();
+        var first = (busSelect.options[0] && busSelect.options[0].value)
+          || Object.keys(qrData.buses || {})[0] || '';
+        if (first) {
+          showBusQr(first);
+          return;
+        }
+        qrTitle.textContent = 'Conductor QR';
+        qrLink.href = qrData.checkin || '#';
+        renderQr(qrCodeBox, qrData.checkin || '', 300);
+        qrModal.classList.add('is-open');
+        qrModal.setAttribute('aria-hidden', 'false');
+      }
+
+      var qrTopButton = document.getElementById('kioskQrButton');
+      if (qrTopButton) qrTopButton.addEventListener('click', openQrModal);
+      var qrHint = document.getElementById('kioskQrHint');
+      if (qrHint) qrHint.addEventListener('click', openQrModal);
 
       busSelect.addEventListener('change', function () { showBusQr(busSelect.value); });
-
-      var conductorCard = document.getElementById('conductorQrCard');
-      if (conductorCard) {
-        conductorCard.addEventListener('click', function () { showBusQr(busSelect.value); });
-      }
 
       qrModal.addEventListener('click', function (event) {
         if (event.target.closest('[data-qr-close]')) closeQrModal();
@@ -401,7 +497,7 @@
       });
 
       /* ---------- Live refresh ---------- */
-      var kioskRefreshUrl = "{% url 'bus:bus_kiosk_refresh' %}{% if kiosk_selected %}?terminal={{ kiosk_selected.slug|urlencode }}{% endif %}";
+      var kioskRefreshUrl = "{% url 'bus:bus_kiosk_refresh' %}{% if kiosk_selected %}?terminal={{ kiosk_selected.slug|urlencode }}{% elif kiosk_area_key %}?area={{ kiosk_area_key|urlencode }}{% else %}?area={% endif %}";
       var kioskVersion = "{{ kiosk_version|escapejs }}";
       var kioskRefreshing = false;
 
@@ -413,8 +509,8 @@
           primary.textContent = counts.available + ' available';
           secondary.textContent = counts.inbound + ' inbound \u00b7 ' + counts.departed + ' departed';
         } else {
-          primary.textContent = counts.total_at + ' buses at terminals';
-          secondary.textContent = counts.total_inbound + ' inbound nationwide';
+          primary.textContent = counts.departures + ' buses';
+          secondary.textContent = counts.at + ' now boarding \u00b7 ' + counts.inbound + ' en route';
         }
       }
 

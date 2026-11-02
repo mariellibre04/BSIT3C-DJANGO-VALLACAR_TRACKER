@@ -547,8 +547,10 @@ REGION_SEEDS = [
 ]
 
 
-# Everyday kiosk coverage: Negros Occidental and Negros Oriental terminals.
-SCOPE_PROVINCES = {'Negros Occidental', 'Negros Oriental'}
+# Everyday kiosk coverage: Negros Occidental only for now. Terminals in other
+# provinces are intentionally left out of the kiosk directory until the scope
+# is widened.
+SCOPE_PROVINCES = {'Negros Occidental'}
 
 TERMINAL_DIRECTORY = []
 TERMINAL_BY_SLUG = {}
@@ -647,7 +649,10 @@ def _merge_owned_terminal(master):
 
 
 for _master in TERMINAL_MASTER_LIST:
-    if _master.get('is_owned_terminal'):
+    if (
+        _master.get('is_owned_terminal')
+        and _master.get('province') in SCOPE_PROVINCES
+    ):
         _merge_owned_terminal(_master)
 
 _MATCH_INDEX = {}

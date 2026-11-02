@@ -28,7 +28,7 @@ from apps.core.permissions import admin_required
 from apps.core.roles import ROLE_CONDUCTOR, get_role
 from django.db.models import Count
 from . import route_service, terminal_directory
-from .models import Bus, BusTerminalTap
+from .models import Bus, BusTerminalTap, Terminal
 from .route_config import TERMINAL_MASTER_LIST
 
 MIN_CAPACITY = 1
@@ -142,135 +142,153 @@ KIOSK_TERMINAL_NAMES = [
 ]
 
 # Static fallback data so the webcam time-in / time-out flow can be demonstrated
-# before the real bus records are entered. The kiosk refreshes their timeline so
-# the demo board always shows today's current time.
+# before the real bus records are entered. This is the only fleet loaded for the
+# kiosk: ten Negros Occidental Vallacar/Ceres buses. Kabankalan appears as an
+# origin, destination, and intermediate stop so passengers can see buses that
+# only pass through the city.
 ESTIMATED_STOP_MINUTES = 15
+KIOSK_DESTINATION = 'Kabankalan'
 STATIC_DEMO_BUSES = [
     {
-        'bus_number': '364',
-        'plate_number': '84',
+        'bus_number': '101',
+        'plate_number': 'VTI 2001',
         'capacity': 49,
-        'route': 'Sipalay-Kabankalan',
-        'terminal': 'Sipalay',
-        'state': 'en_route',
+        'route': 'Kabankalan - Candoni',
+        'terminal': 'Kabankalan',
+        'in_minutes': 3,
+        'out_minutes': None,
+        'stops': ['Kabankalan', 'Candoni'],
+    },
+    {
+        'bus_number': '102',
+        'plate_number': 'VTI 2002',
+        'capacity': 45,
+        'route': 'Bacolod - Sipalay',
+        'terminal': 'Bacolod',
         'in_minutes': 45,
         'out_minutes': 4,
+        'stops': [
+            'Bacolod', 'Bago', 'Valladolid', 'Pontevedra', 'Hinigaran',
+            'Binalbagan', 'Himamaylan', 'Kabankalan', 'Hinoba-an', 'Sipalay',
+        ],
     },
     {
-        'bus_number': '53',
-        'plate_number': '78',
-        'capacity': 49,
-        'route': 'Bacolod-Dumaguete',
-        'terminal': 'Bacolod',
-        'state': 'en_route',
-        'in_minutes': 38,
-        'out_minutes': 1,
-    },
-    {
-        'bus_number': 't76775',
-        'plate_number': '46745',
-        'capacity': 49,
-        'route': 'Kabankalan',
-        'terminal': 'Kabankalan',
-        'state': 'at_terminal',
-        'in_minutes': 12,
-        'out_minutes': None,
-    },
-    {
-        'bus_number': 'KDM-101',
-        'plate_number': 'VTI 1101',
-        'capacity': 49,
-        'route': 'Kabankalan-Dumaguete',
-        'terminal': 'Mabinay',
-        'state': 'at_terminal',
-        'in_minutes': 7,
-        'out_minutes': None,
-    },
-    {
-        'bus_number': 'KDM-102',
-        'plate_number': 'VTI 1102',
-        'capacity': 49,
-        'route': 'Kabankalan-Dumaguete',
-        'terminal': 'Bais',
-        'state': 'en_route',
-        'in_minutes': 26,
-        'out_minutes': 3,
-    },
-    {
-        'bus_number': 'BDG-201',
-        'plate_number': 'VTI 2201',
-        'capacity': 49,
-        'route': 'Bacolod-Dumaguete',
-        'terminal': 'Kabankalan',
-        'state': 'at_terminal',
-        'in_minutes': 5,
-        'out_minutes': None,
-    },
-    {
-        'bus_number': 'MAB-301',
-        'plate_number': 'VTI 3301',
-        'capacity': 49,
-        'route': 'Mabinay-Dumaguete',
-        'terminal': 'Mabinay',
-        'state': 'at_terminal',
-        'in_minutes': 9,
-        'out_minutes': None,
-    },
-    {
-        'bus_number': 'KAB-401',
-        'plate_number': 'VTI 4401',
-        'capacity': 49,
-        'route': 'Kabankalan-Bacolod',
-        'terminal': 'Kabankalan',
-        'state': 'en_route',
-        'in_minutes': 33,
-        'out_minutes': 2,
-    },
-    {
-        'bus_number': 'DUM-501',
-        'plate_number': 'VTI 5501',
-        'capacity': 49,
-        'route': 'Dumaguete-Bais',
-        'terminal': 'Dumaguete',
-        'state': 'at_terminal',
-        'in_minutes': 4,
-        'out_minutes': None,
-    },
-    {
-        'bus_number': 'SIP-601',
-        'plate_number': 'VTI 6601',
-        'capacity': 49,
-        'route': 'Sipalay-Himamaylan',
-        'terminal': 'Sipalay',
-        'state': 'en_route',
-        'in_minutes': 29,
-        'out_minutes': 2,
-    },
-    {
-        'bus_number': 'BAC-701',
-        'plate_number': 'VTI 7701',
-        'capacity': 49,
-        'route': 'Bacolod-San Carlos',
-        'terminal': 'Bacolod',
-        'state': 'at_terminal',
+        'bus_number': '103',
+        'plate_number': 'VTI 2003',
+        'capacity': 53,
+        'route': 'Cauayan - Bacolod',
+        'terminal': 'Cauayan Negros',
         'in_minutes': 6,
         'out_minutes': None,
+        'stops': [
+            'Cauayan Negros', 'Ilog', 'Kabankalan', 'Himamaylan', 'Binalbagan',
+            'Hinigaran', 'Pontevedra', 'Valladolid', 'Bago', 'Bacolod',
+        ],
+    },
+    {
+        'bus_number': '104',
+        'plate_number': 'VTI 2004',
+        'capacity': 49,
+        'route': 'Sipalay - Bacolod',
+        'terminal': 'Sipalay',
+        'in_minutes': 38,
+        'out_minutes': 2,
+        'stops': [
+            'Sipalay', 'Hinoba-an', 'Kabankalan', 'Himamaylan', 'Binalbagan',
+            'Hinigaran', 'Pontevedra', 'Valladolid', 'Bago', 'Bacolod',
+        ],
+    },
+    {
+        'bus_number': '105',
+        'plate_number': 'VTI 2005',
+        'capacity': 45,
+        'route': 'Candoni - Bacolod',
+        'terminal': 'Candoni',
+        'in_minutes': 9,
+        'out_minutes': None,
+        'stops': [
+            'Candoni', 'Kabankalan', 'Himamaylan', 'Binalbagan', 'Hinigaran',
+            'Pontevedra', 'Valladolid', 'Bago', 'Bacolod',
+        ],
+    },
+    {
+        'bus_number': '106',
+        'plate_number': 'VTI 2006',
+        'capacity': 53,
+        'route': 'Hinoba-an - Kabankalan',
+        'terminal': 'Hinoba-an',
+        'in_minutes': 33,
+        'out_minutes': 1,
+        'stops': ['Hinoba-an', 'Sipalay', 'Kabankalan'],
+    },
+    {
+        'bus_number': '107',
+        'plate_number': 'VTI 2007',
+        'capacity': 49,
+        'route': 'Kabankalan - Bacolod',
+        'terminal': 'Kabankalan',
+        'in_minutes': 12,
+        'out_minutes': None,
+        'stops': [
+            'Kabankalan', 'Himamaylan', 'Binalbagan', 'Hinigaran', 'Pontevedra',
+            'Valladolid', 'Bago', 'Bacolod',
+        ],
+    },
+    {
+        'bus_number': '108',
+        'plate_number': 'VTI 2008',
+        'capacity': 49,
+        'route': 'San Carlos - Sipalay',
+        'terminal': 'San Carlos',
+        'in_minutes': 50,
+        'out_minutes': 5,
+        'stops': [
+            'San Carlos', 'Bacolod', 'Bago', 'Valladolid', 'Pontevedra',
+            'Hinigaran', 'Binalbagan', 'Himamaylan', 'Kabankalan',
+            'Hinoba-an', 'Sipalay',
+        ],
+    },
+    {
+        'bus_number': '109',
+        'plate_number': 'VTI 2009',
+        'capacity': 45,
+        'route': 'Victorias - Hinoba-an',
+        'terminal': 'Victorias',
+        'in_minutes': 10,
+        'out_minutes': None,
+        'stops': [
+            'Victorias', 'Bacolod', 'Bago', 'Valladolid', 'Pontevedra',
+            'Hinigaran', 'Binalbagan', 'Himamaylan', 'Kabankalan', 'Sipalay',
+            'Hinoba-an',
+        ],
+    },
+    {
+        'bus_number': '110',
+        'plate_number': 'VTI 2010',
+        'capacity': 53,
+        'route': 'Sagay - Kabankalan',
+        'terminal': 'Sagay',
+        'in_minutes': 22,
+        'out_minutes': 7,
+        'stops': [
+            'Sagay', 'Cadiz', 'Bacolod', 'Bago', 'Valladolid', 'Pontevedra',
+            'Hinigaran', 'Binalbagan', 'Himamaylan', 'Kabankalan',
+        ],
     },
 ]
 
-KIOSK_BAY_COUNT = 12
+KIOSK_BAY_COUNT = 10
 KIOSK_STATIC_BAYS = {
-    '364': 5,
-    '53': 3,
-    't76775': 7,
-    'KDM-101': 2,
-    'KDM-102': 4,
-    'BDG-201': 1,
-    'MAB-301': 6,
-    'KAB-401': 8,
-    'DUM-501': 9,
-    'SIP-601': 10,
-    'BAC-701': 11,
+    '101': 1,
+    '102': 2,
+    '103': 3,
+    '104': 4,
+    '105': 5,
+    '106': 6,
+    '107': 7,
+    '108': 8,
+    '109': 9,
+    '110': 10,
 }
 
 KIOSK_STATUS_CLASS = {
@@ -667,14 +685,292 @@ def _kiosk_bay(bus):
     return f'Bay {bay:02d}'
 
 
-def _kiosk_board_context(selected_terminal=None):
+def _kiosk_requested_area(request):
+    """None means the default area; an empty string means every area."""
+    if 'area' not in request.GET:
+        return None
+    return (request.GET.get('area') or '').strip()
+
+
+def _kiosk_area_key(value):
+    normalized = terminal_directory.normalize_name(value)
+    return re.sub(r'[^a-z0-9]+', '-', normalized).strip('-')
+
+
+def _kiosk_area_catalog():
+    """Every terminal and route stop a passenger can choose on the kiosk."""
+    options = {}
+    for entry in terminal_directory.TERMINAL_DIRECTORY:
+        options[entry['slug']] = {
+            'key': entry['slug'],
+            'name': entry['name'],
+            'province': entry['province'] or '',
+            'search': ' '.join((
+                entry['name'],
+                entry['terminal'],
+                entry['province'] or '',
+                *entry['aliases'],
+            )).lower(),
+        }
+    for terminal in Terminal.objects.filter(
+        province='Negros Occidental'
+    ).order_by('name'):
+        key = _kiosk_area_key(terminal.name)
+        if not key or key in options:
+            continue
+        options[key] = {
+            'key': key,
+            'name': terminal.name,
+            'province': terminal.province or '',
+            'search': ' '.join((
+                terminal.name,
+                terminal.city or '',
+                terminal.province or '',
+                terminal.aliases or '',
+            )).lower(),
+        }
+    return sorted(
+        options.values(),
+        key=lambda option: (option['province'], option['name']),
+    )
+
+
+_ROUTE_SEPARATOR_RE = re.compile(
+    r'\s*(?:->|=>|>|\u2013|\u2014|,|/|\bto\b|\bvia\b)\s*',
+    re.IGNORECASE,
+)
+
+
+def _route_segments(route_text):
+    """Split a route label without breaking hyphenated place names like Hinoba-an."""
+    segments = []
+    for part in _ROUTE_SEPARATOR_RE.split(route_text or ''):
+        part = part.strip()
+        if not part:
+            continue
+        for piece in (item.strip() for item in re.split(r'\s+-\s+', part)):
+            if not piece:
+                continue
+            hyphen_parts = [item.strip() for item in piece.split('-') if item.strip()]
+            if (
+                len(hyphen_parts) > 1
+                and all(
+                    terminal_directory.match_terminal(item) is not None
+                    for item in hyphen_parts
+                )
+            ):
+                segments.extend(hyphen_parts)
+            else:
+                segments.append(piece)
+    return segments
+
+
+def _route_place_roles(route_text):
+    """Map each place written in a route label to its departure/pass/arrival role."""
+    entries = []
+    seen = set()
+    for segment in _route_segments(route_text):
+        entry = terminal_directory.match_terminal(segment)
+        if entry is None or entry['slug'] in seen:
+            continue
+        seen.add(entry['slug'])
+        entries.append(entry)
+    places = {}
+    for index, entry in enumerate(entries):
+        if index == 0:
+            role = 'departs'
+        elif index == len(entries) - 1:
+            role = 'arrives'
+        else:
+            role = 'passes'
+        places[entry['slug']] = {
+            'name': entry['name'],
+            'eta': None,
+            'role': role,
+        }
+    return places
+
+
+def _demo_config_for_bus(bus):
+    number = (getattr(bus, 'bus_number', '') or '').lower()
+    route = (getattr(bus, 'route', '') or '').strip().lower()
+    for demo in STATIC_DEMO_BUSES:
+        if demo['bus_number'].lower() != number:
+            continue
+        if not route or route == demo['route'].strip().lower():
+            return demo
+    return None
+
+
+def _resolve_route_place(name):
+    """Resolve a route stop name to an entry with slug and coordinates."""
+    entry = (
+        terminal_directory.match_terminal(name)
+        or terminal_directory.get_terminal(name)
+    )
+    if entry is not None:
+        return {
+            'name': entry['name'],
+            'label': entry['name'],
+            'slug': entry['slug'],
+            'lat': entry['lat'],
+            'lng': entry['lng'],
+        }
+    found = _find_terminal(name)
+    if found is None:
+        return None
+    found.setdefault('slug', _kiosk_area_key(found['name']))
+    return found
+
+
+def _bus_route_endpoints(bus):
+    """Route endpoints for a bus, preferring the ordered demo stop list."""
+    demo = _demo_config_for_bus(bus)
+    if demo and demo.get('stops'):
+        first = _find_terminal(demo['stops'][0])
+        last = _find_terminal(demo['stops'][-1])
+        if first is not None and last is not None:
+            return first, last
+    return route_endpoints(bus.route)
+
+
+def _route_stop_plan(bus, terminal_name, departure_base):
+    """Return the ordered stops ahead of a demo bus, with roles and ETAs."""
+    demo = _demo_config_for_bus(bus)
+    stop_names = list(demo.get('stops') or []) if demo else []
+    if len(stop_names) < 2:
+        return []
+    entries = [
+        place for place in (_resolve_route_place(name) for name in stop_names)
+        if place is not None
+    ]
+    if len(entries) < 2:
+        return []
+
+    current_entry = (
+        terminal_directory.match_terminal(terminal_name)
+        or terminal_directory.get_terminal(terminal_name)
+    )
+    current_slug = (
+        current_entry['slug'] if current_entry else _kiosk_area_key(terminal_name)
+    )
+    current_name = terminal_directory.normalize_name(terminal_name)
+    current_index = 0
+    for index, entry in enumerate(entries):
+        if entry.get('slug') == current_slug:
+            current_index = index
+            break
+        if terminal_directory.normalize_name(entry['name']) == current_name:
+            current_index = index
+            break
+
+    start = departure_base or timezone.now()
+    plan = []
+    elapsed = start
+    for index, entry in enumerate(entries):
+        if index < current_index:
+            continue
+        key = entry.get('slug') or _kiosk_area_key(entry['name'])
+        if index == current_index:
+            plan.append({
+                'name': entry['name'],
+                'key': key,
+                'eta': start,
+                'minutes': 0,
+                'distance_km': 0,
+                'role': (
+                    'arrives'
+                    if index == len(entries) - 1 and index > 0
+                    else 'departs'
+                ),
+            })
+            continue
+        leg = _arrival_estimate(entries[index - 1], entry, elapsed)
+        if leg is None:
+            break
+        elapsed = leg['eta']
+        plan.append({
+            'name': entry['name'],
+            'key': key,
+            'eta': elapsed,
+            'minutes': leg['minutes'],
+            'distance_km': leg['distance_km'],
+            'role': 'arrives' if index == len(entries) - 1 else 'passes',
+        })
+    return plan
+
+
+def _kiosk_row_area_info(
+    bus, tap, terminal, departure_base, fallback_names, stop_plan=None
+):
+    """Map every stop a bus will still serve to its ETA and role."""
+    plan = (
+        stop_plan if stop_plan is not None
+        else _route_stop_plan(bus, terminal, departure_base)
+    )
+    info = {}
+    if plan:
+        for stop in plan:
+            info[stop['key']] = {
+                'name': stop['name'],
+                'eta': stop['eta'],
+                'role': stop['role'],
+            }
+        return info
+
+    route = route_service.find_route_for_bus(bus)
+    if route is not None:
+        stops = list(route.stops.select_related('terminal').order_by('sequence'))
+        current_name = (
+            tap.terminal_name if tap else (bus.current_terminal or bus.current_location or '')
+        )
+        current_stop = route_service.find_stop(route, current_name)
+        if current_stop is None:
+            current_stop = route_service.find_stop(route, route.origin.name)
+        if current_stop is None:
+            current_stop = route_service.find_stop(route, terminal)
+        if current_stop is not None:
+            for stop in stops:
+                if stop.sequence < current_stop.sequence:
+                    continue
+                eta = route_service.calculate_eta(
+                    stops, current_stop, stop, departure_base
+                )
+                key = _kiosk_area_key(stop.terminal.name)
+                if not key:
+                    continue
+                if stop.pk == current_stop.pk:
+                    role = 'departs'
+                elif stop.pk == stops[-1].pk:
+                    role = 'arrives'
+                else:
+                    role = 'passes'
+                info[key] = {
+                    'name': stop.terminal.name,
+                    'eta': eta.get('eta') if eta else None,
+                    'role': role,
+                }
+    for key, place in _route_place_roles(bus.route).items():
+        info.setdefault(key, place)
+    for name, role in fallback_names:
+        key = _kiosk_area_key(name)
+        if not key or key in info:
+            continue
+        info[key] = {'name': name, 'eta': None, 'role': role}
+    return info
+
+
+def _kiosk_board_context(selected_terminal=None, area_key=None):
     """Build the live terminal-monitor board from buses and their last tap.
 
     When ``selected_terminal`` is a directory entry, only that location's
-    available buses and movements are returned. Free-form tap labels are
-    matched back to the directory so a bus checked in at ``CEBU-SOUTH`` still
-    appears on the Cebu South Bus Terminal kiosk.
+    available buses and movements are returned. Otherwise ``area_key`` selects
+    the passenger's stop and the board keeps every bus that departs from,
+    passes through, or ends at that stop.
     """
+    area_catalog = _kiosk_area_catalog()
+    area_lookup = {option['key']: option for option in area_catalog}
+    selected_area = area_lookup.get(area_key) if area_key else None
     latest_tap_id = (
         BusTerminalTap.objects.filter(bus_id=OuterRef('pk'))
         .order_by('-tapped_at')
@@ -704,7 +1000,7 @@ def _kiosk_board_context(selected_terminal=None):
     for bus in buses:
         tap = latest_taps.get(bus.id)
         is_at = bus.movement_status == Bus.MOVE_AT_TERMINAL
-        route_from, route_to = route_endpoints(bus.route)
+        route_from, route_to = _bus_route_endpoints(bus)
         dest = route_to['name'] if route_to else ''
 
         time_in = tap.tapped_at if tap else _to_datetime(bus.scheduled_time)
@@ -739,8 +1035,9 @@ def _kiosk_board_context(selected_terminal=None):
         arrival = None
         final_destination = None
         final_arrival = None
+        departure_base = time_out or estimated or time_in or when or timezone.now()
+        stop_plan = _route_stop_plan(bus, terminal, departure_base)
         if tap is not None:
-            departure_base = time_out or estimated
             summary = route_service.route_eta_summary(
                 bus, tap.terminal_name, departure_base
             )
@@ -779,6 +1076,29 @@ def _kiosk_board_context(selected_terminal=None):
             final_destination = {'name': bus.final_destination}
             final_arrival = {'eta': _to_datetime(bus.final_destination_eta)}
 
+        if stop_plan:
+            upcoming = [stop for stop in stop_plan if stop['role'] != 'departs']
+            if upcoming:
+                next_stop = upcoming[0]
+                next_destination = {'name': next_stop['name']}
+                arrival = {
+                    'eta': next_stop['eta'],
+                    'minutes': next_stop['minutes'],
+                    'distance_km': next_stop['distance_km'],
+                }
+                final_stop = stop_plan[-1]
+                final_destination = {'name': final_stop['name']}
+                final_arrival = {
+                    'eta': final_stop['eta'],
+                    'minutes': final_stop['minutes'],
+                    'distance_km': final_stop['distance_km'],
+                }
+            else:
+                next_destination = None
+                arrival = None
+                final_destination = None
+                final_arrival = None
+
         last_tap_terminal = tap.terminal_name if tap else ''
         tap_entry = terminal_directory.match_terminal(last_tap_terminal)
         terminal_entry = terminal_directory.match_terminal(terminal)
@@ -788,6 +1108,24 @@ def _kiosk_board_context(selected_terminal=None):
             # An en-route bus without a known next stop is heading towards the
             # terminal currently shown in its own row.
             destination_entry = terminal_entry
+
+        area_info = _kiosk_row_area_info(
+            bus,
+            tap,
+            terminal,
+            departure_base,
+            (
+                (route_from['label'] if route_from else '', 'departs'),
+                (route_to['label'] if route_to else '', 'arrives'),
+                (terminal, 'departs'),
+                (destination_name, 'arrives'),
+                (next_destination['name'] if next_destination else '', 'passes'),
+                (bus.next_stop or '', 'passes'),
+                (bus.final_destination or '', 'arrives'),
+            ),
+            stop_plan=stop_plan,
+        )
+        area_hit = area_info.get(area_key) if selected_area else None
 
         seated = bus.passenger_count or 0
         seats_left = max(0, (bus.capacity or 0) - seated)
@@ -823,6 +1161,10 @@ def _kiosk_board_context(selected_terminal=None):
             'status_label': bus.get_movement_status_display(),
             'is_at_terminal': is_at,
             'is_departed': time_out is not None,
+            'area_match': bool(area_hit),
+            'area_name': area_hit['name'] if area_hit else '',
+            'area_eta': area_hit['eta'] if area_hit else None,
+            'area_role': area_hit['role'] if area_hit else '',
             'capacity': bus.capacity or 0,
             'passengers': seated,
             'seats_left': seats_left,
@@ -945,11 +1287,47 @@ def _kiosk_board_context(selected_terminal=None):
         clock = timezone.localtime(latest_change).strftime('%I:%M %p').lstrip('0')
         updated_label = f'Updated {clock}'
 
+    if selected_terminal is None:
+        if selected_area is not None:
+            departures = [row for row in all_rows if row['area_match']]
+            at_terminal = [row for row in departures if row['is_at_terminal']]
+            inbound = [row for row in departures if not row['is_at_terminal']]
+            departed = [row for row in departures if row['is_departed']]
+        else:
+            departures = list(all_rows)
+    else:
+        departures = at_terminal + inbound + departed
+    if selected_area is not None:
+        departures.sort(
+            key=lambda row: (
+                row['area_eta'] or row['estimated_departure']
+                or row['time_out'] or row['time'] or timezone.now()
+            )
+        )
+    else:
+        departures.sort(
+            key=lambda row: (
+                row['estimated_departure'] or row['time_out'] or row['time']
+                or timezone.now()
+            )
+        )
+
     signature_parts.append(
         f'selected:{selected_terminal["slug"] if selected_terminal else ""}'
     )
+    signature_parts.append(f'area:{area_key if selected_area else ""}')
     signature = '\n'.join(signature_parts)
+    area_label = selected_area['name'] if selected_area else 'Negros Occidental'
     return {
+        'kiosk_destination': (
+            selected_terminal['name'] if selected_terminal else area_label
+        ),
+        'kiosk_area': selected_area,
+        'kiosk_area_key': area_key if selected_area else '',
+        'kiosk_area_label': area_label,
+        'kiosk_area_options': area_catalog,
+        'kiosk_departures': departures,
+        'kiosk_departure_count': len(departures),
         'kiosk_terminals': terminals,
         'kiosk_at_terminal': at_terminal,
         'kiosk_inbound': inbound,
@@ -1016,8 +1394,9 @@ def terminal_monitor_context(request, selected_terminal=None):
 def bus_kiosk_page(request, terminal_slug=None):
     """Live airport-style terminal monitor board.
 
-    Without a slug the board shows the nationwide overview. With a slug it is
-    a dedicated kiosk for that terminal only.
+    Without a slug the board is a passenger search board: the passenger picks
+    an area and sees buses that depart from, pass through, or end there. With
+    a slug it is a dedicated kiosk for that terminal only.
     """
     seed_static_demo_data()
     selected = None
@@ -1025,8 +1404,9 @@ def bus_kiosk_page(request, terminal_slug=None):
         selected = terminal_directory.get_terminal(terminal_slug)
         if selected is None:
             return redirect('bus:bus_kiosk')
+    area_key = None if selected else _kiosk_requested_area(request)
     context = terminal_monitor_context(request, selected)
-    context.update(_kiosk_board_context(selected))
+    context.update(_kiosk_board_context(selected, area_key=area_key))
     return render(request, 'bus/terminal_monitor.html', context)
 
 
@@ -1041,17 +1421,23 @@ def bus_kiosk_refresh(request):
         if selected is None:
             return JsonResponse({'error': 'Unknown terminal'}, status=404)
 
-    context = _kiosk_board_context(selected)
+    context = _kiosk_board_context(
+        selected,
+        area_key=None if selected else _kiosk_requested_area(request),
+    )
     bus_qr_map = terminal_monitor_context(request, selected)['kiosk_qr_data']['buses']
     return JsonResponse({
         'version': context['kiosk_version'],
         'updated': context['kiosk_updated_label'],
         'selected': context['kiosk_selected_slug'],
+        'area': context['kiosk_area_key'],
+        'area_label': context['kiosk_area_label'],
         'counts': {
             'at': context['kiosk_at_count'],
             'inbound': context['kiosk_inbound_count'],
             'departed': context['kiosk_departed_count'],
             'available': context['kiosk_available_count'],
+            'departures': context['kiosk_departure_count'],
             'total_at': context['kiosk_total_at'],
             'total_inbound': context['kiosk_total_inbound'],
         },
@@ -1063,7 +1449,9 @@ def bus_kiosk_refresh(request):
             'bus/_kiosk_terminals.html', context, request=request
         ),
         'board_html': render_to_string(
-            'bus/_kiosk_board_body.html', context, request=request
+            'bus/_kiosk_board_body.html' if selected else 'bus/_kiosk_departures_body.html',
+            context,
+            request=request,
         ),
         'ticker_html': render_to_string(
             'bus/_kiosk_ticker_items.html', context, request=request
@@ -1424,7 +1812,7 @@ def seed_static_demo_data(force=False):
             terminal = _find_terminal(demo['terminal'])
             if terminal is None:
                 continue
-            bus, _created = Bus.objects.get_or_create(
+            bus, _created = Bus.objects.update_or_create(
                 bus_number=demo['bus_number'],
                 defaults={
                     'plate_number': demo['plate_number'],
@@ -1438,6 +1826,8 @@ def seed_static_demo_data(force=False):
                 force
                 or tap is None
                 or timezone.localdate(tap.tapped_at) != today
+                or (tap.terminal_name or '').strip().lower()
+                != (terminal['label'] or '').strip().lower()
             )
 
             if should_anchor:

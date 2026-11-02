@@ -29,8 +29,8 @@ class TerminalScanTests(TestCase):
     def setUp(self):
         self.client.force_login(make_conductor())
         self.bus = Bus.objects.create(
-            bus_number='101',
-            plate_number='ABC-101',
+            bus_number='9001',
+            plate_number='ABC-9001',
             capacity=50,
             route='Bacolod - Kabankalan',
             movement_status=Bus.MOVE_EN_ROUTE,
@@ -123,7 +123,7 @@ class KioskRefreshTests(TestCase):
         data = self.client.get(reverse('bus:bus_kiosk_refresh')).json()
 
         self.assertNotEqual(before, data['version'])
-        self.assertIn('Now at terminal', data['board_html'])
+        self.assertIn('All buses', data['board_html'])
         self.assertIn('101', data['board_html'])
         self.assertIn('<strong>1</strong> at terminal', data['terminals_html'])
 
@@ -133,8 +133,43 @@ class KioskRefreshTests(TestCase):
         self.assertEqual(response.status_code, 200)
         self.assertContains(response, '101')
         self.assertContains(response, 'id="kioskTableWrap"')
-        self.assertContains(response, 'id="kioskTerminals"')
+        self.assertNotContains(response, 'id="kioskTerminals"')
         self.assertContains(response, reverse('bus:bus_kiosk_refresh'))
+        self.assertNotContains(response, 'Seats')
+        self.assertNotContains(response, 'k-qr-btn')
+
+    def test_kiosk_area_filter_shows_pass_through_eta(self):
+        self.client.get(reverse('bus:bus_kiosk'))
+        data = self.client.get(
+            reverse('bus:bus_kiosk_refresh') + '?area=kabankalan'
+        ).json()
+
+        self.assertIn('102', data['board_html'])
+        self.assertIn('Bacolod to Sipalay', data['board_html'])
+        self.assertIn('Passes Kabankalan', data['board_html'])
+        self.assertIn('ETA', data['board_html'])
+
+    def test_kiosk_area_filter_keeps_relevant_buses(self):
+        Bus.objects.create(
+            bus_number='202',
+            plate_number='ABC-202',
+            capacity=49,
+            route='Sipalay - Kabankalan',
+            movement_status=Bus.MOVE_EN_ROUTE,
+        )
+
+        kabankalan = self.client.get(
+            reverse('bus:bus_kiosk_refresh') + '?area=kabankalan'
+        ).json()
+        self.assertIn('101', kabankalan['board_html'])
+        self.assertIn('202', kabankalan['board_html'])
+
+        sipalay = self.client.get(
+            reverse('bus:bus_kiosk_refresh') + '?area=sipalay'
+        ).json()
+        self.assertIn('202', sipalay['board_html'])
+        self.assertNotIn('101', sipalay['board_html'])
+        self.assertIn('Kabankalan', sipalay['board_html'])
 
     def test_inactive_bus_is_left_off_the_board(self):
         self.bus.status = Bus.STATUS_INACTIVE
@@ -144,7 +179,7 @@ class KioskRefreshTests(TestCase):
 
         self.assertNotIn('101', data['board_html'])
 
-    def test_dedicated_terminal_kiosk_lists_owned_terminals_nationwide(self):
+    def test_dedicated_terminal_kiosk_lists_negros_occidental_terminals(self):
         response = self.client.get(
             reverse('bus:bus_kiosk_terminal', args=['bacolod-north'])
         )
@@ -153,8 +188,9 @@ class KioskRefreshTests(TestCase):
         self.assertContains(response, 'Bacolod North Bus Terminal')
         self.assertContains(response, 'id="kioskSidebarList"')
         self.assertContains(response, 'Negros Occidental')
-        self.assertContains(response, 'Cebu South Bus Terminal')
-        self.assertContains(response, 'PITX')
+        self.assertContains(response, 'Kabankalan Bus Terminal')
+        self.assertNotContains(response, 'Cebu South Bus Terminal')
+        self.assertNotContains(response, 'PITX')
 
     def test_terminal_kiosk_filters_board_to_that_terminal(self):
         other = Bus.objects.create(
@@ -198,8 +234,8 @@ class KioskRefreshTests(TestCase):
         )
 
         rows = response.context['kiosk_inbound'] + response.context['kiosk_at_terminal']
-        bus = next(row for row in rows if row['number'] == '364')
-        self.assertEqual(bus['bay'], 'Bay 05')
+        bus = next(row for row in rows if row['number'] == '106')
+        self.assertEqual(bus['bay'], 'Bay 06')
 
     def test_unknown_terminal_kiosk_redirects_to_all_terminals(self):
         response = self.client.get(
@@ -346,7 +382,9 @@ class TerminalStaffScannerTests(TestCase):
         self.assertEqual(response.json()['type'], 'IN')
 
     def test_api_scan_updates_terminal_monitor_feed(self):
-        before = self.client.get(reverse('bus:bus_kiosk_refresh')).json()
+        before = self.client.get(
+            reverse('bus:bus_kiosk_refresh') + '?area=cebu-south'
+        ).json()
 
         self.client.post(
             reverse('terminal_checkin_api'),
@@ -357,7 +395,9 @@ class TerminalStaffScannerTests(TestCase):
             }),
             content_type='application/json',
         )
-        after = self.client.get(reverse('bus:bus_kiosk_refresh')).json()
+        after = self.client.get(
+            reverse('bus:bus_kiosk_refresh') + '?area=cebu-south'
+        ).json()
 
         self.assertNotEqual(before['version'], after['version'])
         self.assertIn('909', after['board_html'])
@@ -380,7 +420,9 @@ class TerminalStaffScannerTests(TestCase):
         self.assertEqual(self.bus.current_location, 'En route from CEBU-SOUTH Terminal')
 
     def test_api_checkout_also_appears_on_terminal_monitor_feed(self):
-        before = self.client.get(reverse('bus:bus_kiosk_refresh')).json()
+        before = self.client.get(
+            reverse('bus:bus_kiosk_refresh') + '?area=cebu-south'
+        ).json()
 
         self.client.post(
             reverse('terminal_checkin_api'),
@@ -391,7 +433,9 @@ class TerminalStaffScannerTests(TestCase):
             }),
             content_type='application/json',
         )
-        after = self.client.get(reverse('bus:bus_kiosk_refresh')).json()
+        after = self.client.get(
+            reverse('bus:bus_kiosk_refresh') + '?area=cebu-south'
+        ).json()
 
         self.assertNotEqual(before['version'], after['version'])
         self.assertIn('909', after['board_html'])
