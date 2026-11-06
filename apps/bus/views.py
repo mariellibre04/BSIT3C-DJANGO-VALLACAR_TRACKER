@@ -23,12 +23,11 @@ from django.db import IntegrityError, transaction
 from django.db.models import OuterRef, Q, Subquery
 from django.utils import timezone
 
-from apps.scoping import scoped_bus, scoped_buses
 from apps.core.permissions import admin_required
 from apps.core.roles import ROLE_CONDUCTOR, get_role
 from django.db.models import Count
 from . import route_service, terminal_directory
-from .models import Bus, BusTerminalTap, Terminal
+from .models import Bus, BusTerminalTap, DemoSeedState, Terminal
 from .route_config import TERMINAL_MASTER_LIST
 
 MIN_CAPACITY = 1
@@ -278,6 +277,7 @@ STATIC_DEMO_BUSES = [
 ]
 
 KIOSK_BAY_COUNT = 10
+DEMO_SEED_KEY = 'static-demo-buses-v1'
 KIOSK_STATIC_BAYS = {
     '101': 1,
     '102': 2,
@@ -609,6 +609,20 @@ def _bus_gps_payload(bus, occupied=None, use_fallback=False):
         'movement_status': bus.movement_status,
         'movement_display': bus.get_movement_status_display(),
         'movement_reason': bus.movement_reason,
+        'current_terminal': bus.current_terminal,
+        'bay': bus.bay,
+        'next_stop': bus.next_stop,
+        'next_stop_eta': (
+            bus.next_stop_eta.isoformat() if bus.next_stop_eta else None
+        ),
+        'next_terminal': bus.next_terminal,
+        'next_terminal_eta': (
+            bus.next_terminal_eta.isoformat() if bus.next_terminal_eta else None
+        ),
+        'final_destination': bus.final_destination,
+        'final_destination_eta': (
+            bus.final_destination_eta.isoformat() if bus.final_destination_eta else None
+        ),
         'last_gps_update': bus.last_gps_update.isoformat() if bus.last_gps_update else None,
         'passengers_count': occupied,
         'available_seats': max(0, bus.capacity - occupied),
@@ -619,7 +633,7 @@ def _bus_gps_payload(bus, occupied=None, use_fallback=False):
 @admin_required
 def bus_list_page(request):
     query = request.GET.get('q', '').strip()
-    buses_list = scoped_buses(request.user).annotate(
+    buses_list = Bus.objects.annotate(
         total_passengers=Count('passengers')
     ).order_by('bus_number')
     if query:
@@ -627,7 +641,9 @@ def bus_list_page(request):
             Q(bus_number__icontains=query) |
             Q(plate_number__icontains=query) |
             Q(route__icontains=query) |
-            Q(current_location__icontains=query)
+            Q(current_location__icontains=query) |
+            Q(current_terminal__icontains=query) |
+            Q(next_terminal__icontains=query)
         )
     paginator = Paginator(buses_list, 10)
     buses = paginator.get_page(request.GET.get('page', 1))
@@ -639,7 +655,7 @@ def bus_list_page(request):
 @admin_required
 def bus_list_ajax(request):
     query = request.GET.get('q', '').strip()
-    buses_list = scoped_buses(request.user).annotate(
+    buses_list = Bus.objects.annotate(
         total_passengers=Count('passengers')
     ).order_by('bus_number')
     if query:
@@ -647,7 +663,9 @@ def bus_list_ajax(request):
             Q(bus_number__icontains=query) |
             Q(plate_number__icontains=query) |
             Q(route__icontains=query) |
-            Q(current_location__icontains=query)
+            Q(current_location__icontains=query) |
+            Q(current_terminal__icontains=query) |
+            Q(next_terminal__icontains=query)
         )
     paginator = Paginator(buses_list, 10)
     buses = paginator.get_page(request.GET.get('page', 1))
@@ -667,10 +685,7 @@ def bus_list_ajax(request):
 
 @admin_required
 def bus_get_ajax(request, pk):
-    if request.user.is_authenticated:
-        bus = scoped_bus(request.user, pk)
-    else:
-        bus = get_object_or_404(Bus, pk=pk)
+    bus = get_object_or_404(Bus, pk=pk)
     return JsonResponse(_bus_gps_payload(bus))
 
 
@@ -1068,9 +1083,11 @@ def _kiosk_board_context(selected_terminal=None, area_key=None):
                     final_destination = next_destination
                     final_arrival = arrival
 
-        if next_destination is None and bus.next_stop:
-            next_destination = {'name': bus.next_stop}
-            arrival = {'eta': _to_datetime(bus.next_stop_eta)}
+        if next_destination is None and bus.next_terminal:
+            next_destination = {'name': bus.next_terminal}
+            arrival = {
+                'eta': _to_datetime(bus.next_terminal_eta or bus.next_stop_eta)
+            }
 
         if final_destination is None and bus.final_destination:
             final_destination = {'name': bus.final_destination}
@@ -1099,6 +1116,17 @@ def _kiosk_board_context(selected_terminal=None, area_key=None):
                 final_destination = None
                 final_arrival = None
 
+        # Dispatcher-entered next terminal / final destination wins over the
+        # computed route plan so admin edits show up on the kiosk immediately.
+        if bus.next_terminal:
+            next_destination = {'name': bus.next_terminal}
+            arrival = {
+                'eta': _to_datetime(bus.next_terminal_eta or bus.next_stop_eta)
+            }
+        if bus.final_destination:
+            final_destination = {'name': bus.final_destination}
+            final_arrival = {'eta': _to_datetime(bus.final_destination_eta)}
+
         last_tap_terminal = tap.terminal_name if tap else ''
         tap_entry = terminal_directory.match_terminal(last_tap_terminal)
         terminal_entry = terminal_directory.match_terminal(terminal)
@@ -1120,7 +1148,7 @@ def _kiosk_board_context(selected_terminal=None, area_key=None):
                 (terminal, 'departs'),
                 (destination_name, 'arrives'),
                 (next_destination['name'] if next_destination else '', 'passes'),
-                (bus.next_stop or '', 'passes'),
+                (bus.next_terminal or '', 'passes'),
                 (bus.final_destination or '', 'arrives'),
             ),
             stop_plan=stop_plan,
@@ -1149,6 +1177,8 @@ def _kiosk_board_context(selected_terminal=None, area_key=None):
             'next_stop_eta': arrival.get('eta') if arrival else None,
             'next_stop_minutes': arrival.get('minutes') if arrival else None,
             'next_stop_distance_km': arrival.get('distance_km') if arrival else None,
+            'next_bay': bus.next_stop,
+            'next_terminal': bus.next_terminal,
             'final_destination': final_destination['name'] if final_destination else '',
             'final_destination_eta': final_arrival.get('eta') if final_arrival else None,
             'final_destination_minutes': (
@@ -1188,6 +1218,8 @@ def _kiosk_board_context(selected_terminal=None, area_key=None):
                 estimated.isoformat() if estimated else '',
                 destination_name,
                 arrival.get('eta').isoformat() if arrival and arrival.get('eta') else '',
+                bus.next_stop or '',
+                bus.next_terminal or '',
                 f'{seats_left}/{bus.capacity or 0}',
             ])
         )
@@ -1799,12 +1831,15 @@ def _demo_bus_for(bus_number):
 
 
 def seed_static_demo_data(force=False):
-    """Create the placeholder buses and anchor their timeline to today.
+    """Create the placeholder buses once and anchor their timeline to today.
 
-    Timestamps are written once from the real Philippine clock and are then
-    left untouched. A bus only changes to en route after its estimated
-    departure time has passed; it is never re-timed on every request.
+    Seeding is intentionally one-shot: after the marker exists the kiosk never
+    rewrites bus fields, so dispatcher edits survive and deleted demo buses are
+    not recreated. Timestamps are written once from the real Philippine clock
+    and then left untouched.
     """
+    if DemoSeedState.objects.filter(key=DEMO_SEED_KEY).exists() and not force:
+        return
     now = timezone.now()
     today = timezone.localdate(now)
     with transaction.atomic():
@@ -1812,13 +1847,18 @@ def seed_static_demo_data(force=False):
             terminal = _find_terminal(demo['terminal'])
             if terminal is None:
                 continue
-            bus, _created = Bus.objects.update_or_create(
+            bus, created = Bus.objects.get_or_create(
                 bus_number=demo['bus_number'],
                 defaults={
                     'plate_number': demo['plate_number'],
                     'capacity': demo['capacity'],
                     'route': demo['route'],
                     'status': Bus.STATUS_ACTIVE,
+                    'current_terminal': terminal['label'],
+                    'current_location': f"{terminal['label']} Terminal",
+                    'latitude': Decimal(str(terminal['lat'])),
+                    'longitude': Decimal(str(terminal['lng'])),
+                    'last_gps_update': now,
                 },
             )
             tap = bus.terminal_taps.order_by('-tapped_at').first()
@@ -1862,22 +1902,24 @@ def seed_static_demo_data(force=False):
                         left_at = estimated
                         BusTerminalTap.objects.filter(pk=tap.pk).update(left_at=left_at)
 
+            if not created:
+                # Never overwrite dispatcher edits on an existing bus.
+                continue
+
             if left_at is None:
                 bus.current_location = f"{terminal['label']} Terminal"
                 bus.movement_status = Bus.MOVE_AT_TERMINAL
             else:
                 bus.current_location = f"En route from {terminal['label']} Terminal"
                 bus.movement_status = Bus.MOVE_EN_ROUTE
-            bus.latitude = Decimal(str(terminal['lat']))
-            bus.longitude = Decimal(str(terminal['lng']))
-            bus.movement_reason = ''
-            bus.status = Bus.STATUS_ACTIVE
-            bus.last_gps_update = now
-            bus.save()
+            bus.save(update_fields=[
+                'current_location', 'movement_status', 'last_gps_update',
+            ])
+        DemoSeedState.objects.get_or_create(key=DEMO_SEED_KEY)
 
 
 def _advance_demo_departures(now=None):
-    """Switch placeholder buses to en route once their departure time passes."""
+    """Switch demo buses to en route once their departure time passes."""
     now = now or timezone.now()
     demo_numbers = [demo['bus_number'] for demo in STATIC_DEMO_BUSES]
     taps = (
@@ -1890,7 +1932,7 @@ def _advance_demo_departures(now=None):
         if estimated is None or estimated > now:
             continue
         BusTerminalTap.objects.filter(pk=tap.pk).update(left_at=estimated)
-        if tap.bus.movement_status != Bus.MOVE_EN_ROUTE:
+        if tap.bus.movement_status == Bus.MOVE_AT_TERMINAL:
             Bus.objects.filter(pk=tap.bus_id).update(
                 movement_status=Bus.MOVE_EN_ROUTE,
                 current_location=f"En route from {tap.terminal_name}",
@@ -2476,7 +2518,7 @@ def bus_scan_checkin_ajax(request):
 def bus_save_ajax(request):
     bus_id = request.POST.get('id')
     if bus_id:
-        bus = scoped_bus(request.user, bus_id)
+        bus = get_object_or_404(Bus, pk=bus_id)
         is_update = True
     else:
         bus = Bus()
@@ -2497,6 +2539,8 @@ def bus_save_ajax(request):
     movement_reason = request.POST.get('movement_reason', '').strip()
     next_stop = request.POST.get('next_stop', '').strip()
     next_stop_eta = request.POST.get('next_stop_eta', '').strip()
+    next_terminal = request.POST.get('next_terminal', '').strip()
+    next_terminal_eta = request.POST.get('next_terminal_eta', '').strip()
     final_destination = request.POST.get('final_destination', '').strip()
     final_destination_eta = request.POST.get('final_destination_eta', '').strip()
     
@@ -2569,6 +2613,8 @@ def bus_save_ajax(request):
     bus.longitude = longitude
     bus.next_stop = next_stop
     bus.next_stop_eta = _parse_time(next_stop_eta)
+    bus.next_terminal = next_terminal
+    bus.next_terminal_eta = _parse_time(next_terminal_eta)
     bus.final_destination = final_destination
     bus.final_destination_eta = _parse_time(final_destination_eta)
     bus.movement_status = movement_status
@@ -2595,7 +2641,7 @@ def bus_save_ajax(request):
 @admin_required
 @require_POST
 def bus_delete_ajax(request, pk):
-    bus = scoped_bus(request.user, pk)
+    bus = get_object_or_404(Bus, pk=pk)
     name = bus.bus_number
     bus.delete()
     messages.success(request, f'Bus "{name}" has been deleted successfully.')
@@ -2765,7 +2811,7 @@ def bus_map_page(request):
     results, error = [], None
     today = timezone.localdate()
     now = timezone.now()
-    buses_qs = scoped_buses(request.user) if is_admin else Bus.objects.all()
+    buses_qs = Bus.objects.all()
     active_buses = list(
         buses_qs.annotate(total_passengers=Count('passengers'))
         .filter(status=Bus.STATUS_ACTIVE)
@@ -2818,7 +2864,7 @@ def bus_locations_ajax(request):
     route-terminal pin so every available bus is located on the map
     (flagged with is_approx).
     """
-    buses_qs = scoped_buses(request.user) if request.user.is_authenticated else Bus.objects.all()
+    buses_qs = Bus.objects.all()
     buses = buses_qs.annotate(total_passengers=Count('passengers')).order_by('bus_number')
     return JsonResponse({'buses': [_bus_gps_payload(b, b.total_passengers, use_fallback=True) for b in buses]})
 
@@ -2945,7 +2991,7 @@ def geocode_ajax(request):
 @require_POST
 def bus_gps_update_ajax(request, pk):
     """Quick GPS ping: update location / coordinates / movement from the map."""
-    bus = scoped_bus(request.user, pk)
+    bus = get_object_or_404(Bus, pk=pk)
     current_location = request.POST.get('current_location', '').strip()
     movement_status = request.POST.get('movement_status', '').strip() or bus.movement_status
     movement_reason = request.POST.get('movement_reason')

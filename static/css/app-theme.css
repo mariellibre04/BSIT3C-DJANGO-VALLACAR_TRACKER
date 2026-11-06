@@ -1,20 +1,30 @@
 :root,
 [data-bs-theme="light"] {
-  --tblr-primary-hover: color-mix(in srgb, var(--tblr-primary) 87%, #141733);
-  --tblr-primary-active: color-mix(in srgb, var(--tblr-primary) 78%, #141733);
-  --tblr-primary-lt: color-mix(in srgb, var(--tblr-primary) 12%, #ffffff);
-  --tblr-accent: #f8b84e;
-  --tblr-body-bg: #f3f4fb;
-  --tblr-body-bg-rgb: 243, 244, 251;
-  --tblr-body-color: #232741;
-  --tblr-body-color-rgb: 35, 39, 65;
-  --tblr-muted: #7a81a3;
-  --tblr-muted-rgb: 122, 129, 163;
-  --tblr-border-color: #e8eaf4;
-  --tblr-border-color-translucent: rgba(35, 39, 65, 0.08);
+  /* Ceres Liner livery palette */
+  --ceres-yellow: #ffc72c;
+  --ceres-yellow-soft: #ffe58a;
+  --ceres-yellow-deep: #f0a500;
+  --ceres-red: #c8102e;
+  --ceres-red-dark: #96071f;
+  --ceres-blue: #1d4ed8;
+  --ceres-blue-deep: #12326e;
+  --ceres-ink: #0b1020;
+  --ceres-stripe: linear-gradient(90deg, #c8102e 0 36%, #ffc72c 36% 72%, #1d4ed8 72% 100%);
+  --tblr-primary-hover: #a30f27;
+  --tblr-primary-active: #8a0a20;
+  --tblr-primary-lt: #fde8ec;
+  --tblr-accent: #ffc72c;
+  --tblr-body-bg: #fbf7ec;
+  --tblr-body-bg-rgb: 251, 247, 236;
+  --tblr-body-color: #20253a;
+  --tblr-body-color-rgb: 32, 37, 58;
+  --tblr-muted: #767b8f;
+  --tblr-muted-rgb: 118, 123, 143;
+  --tblr-border-color: #ece2ce;
+  --tblr-border-color-translucent: rgba(32, 37, 58, 0.08);
   --tblr-bg-surface: #ffffff;
-  --tblr-bg-surface-secondary: #f8f9fe;
-  --tblr-bg-surface-tertiary: #f3f5fc;
+  --tblr-bg-surface-secondary: #fdf9f0;
+  --tblr-bg-surface-tertiary: #f8f0df;
   --tblr-border-radius: calc(10px * var(--tblr-border-radius-scale, 1));
   --tblr-border-radius-sm: calc(8px * var(--tblr-border-radius-scale, 1));
   --tblr-border-radius-lg: calc(14px * var(--tblr-border-radius-scale, 1));
@@ -33,29 +43,29 @@
 
 :root:not([data-bs-theme-primary]),
 [data-bs-theme="light"]:not([data-bs-theme-primary]) {
-  --tblr-primary: #6366f1;
-  --tblr-primary-rgb: 99, 102, 241;
+  --tblr-primary: #c8102e;
+  --tblr-primary-rgb: 200, 16, 46;
 }
 
 [data-bs-theme="dark"]:not([data-bs-theme-primary]) {
-  --tblr-primary: #7c82f5;
-  --tblr-primary-rgb: 124, 130, 245;
+  --tblr-primary: #ff5c75;
+  --tblr-primary-rgb: 255, 92, 117;
 }
 
-[data-bs-theme-primary="indigo"] {
-  --tblr-primary: #6366f1;
-  --tblr-primary-rgb: 99, 102, 241;
+[data-bs-theme-primary="ceres"] {
+  --tblr-primary: #c8102e;
+  --tblr-primary-rgb: 200, 16, 46;
 }
 
 [data-bs-theme="dark"],
 body[data-bs-theme="dark"] [data-bs-theme="light"] {
-  --tblr-body-bg: #0e1020;
-  --tblr-body-bg-rgb: 14, 16, 32;
-  --tblr-body-color: #e6e8f4;
+  --tblr-body-bg: #090d19;
+  --tblr-body-bg-rgb: 9, 13, 25;
+  --tblr-body-color: #e8eaf4;
   --tblr-border-color: rgba(255, 255, 255, 0.09);
-  --tblr-bg-surface: #161a30;
-  --tblr-bg-surface-secondary: #1b1f38;
-  --tblr-bg-surface-tertiary: #1e2340;
+  --tblr-bg-surface: #111728;
+  --tblr-bg-surface-secondary: #161d31;
+  --tblr-bg-surface-tertiary: #1c2439;
   --tblr-shadow-card: 0 1px 2px rgba(0, 0, 0, 0.2), 0 10px 28px -14px rgba(0, 0, 0, 0.6);
 }
 
@@ -63,7 +73,17 @@ body {
   font-feature-settings: "cv02", "cv03", "cv11";
   letter-spacing: -0.01em;
   background-color: var(--tblr-body-bg);
+  background-image:
+    radial-gradient(1100px 560px at 88% -12%, rgba(255, 199, 44, 0.16), transparent 62%),
+    radial-gradient(820px 480px at -8% 4%, rgba(200, 16, 46, 0.06), transparent 60%);
+  background-attachment: fixed;
   -webkit-font-smoothing: antialiased;
+}
+
+[data-bs-theme="dark"] body {
+  background-image:
+    radial-gradient(1100px 560px at 88% -12%, rgba(255, 199, 44, 0.08), transparent 62%),
+    radial-gradient(820px 480px at -8% 4%, rgba(29, 78, 216, 0.1), transparent 60%);
 }
 
 html {
@@ -227,21 +247,44 @@ html {
 }
 
 .dh-sidebar {
-  --tblr-navbar-bg: #12142c;
+  --tblr-navbar-bg: #0b1020;
   --tblr-navbar-border-color: rgba(255, 255, 255, 0.06);
   --tblr-navbar-color: rgba(255, 255, 255, 0.64);
   --tblr-navbar-hover-color: #ffffff;
   --tblr-navbar-active-color: #ffffff;
   --tblr-navbar-disabled-color: rgba(255, 255, 255, 0.35);
   --tblr-navbar-active-bg: rgba(255, 255, 255, 0.08);
+  position: relative;
   background:
-    radial-gradient(120% 70% at 100% 0%, color-mix(in srgb, var(--tblr-primary) 18%, transparent) 0%, transparent 55%),
-    linear-gradient(180deg, #151737 0%, #101224 100%);
+    radial-gradient(120% 70% at 100% 0%, rgba(255, 199, 44, 0.13) 0%, transparent 55%),
+    radial-gradient(90% 65% at 0% 100%, rgba(29, 78, 216, 0.14) 0%, transparent 60%),
+    linear-gradient(180deg, #111729 0%, #090d19 100%);
 }
 
-.dh-sidebar .navbar-brand {
-  padding: 1.1rem 1.25rem;
+.dh-sidebar::before {
+  content: "";
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 3px;
+  background: var(--ceres-stripe);
+  z-index: 5;
+}
+
+.dh-sidebar.navbar-vertical .navbar-brand {
+  padding: 1.1rem 1rem;
+  justify-content: flex-start;
   border-bottom: 1px solid rgba(255, 255, 255, 0.06);
+}
+
+.dh-brand,
+.dh-brand > a {
+  min-width: 0;
+}
+
+.dh-brand > a {
+  overflow: hidden;
 }
 
 .dh-brand-mark {
@@ -251,11 +294,19 @@ html {
   width: 2.35rem;
   height: 2.35rem;
   flex-shrink: 0;
+  overflow: hidden;
   border-radius: 0.75rem;
   color: #fff;
   font-size: 1rem;
-  background: linear-gradient(135deg, var(--tblr-primary) 0%, #8b5cf6 100%);
-  box-shadow: 0 6px 16px -6px color-mix(in srgb, var(--tblr-primary) 80%, transparent);
+  background: #ffc72c;
+  box-shadow: 0 8px 20px -8px rgba(255, 199, 44, 0.7);
+}
+
+.dh-brand-mark img {
+  width: 100%;
+  height: 100%;
+  display: block;
+  object-fit: cover;
 }
 
 .dh-brand-name {
@@ -269,9 +320,13 @@ html {
 
 .dh-brand-sub {
   display: block;
-  font-size: 0.68rem;
+  max-width: 10.5rem;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 0.62rem;
   font-weight: 600;
-  letter-spacing: 0.08em;
+  letter-spacing: 0.06em;
   text-transform: uppercase;
   color: rgba(255, 255, 255, 0.45);
 }
@@ -302,13 +357,17 @@ html {
 }
 
 .dh-sidebar .navbar-nav .nav-link.active {
-  color: #ffffff;
-  background-image: linear-gradient(135deg, var(--tblr-primary) 0%, color-mix(in srgb, var(--tblr-primary) 78%, #141733) 100%);
-  box-shadow: 0 8px 18px -8px color-mix(in srgb, var(--tblr-primary) 55%, transparent);
+  color: #171203;
+  background-image: linear-gradient(135deg, #ffe066 0%, #ffc72c 55%, #f0a500 100%);
+  box-shadow: 0 10px 22px -10px rgba(255, 199, 44, 0.65);
+}
+
+.dh-sidebar .navbar-nav .nav-link.active .nav-link-icon {
+  color: #171203;
 }
 
 .dh-sidebar .navbar-nav .nav-link.active .nav-link-title {
-  font-weight: 600;
+  font-weight: 700;
 }
 
 .dh-sidebar .nav-link-icon {
@@ -381,11 +440,11 @@ html {
   height: 2.25rem;
   flex-shrink: 0;
   border-radius: 0.65rem;
-  color: #fff;
-  font-weight: 700;
+  color: #332400;
+  font-weight: 800;
   font-size: 0.9rem;
-  background: linear-gradient(135deg, #f8b84e 0%, #f59f00 100%);
-  box-shadow: 0 4px 10px -4px rgba(245, 159, 0, 0.8);
+  background: linear-gradient(135deg, #ffe066 0%, #ffc72c 55%, #f0a500 100%);
+  box-shadow: 0 4px 12px -4px rgba(240, 165, 0, 0.8);
 }
 
 .dh-user-name {
@@ -473,10 +532,21 @@ html {
   border-radius: var(--tblr-border-radius-xl);
   padding: 1.75rem 2rem;
   background:
-    radial-gradient(90% 120% at 100% 0%, rgba(139, 92, 246, 0.28) 0%, transparent 55%),
-    linear-gradient(120deg, #171a3b 0%, #1f2352 55%, #2d2f74 100%);
+    radial-gradient(90% 120% at 100% 0%, rgba(255, 199, 44, 0.26) 0%, transparent 55%),
+    radial-gradient(70% 100% at 0% 100%, rgba(200, 16, 46, 0.28) 0%, transparent 62%),
+    linear-gradient(120deg, #0d1326 0%, #131c34 55%, #1a2747 100%);
   color: #fff;
-  box-shadow: 0 20px 40px -22px rgba(23, 26, 54, 0.6);
+  box-shadow: 0 20px 40px -22px rgba(11, 16, 32, 0.7);
+}
+
+.dh-hero::before {
+  content: "";
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 4px;
+  background: var(--ceres-stripe);
 }
 
 .dh-hero::after {
@@ -517,16 +587,16 @@ html {
 }
 
 .dh-hero .btn-accent {
-  background: #f8b84e;
-  color: #1c1e36;
-  font-weight: 700;
+  background: linear-gradient(135deg, #ffe066 0%, #ffc72c 55%, #f0a500 100%);
+  color: #332400;
+  font-weight: 800;
   border: 0;
-  box-shadow: 0 8px 18px -8px rgba(248, 184, 78, 0.7);
+  box-shadow: 0 8px 18px -8px rgba(255, 199, 44, 0.8);
 }
 
 .dh-hero .btn-accent:hover {
-  background: #ffc85c;
-  color: #1c1e36;
+  background: linear-gradient(135deg, #ffe88f 0%, #ffd45c 55%, #f7b21a 100%);
+  color: #332400;
 }
 
 .dh-welcome-row {
@@ -662,4 +732,82 @@ html {
   .dh-hero-title {
     font-size: 1.3rem;
   }
+}
+
+/* ---------- Ceres Liner brand utilities ---------- */
+.ceres-stripe {
+  height: 4px;
+  border-radius: 100rem;
+  background: var(--ceres-stripe);
+}
+
+.ceres-stripe-top {
+  position: relative;
+}
+
+.ceres-stripe-top::before {
+  content: "";
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 4px;
+  background: var(--ceres-stripe);
+}
+
+.btn-ceres {
+  background: linear-gradient(135deg, #ffe066 0%, #ffc72c 55%, #f0a500 100%);
+  border: 1px solid #e0a400;
+  color: #332400;
+  font-weight: 800;
+  box-shadow: 0 8px 18px -8px rgba(255, 199, 44, 0.8);
+}
+
+.btn-ceres:hover,
+.btn-ceres:focus {
+  background: linear-gradient(135deg, #ffe88f 0%, #ffd45c 55%, #f7b21a 100%);
+  border-color: #cf9700;
+  color: #241900;
+}
+
+.btn-ceres-blue {
+  background: linear-gradient(135deg, #3b82f6 0%, #1d4ed8 60%, #12326e 100%);
+  border: 1px solid #12326e;
+  color: #fff;
+  font-weight: 700;
+  box-shadow: 0 8px 18px -8px rgba(29, 78, 216, 0.7);
+}
+
+.btn-ceres-blue:hover,
+.btn-ceres-blue:focus {
+  background: linear-gradient(135deg, #5a97f8 0%, #2563eb 60%, #17418a 100%);
+  border-color: #17418a;
+  color: #fff;
+}
+
+.badge-ceres {
+  background: #fff4cf;
+  color: #7a5200;
+  border: 1px solid #ffd968;
+  font-weight: 700;
+}
+
+.ceres-logo-mark {
+  width: 2.6rem;
+  height: 2.6rem;
+  flex-shrink: 0;
+  display: inline-block;
+  border-radius: 0.7rem;
+  object-fit: cover;
+  box-shadow: 0 8px 18px -8px rgba(240, 165, 0, 0.85);
+}
+
+.ceres-wordmark {
+  font-weight: 800;
+  letter-spacing: 0.06em;
+  color: #1c1e36;
+}
+
+.ceres-wordmark span {
+  color: var(--ceres-red);
 }

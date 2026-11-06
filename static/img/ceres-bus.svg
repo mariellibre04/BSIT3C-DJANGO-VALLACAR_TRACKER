@@ -1,0 +1,80 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 560 240" role="img" aria-label="Yellow Ceres Liner bus">
+  <defs>
+    <linearGradient id="busBody" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#FFE477"/>
+      <stop offset=".42" stop-color="#FFC72C"/>
+      <stop offset="1" stop-color="#EFA400"/>
+    </linearGradient>
+    <linearGradient id="busGlass" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#2B3B5C"/>
+      <stop offset="1" stop-color="#0C1425"/>
+    </linearGradient>
+    <linearGradient id="busRed" x1="0" y1="1" x2="1" y2="0">
+      <stop offset="0" stop-color="#C8102E"/>
+      <stop offset="1" stop-color="#F04461"/>
+    </linearGradient>
+    <linearGradient id="busBlue" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#3B82F6"/>
+      <stop offset="1" stop-color="#12326E"/>
+    </linearGradient>
+    <filter id="busShadow" x="-20%" y="-40%" width="140%" height="180%">
+      <feGaussianBlur stdDeviation="7"/>
+    </filter>
+  </defs>
+
+  <ellipse cx="286" cy="207" rx="236" ry="14" fill="#040814" opacity=".22" filter="url(#busShadow)"/>
+
+  <!-- Body -->
+  <rect x="46" y="52" width="470" height="114" rx="27" fill="url(#busBody)"/>
+  <rect x="46" y="146" width="470" height="21" rx="10.5" fill="#E39B00"/>
+  <rect x="46" y="60" width="470" height="7" rx="3.5" fill="#FFF0A8" opacity=".55"/>
+
+  <!-- Roof unit -->
+  <rect x="224" y="43" width="98" height="13" rx="6.5" fill="#E39B00"/>
+
+  <!-- Window band -->
+  <rect x="92" y="62" width="384" height="53" rx="15" fill="url(#busGlass)"/>
+  <g stroke="#FFC72C" stroke-width="5" opacity=".92" stroke-linecap="round">
+    <line x1="158" y1="64" x2="158" y2="113"/>
+    <line x1="224" y1="64" x2="224" y2="113"/>
+    <line x1="290" y1="64" x2="290" y2="113"/>
+    <line x1="356" y1="64" x2="356" y2="113"/>
+    <line x1="422" y1="64" x2="422" y2="113"/>
+  </g>
+
+  <!-- Front windshield + door -->
+  <path d="M478 62h13c12 0 21 9 21 21v32h-34Z" fill="url(#busGlass)"/>
+  <rect x="430" y="70" width="26" height="82" rx="5" fill="#0C1425" opacity=".92"/>
+  <rect x="436" y="76" width="14" height="70" rx="3" fill="#25344F"/>
+  <line x1="478" y1="62" x2="478" y2="116" stroke="#FFC72C" stroke-width="4" opacity=".9"/>
+
+  <!-- CERES LINER wordmark -->
+  <text x="118" y="141" font-family="Inter, Arial, Helvetica, sans-serif" font-size="16" font-weight="700" letter-spacing="4.4" fill="#3A2A00">CERES LINER</text>
+
+  <!-- Livery swoosh -->
+  <path d="M262 160c64-5 137-15 218-33l9 15c-82 20-158 31-224 35Z" fill="url(#busRed)"/>
+  <path d="M292 173c62-3 133-14 206-33l7 13c-75 20-148 31-211 34Z" fill="url(#busBlue)"/>
+
+  <!-- Details -->
+  <circle cx="513" cy="142" r="5.5" fill="#FFF7CF"/>
+  <circle cx="513" cy="142" r="2.5" fill="#F4A100"/>
+  <rect x="500" y="156" width="22" height="9" rx="4.5" fill="#20263A"/>
+  <rect x="62" y="158" width="52" height="9" rx="4.5" fill="#20263A"/>
+
+  <!-- Wheels -->
+  <g>
+    <circle cx="150" cy="172" r="31" fill="#0B1020"/>
+    <circle cx="150" cy="172" r="18" fill="#C7CCD8"/>
+    <circle cx="150" cy="172" r="7" fill="#6B7280"/>
+    <circle cx="408" cy="172" r="31" fill="#0B1020"/>
+    <circle cx="408" cy="172" r="18" fill="#C7CCD8"/>
+    <circle cx="408" cy="172" r="7" fill="#6B7280"/>
+  </g>
+
+  <!-- Tiny motion accents -->
+  <g stroke="#FFFFFF" stroke-linecap="round" opacity=".55">
+    <line x1="8" y1="126" x2="36" y2="126" stroke-width="4"/>
+    <line x1="16" y1="142" x2="42" y2="142" stroke-width="3"/>
+    <line x1="10" y1="158" x2="30" y2="158" stroke-width="3"/>
+  </g>
+</svg>

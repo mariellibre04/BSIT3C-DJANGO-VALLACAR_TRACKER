@@ -223,7 +223,7 @@ def admin_dashboard(request):
     from django.db.models import Avg, Count, Sum
     from django.utils import timezone as dj_timezone
     from apps.scoping import (
-        scoped_buses, scoped_drivers, scoped_incidents,
+        scoped_drivers, scoped_incidents,
         scoped_maintenances, scoped_trips,
     )
     from apps.bus.models import Bus
@@ -231,7 +231,7 @@ def admin_dashboard(request):
     from apps.maintenance.models import MaintenanceRecord
     from apps.trips.models import Trip
 
-    buses_qs = scoped_buses(request.user)
+    buses_qs = Bus.objects.all()
     drivers_qs = scoped_drivers(request.user)
     incidents_qs = scoped_incidents(request.user)
     maintenances_qs = scoped_maintenances(request.user)

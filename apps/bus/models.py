@@ -62,8 +62,16 @@ class Bus(models.Model):
         help_text='GPS longitude, e.g. 122.950900',
     )
     
-    next_stop = models.CharField(max_length=255, blank=True, default='')
+    next_stop = models.CharField(
+        max_length=255, blank=True, default='',
+        help_text='Bay the bus will use at its next terminal.',
+    )
     next_stop_eta = models.TimeField(null=True, blank=True)
+    next_terminal = models.CharField(
+        max_length=255, blank=True, default='',
+        help_text='Terminal the bus is heading to next.',
+    )
+    next_terminal_eta = models.TimeField(null=True, blank=True)
     final_destination = models.CharField(max_length=255, blank=True, default='')
     final_destination_eta = models.TimeField(null=True, blank=True)
     
@@ -103,6 +111,20 @@ class Bus(models.Model):
     @property
     def is_full(self):
         return self.available_seats <= 0
+
+
+class DemoSeedState(models.Model):
+    """Marks one-time demo seeding so admin edits and deletions are respected."""
+
+    key = models.CharField(max_length=100, unique=True)
+    seeded_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        db_table = 'tbldemoseedstate'
+        ordering = ['key']
+
+    def __str__(self):
+        return self.key
 
 
 class Terminal(models.Model):

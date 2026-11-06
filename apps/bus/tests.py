@@ -4,17 +4,19 @@ from django.contrib.auth import get_user_model
 from django.test import TestCase
 from django.urls import reverse
 
-from apps.core.roles import ROLE_CONDUCTOR, set_role
+from apps.core.roles import ROLE_ADMIN, ROLE_CONDUCTOR, set_role
 
 from .models import (
     Bus,
     BusNextStopLog,
     BusTerminalTap,
+    DemoSeedState,
     Route,
     Terminal,
 )
 from .route_config import ROUTE_DEFINITIONS, TERMINAL_MASTER_LIST
 from .route_service import INVALID_STOP_MESSAGE, seed_transit_data
+from .views import DEMO_SEED_KEY, seed_static_demo_data
 
 
 def make_conductor(username='conductor'):
@@ -22,6 +24,14 @@ def make_conductor(username='conductor'):
         username=username, password='secret1234'
     )
     set_role(user, ROLE_CONDUCTOR)
+    return user
+
+
+def make_admin(username='admin'):
+    user = get_user_model().objects.create_user(
+        username=username, password='secret1234'
+    )
+    set_role(user, ROLE_ADMIN)
     return user
 
 
@@ -145,7 +155,7 @@ class KioskRefreshTests(TestCase):
         ).json()
 
         self.assertIn('102', data['board_html'])
-        self.assertIn('Bacolod to Sipalay', data['board_html'])
+        self.assertIn('Bacolod &rarr; Sipalay', data['board_html'])
         self.assertIn('Passes Kabankalan', data['board_html'])
         self.assertIn('ETA', data['board_html'])
 
@@ -641,3 +651,81 @@ class RouteNextStopTests(TestCase):
         self.assertIn('Final Dumaguete ETA', data['ticker_html'])
         self.assertIn('Next stop: Mabinay', data['board_html'])
         self.assertIn('Final: Dumaguete', data['board_html'])
+
+class AdminKioskSyncTests(TestCase):
+    def setUp(self):
+        self.client.force_login(make_admin())
+        seed_static_demo_data()
+
+    def test_admin_bus_list_reads_the_kiosk_fleet(self):
+        response = self.client.get(reverse('bus:bus_list'))
+
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, '101')
+        self.assertEqual(
+            response.context['buses'].paginator.count, Bus.objects.count()
+        )
+
+    def test_admin_dashboard_counts_match_kiosk_buses(self):
+        response = self.client.get(reverse('admin_dashboard'))
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.context['total_buses'], Bus.objects.count())
+
+    def test_admin_edit_is_reflected_on_kiosk(self):
+        bus = Bus.objects.get(bus_number='101')
+        response = self.client.post(
+            reverse('bus:bus_save_ajax'),
+            {
+                'id': bus.id,
+                'bus_number': bus.bus_number,
+                'plate_number': bus.plate_number,
+                'capacity': bus.capacity,
+                'route': bus.route,
+                'status': Bus.STATUS_ACTIVE,
+                'movement_status': Bus.MOVE_EN_ROUTE,
+                'current_terminal': 'Kabankalan',
+                'bay': 'Bay 03',
+                'next_stop': 'Bay 09',
+                'next_terminal': 'Sibulan',
+                'next_terminal_eta': '10:30',
+                'final_destination': 'Dumaguete',
+                'final_destination_eta': '11:45',
+            },
+        )
+
+        self.assertEqual(response.status_code, 200)
+        bus.refresh_from_db()
+        self.assertEqual(bus.next_terminal, 'Sibulan')
+        self.assertEqual(bus.next_stop, 'Bay 09')
+        board = self.client.get(reverse('bus:bus_kiosk_refresh')).json()['board_html']
+        self.assertIn('Sibulan', board)
+        self.assertIn('Bay 09', board)
+        self.assertIn('Dumaguete', board)
+
+    def test_demo_seed_does_not_overwrite_admin_edits(self):
+        bus = Bus.objects.get(bus_number='101')
+        Bus.objects.filter(pk=bus.pk).update(
+            plate_number='ADMIN-EDIT',
+            capacity=30,
+            route='Admin - Route',
+            status=Bus.STATUS_MAINTENANCE,
+            bay='Bay 07',
+        )
+
+        seed_static_demo_data(force=True)
+
+        bus.refresh_from_db()
+        self.assertEqual(bus.plate_number, 'ADMIN-EDIT')
+        self.assertEqual(bus.capacity, 30)
+        self.assertEqual(bus.route, 'Admin - Route')
+        self.assertEqual(bus.status, Bus.STATUS_MAINTENANCE)
+        self.assertEqual(bus.bay, 'Bay 07')
+
+    def test_deleted_demo_bus_is_not_recreated(self):
+        Bus.objects.get(bus_number='101').delete()
+
+        seed_static_demo_data()
+
+        self.assertFalse(Bus.objects.filter(bus_number='101').exists())
+        self.assertTrue(DemoSeedState.objects.filter(key=DEMO_SEED_KEY).exists())

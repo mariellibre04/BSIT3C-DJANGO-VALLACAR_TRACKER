@@ -6,6 +6,8 @@
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
   <meta name="description" content="Vallacar Tracker passenger terminal monitor — choose your area and see every bus that departs from, passes through, or ends there.">
   <title>{% if kiosk_selected %}{{ kiosk_selected.name }} Terminal — {% endif %}Terminal Monitor — Vallacar Tracker</title>
+  <meta name="theme-color" content="#ffc72c">
+  <link rel="icon" type="image/svg+xml" href="{% static 'img/ceres-mark.svg' %}">
   <link rel="icon" href="{% static 'favicon-dev.ico' %}" type="image/x-icon">
   <link rel="shortcut icon" href="{% static 'favicon-dev.ico' %}" type="image/x-icon">
   <link href="{% static 'css/tabler.css' %}" rel="stylesheet">
@@ -20,10 +22,10 @@
     <!-- Top bar -->
     <header class="k-topbar">
       <div class="k-brand">
-        <span class="k-brand-mark"><i class="fa-solid fa-bus"></i></span>
+        <span class="k-brand-mark"><img src="{% static 'img/ceres-mark.svg' %}" alt="Ceres Liner logo"></span>
         <span>
           <span class="k-brand-name">VALLACAR <span>TRACKER</span></span>
-          <span class="k-brand-sub">Vallacar Transit Inc. &middot; Terminal Operations</span>
+          <span class="k-brand-sub">Ceres Liner &middot; Vallacar Transit Terminal Operations</span>
         </span>
       </div>
       <div class="k-topbar-right">

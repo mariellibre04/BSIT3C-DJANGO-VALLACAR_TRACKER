@@ -1,13 +1,14 @@
+{% load static %}
 <aside class="navbar navbar-vertical navbar-expand-lg navbar-dark dh-sidebar">
   <div class="container-fluid">
     <div class="navbar-brand navbar-brand-autodark dh-brand">
       <a href="{% if is_admin_user %}{% url 'admin_dashboard' %}{% elif is_conductor_user %}{% url 'conductor_dashboard' %}{% else %}{% url 'dashboard' %}{% endif %}" class="d-flex align-items-center gap-2 text-decoration-none">
-        <span class="dh-brand-mark" style="background:linear-gradient(135deg,#C1121F 0%,#F4A100 100%);">
-          <i class="fa-solid fa-bus"></i>
+        <span class="dh-brand-mark">
+          <img src="{% static 'img/ceres-mark.svg' %}" alt="Ceres Liner logo">
         </span>
         <span class="lh-1">
           <span class="dh-brand-name">VALLACAR <span class="text-warning">TRACKER</span></span>
-          <span class="dh-brand-sub">Vallacar Transit Inc. &bull; Bus Tracking</span>
+          <span class="dh-brand-sub">Ceres Liner &bull; Fleet Ops</span>
         </span>
       </a>
     </div>

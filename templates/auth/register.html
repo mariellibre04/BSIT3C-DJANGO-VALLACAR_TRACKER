@@ -11,8 +11,9 @@
   <title>
     Register - Vallacar Tracker
 </title>
-<link rel="icon" href="./favicon-dev.ico" type="image/x-icon" />
-<link rel="shortcut icon" href="./favicon-dev.ico" type="image/x-icon" />
+<link rel="icon" type="image/svg+xml" href="{% static 'img/ceres-mark.svg' %}" />
+<link rel="icon" href="{% static 'favicon-dev.ico' %}" type="image/x-icon" />
+<link rel="shortcut icon" href="{% static 'favicon-dev.ico' %}" type="image/x-icon" />
 <link
 href="{% static 'libs/jsvectormap/dist/jsvectormap.css' %}"
 rel="stylesheet"
@@ -24,6 +25,7 @@ rel="stylesheet"
 <link href="{% static 'css/tabler-vendors.css' %}" rel="stylesheet" />
 <link href="{% static 'css/tabler-marketing.css' %}" rel="stylesheet" />
 <link href="{% static 'css/tabler-themes.css' %}" rel="stylesheet" />
+<link href="{% static 'css/app-theme.css' %}" rel="stylesheet" />
 <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
 <style>
     @import url("https://rsms.me/inter/inter.css");
@@ -35,11 +37,11 @@ rel="stylesheet"
         <div class="container container-tight py-4">
 
             <!-- Logo / Brand -->
-            <center class="mb-2">
-                <span class="fw-bold fs-1 text-body">
-                  GoldHeist <span class="text-primary">Trader</span>
-              </span>
-          </center>
+            <div class="d-flex flex-column align-items-center mb-3">
+                <img src="{% static 'img/ceres-mark.svg' %}" alt="Ceres Liner logo" width="56" height="56" style="border-radius:15px;box-shadow:0 12px 24px -12px rgba(240,165,0,.9);">
+                <div class="ceres-wordmark fs-3 mt-2">CERES <span>LINER</span></div>
+                <div class="text-muted small fw-bold" style="letter-spacing:.18em;">VALLACAR TRANSIT</div>
+            </div>
 
           <div class="card card-md">
             <div class="card-body">

@@ -1,4 +1,5 @@
 {% extends "theme/base.html" %}
+{% load static %}
 {% block content %}
 <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
 <style>
@@ -7,17 +8,26 @@
     padding:1rem 0 1.5rem 0; gap:1rem; flex-wrap:wrap;
   }
   .live-track-brand { display:flex; align-items:center; gap:.75rem; }
+  .live-track-brand-mark {
+    width:48px; height:48px; flex:none; border-radius:13px; object-fit:cover;
+    box-shadow:0 10px 22px -10px rgba(240,165,0,.9);
+  }
+  .live-track-brand-text { min-width:0; }
+  .live-track-brand-sub {
+    margin:0; font-size:.7rem; font-weight:700; letter-spacing:.14em;
+    text-transform:uppercase; color:#8a6a00;
+  }
   .live-track-hamburger {
     display:none; background:none; border:none; font-size:1.5rem; color:#6c757d; cursor:pointer;
     padding:.5rem; border-radius:8px; transition:background .15s;
   }
   .live-track-hamburger:hover { background:#f1f3f5; }
-  .live-track-hamburger:focus { outline:2px solid #C1121F; outline-offset:2px; }
+  .live-track-hamburger:focus { outline:2px solid #c8102e; outline-offset:2px; }
   .live-track-title { font-size:1.75rem; font-weight:700; letter-spacing:-.02em; color:#1c1e36; margin:0; }
   .live-track-sub { font-size:.875rem; color:#6c757d; margin:0; display:flex; align-items:center; gap:.4rem; }
   .live-track-sub a { color:#6c757d; text-decoration:none; }
   .live-track-sub a:hover { text-decoration:underline; }
-  .live-track-sub a:focus { outline:2px solid #C1121F; outline-offset:2px; border-radius:2px; }
+  .live-track-sub a:focus { outline:2px solid #c8102e; outline-offset:2px; border-radius:2px; }
   .live-track-actions { display:flex; align-items:center; gap:.75rem; }
   .live-track-lang { width:28px; height:20px; border:1px solid #e2e2e2; border-radius:4px; cursor:pointer; }
   .live-track-user { width:36px; height:36px; border-radius:50%; border:2px solid #eef0f4; background:#fff; display:inline-flex; align-items:center; justify-content:center; color:#6c757d; font-size:1.25rem; }
@@ -55,7 +65,7 @@
   .live-track-bus-eta {
     display:flex; align-items:center; gap:.5rem; margin-top:.25rem; font-size:.8rem;
   }
-  .live-track-eta-time { background:#C1121F; color:#fff; padding:.1rem .5rem; border-radius:4px; font-weight:700; font-size:.75rem; }
+  .live-track-eta-time { background:#c8102e; color:#fff; padding:.1rem .5rem; border-radius:4px; font-weight:700; font-size:.75rem; }
   .live-track-eta-label { color:#6c757d; font-size:.75rem; }
   .live-track-bus-contact { font-size:.8rem; color:#1c1e36; font-weight:600; white-space:nowrap; text-align:right; flex-shrink:0; }
   .live-track-route-badge {
@@ -99,21 +109,21 @@
   .live-track-search input::placeholder { color:#8a94a6; opacity:1; }
   .live-track-search input:focus { outline:none; }
   .live-track-search-btn {
-    flex-shrink:0; border:none; background:#C1121F; color:#fff; font-size:.8rem;
+    flex-shrink:0; border:none; background:#c8102e; color:#fff; font-size:.8rem;
     font-weight:700; border-radius:6px; padding:.3rem .75rem; cursor:pointer;
   }
   .live-track-search-btn:hover { background:#a00f1a; }
-  .live-track-search-btn:focus-visible { outline:2px solid #C1121F; outline-offset:2px; }
+  .live-track-search-btn:focus-visible { outline:2px solid #c8102e; outline-offset:2px; }
   .live-track-search-results { display:none; list-style:none; margin:0; padding:0; position:absolute; top:100%; left:0; right:0; max-height:300px; overflow-y:auto; background:#fff; border:1px solid var(--tblr-border-color); border-top:none; border-radius:0 0 10px 10px; z-index:101; box-shadow:var(--tblr-shadow-card); }
   .live-track-search-results.show { display:block; }
   .live-track-search-item { padding:.6rem .8rem; cursor:pointer; font-size:.875rem; color:#1c1e36; border-bottom:1px solid #f1f3f5; }
   .live-track-search-item:last-child { border-bottom:none; }
   .live-track-search-item:hover, .live-track-search-item:focus { background:#f8f9fa; outline:none; }
-  .live-track-search-item:focus { outline:2px solid #C1121F; outline-offset:-2px; }
+  .live-track-search-item:focus { outline:2px solid #c8102e; outline-offset:-2px; }
   .live-track-search-item strong { color:#22c55e; }
   .search-result-buses { display:flex; gap:.4rem; margin-top:.35rem; flex-wrap:wrap; }
   .search-result-bus-tag { background:#f1f5f9; color:#334155; font-size:.65rem; font-weight:700; padding:.1rem .4rem; border-radius:999px; text-transform:uppercase; }
-  .search-result-bus-count { background:#C1121F; color:#fff; font-size:.65rem; font-weight:700; padding:.1rem .4rem; border-radius:999px; }
+  .search-result-bus-count { background:#c8102e; color:#fff; font-size:.65rem; font-weight:700; padding:.1rem .4rem; border-radius:999px; }
   .search-result-name { font-weight:700; color:#16a34a; }
   .search-result-address { color:#6c757d; font-size:.78rem; }
   .live-track-search-status { padding:.7rem .8rem; font-size:.82rem; color:#6c757d; }
@@ -143,7 +153,11 @@
   <header class="live-track-topbar" role="banner">
     <button class="live-track-hamburger" aria-label="Toggle navigation menu" aria-expanded="false" aria-controls="sidebar-menu"><i class="fa-solid fa-bars" aria-hidden="true"></i></button>
     <div class="live-track-brand">
-      <h1 class="live-track-title">Live Tracking</h1>
+      <img class="live-track-brand-mark" src="{% static 'img/ceres-mark.svg' %}" alt="Ceres Liner logo">
+      <div class="live-track-brand-text">
+        <p class="live-track-brand-sub">Ceres Liner &middot; Vallacar Transit</p>
+        <h1 class="live-track-title">Live Tracking</h1>
+      </div>
     </div>
     <nav aria-label="Breadcrumb" class="live-track-sub">
       <a href="{% url 'bus:bus_map' %}">Bus Station</a>
@@ -260,7 +274,7 @@
   // Movement is time-compressed so buses visibly travel at region zoom.
   // Set to 1 for strict wall-clock speed (a 2-hour trip would take 2 hours).
   const SIM_TIME_SCALE = 20;
-  const ROUTE_COLORS = ['#C1121F', '#2563eb', '#16a34a', '#9333ea', '#ea580c', '#0891b2'];
+  const ROUTE_COLORS = ['#c8102e', '#2563eb', '#16a34a', '#9333ea', '#ea580c', '#0891b2'];
 
   // --- DOM elements ---
   const mapEl = document.getElementById('live-map');
@@ -428,7 +442,7 @@
   };
 
   function statusColor(key) {
-    return STATUS_COLORS[key] || '#C1121F';
+    return STATUS_COLORS[key] || '#c8102e';
   }
 
   // Create bus marker icon with a direction arrow and a status label.

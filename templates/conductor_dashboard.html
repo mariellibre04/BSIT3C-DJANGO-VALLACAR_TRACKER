@@ -1,4 +1,5 @@
 {% extends "theme/base.html" %}
+{% load static %}
 {% block content %}
 <div class="container-xl">
   <div class="page-header d-print-none" aria-label="Page header">
@@ -27,7 +28,7 @@
       <aside class="dh-sidebar">
         <div class="container-fluid">
           <div class="navbar-brand">
-            <span class="dh-brand-mark"><i class="fa-solid fa-bus"></i></span>
+            <span class="dh-brand-mark"><img src="{% static 'img/ceres-mark.svg' %}" alt="Ceres Liner logo"></span>
             <span class="lh-1">Terminal Ops</span>
           </div>
           <div class="collapse navbar-collapse" id="terminal-ops-sidebar">

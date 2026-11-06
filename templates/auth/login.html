@@ -5,9 +5,11 @@
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
   <meta http-equiv="X-UA-Compatible" content="ie=edge" />
-  <title>
-    Sign in - Vallacar Tracker
-  </title>
+  <meta name="theme-color" content="#ffc72c" />
+  <title>Sign in - Vallacar Tracker</title>
+  <link rel="icon" type="image/svg+xml" href="{% static 'img/ceres-mark.svg' %}" />
+  <link rel="icon" href="{% static 'favicon-dev.ico' %}" type="image/x-icon" />
+  <link rel="shortcut icon" href="{% static 'favicon-dev.ico' %}" type="image/x-icon" />
   <link href="{% static 'libs/jsvectormap/dist/jsvectormap.css' %}" rel="stylesheet" />
   <link href="{% static 'css/tabler.css' %}" rel="stylesheet" />
   <link href="{% static 'css/tabler-flags.css' %}" rel="stylesheet" />
@@ -16,144 +18,398 @@
   <link href="{% static 'css/tabler-vendors.css' %}" rel="stylesheet" />
   <link href="{% static 'css/tabler-marketing.css' %}" rel="stylesheet" />
   <link href="{% static 'css/tabler-themes.css' %}" rel="stylesheet" />
+  <link href="{% static 'css/app-theme.css' %}" rel="stylesheet" />
   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
-</head>
+  <style>
+    @import url("https://rsms.me/inter/inter.css");
 
-<body>
-  <script src="{% static 'js/tabler-theme.js' %}"></script>
-  <div class="page page-center">
-    <div class="container container-tight py-4">
-
-     <div class="card card-md">
-      <div class="card-body">
-
-        <center class="mt-n4">
-        <i class='far fa-calendar' style='font-size:40px'></i>
-        </center>
-        <h2 class="h3 text-center mb-4">Sign in to start your session</h2>
-
-        <form method="post">
-          {% csrf_token %}
-
-          {% for message in messages %}
-          {% if message.tags != 'success' %}
-          <div id="error-message" class="alert alert-danger">
-            {{ message }}
-          </div>
-          {% endif %}
-          {% endfor %}
-          <div class="mb-3">
-            <label class="form-label">Username</label>
-            <input type="text" class="form-control" name="username" autocomplete="off" {% if locked %}disabled{% endif %}>
-          </div>
-          <div class="mb-2">
-            <label class="form-label">
-              Password
-            </label>
-            <div class="input-group input-group-flat">
-              <input type="password" class="form-control" name="password" autocomplete="off" {% if locked %}disabled{% endif %}>
-            </div>
-          </div>
-          <div class="form-footer d-flex justify-content-end">
-            <button type="submit" class="btn btn-primary w-50">
-              <i class="fas fa-sign-in-alt me-1"></i> Sign in
-            </button>
-          </div>
-       </form>
-     </div>
-   </div>
- </div>
-  <!-- <div class="text-center text-secondary mt-n1">
-   Don't have an account?
-   <a href="{% url 'register' %}" class="text-primary fw-bold">Register</a>
-  </div> -->
-</div>
-
-{% include 'theme/settings.html' %}
-
-<script src="{% static 'js/tabler.js' %}" defer></script>
-<script src="{% static 'js/demo.js' %}" defer></script>
-{% if locked %}
-<script>
-  let remaining = {{ remaining }};
-  const messageBox = document.getElementById("error-message");
-
-  let interval = setInterval(function() {
-    remaining--;
-
-    if (remaining > 0) {
-      messageBox.innerHTML =
-      "Too many failed attempts. Try again in " + remaining + " seconds.";
-    } else {
-      clearInterval(interval);
-      window.location.href = "{% url 'login' %}";
+    .ceres-auth {
+      min-height: 100vh;
+      background:
+        radial-gradient(900px 520px at 85% -10%, rgba(255, 199, 44, .2), transparent 62%),
+        radial-gradient(720px 480px at 0% 100%, rgba(200, 16, 46, .08), transparent 60%),
+        #fbf7ec;
     }
 
-  }, 1000);
-</script>
-{% endif %}
-<script>
-  document.addEventListener("DOMContentLoaded", function () {
-    var themeConfig = {
-      theme: "light",
-      "theme-base": "gray",
-      "theme-font": "sans-serif",
-      "theme-primary": "blue",
-      "theme-radius": "1",
-    };
+    .ceres-auth-shell {
+      display: grid;
+      grid-template-columns: 1.05fr .95fr;
+      max-width: 1000px;
+      margin: 0 auto;
+      border-radius: 26px;
+      overflow: hidden;
+      background: #fff;
+      border: 1px solid #ece2ce;
+      box-shadow: 0 34px 80px -40px rgba(11, 16, 32, .55);
+    }
 
-    var url = new URL(window.location);
-    var form = document.getElementById("offcanvasSettings");
-    var resetButton = document.getElementById("reset-changes");
+    .ceres-auth-visual {
+      position: relative;
+      overflow: hidden;
+      padding: 2.4rem 2.4rem 2rem;
+      color: #fff;
+      display: flex;
+      flex-direction: column;
+      min-height: 560px;
+      background:
+        radial-gradient(80% 120% at 100% 4%, rgba(255, 199, 44, .3), transparent 55%),
+        radial-gradient(70% 100% at 0% 100%, rgba(200, 16, 46, .38), transparent 60%),
+        radial-gradient(60% 90% at 70% 100%, rgba(29, 78, 216, .3), transparent 65%),
+        linear-gradient(140deg, #0a0f1e 0%, #121b31 55%, #1b2746 100%);
+    }
 
-    var checkItems = function () {
-      for (var key in themeConfig) {
-        var value =
-        window.localStorage["tabler-" + key] || themeConfig[key];
+    .ceres-auth-visual::before {
+      content: "";
+      position: absolute;
+      top: 0; left: 0; right: 0; height: 5px;
+      background: linear-gradient(90deg, #c8102e 0 36%, #ffc72c 36% 72%, #1d4ed8 72% 100%);
+    }
 
-        if (!!value) {
-          var radios = form.querySelectorAll(`[name="${key}"]`);
+    .ceres-auth-brand {
+      position: relative;
+      z-index: 2;
+      display: flex;
+      align-items: center;
+      gap: .85rem;
+    }
 
-          if (!!radios) {
-            radios.forEach((radio) => {
-              radio.checked = radio.value === value;
-            });
+    .ceres-auth-brand img {
+      width: 54px;
+      height: 54px;
+      border-radius: 15px;
+      box-shadow: 0 14px 28px -12px rgba(240, 165, 0, .9);
+    }
+
+    .ceres-auth-brand-name {
+      display: block;
+      font-size: 1rem;
+      font-weight: 800;
+      letter-spacing: .14em;
+      color: #fff;
+      line-height: 1.1;
+    }
+
+    .ceres-auth-brand-sub {
+      display: block;
+      margin-top: .2rem;
+      font-size: .64rem;
+      font-weight: 700;
+      letter-spacing: .2em;
+      text-transform: uppercase;
+      color: rgba(255, 255, 255, .55);
+    }
+
+    .ceres-auth-copy {
+      position: relative;
+      z-index: 2;
+      margin-top: 3rem;
+      max-width: 23rem;
+    }
+
+    .ceres-auth-kicker {
+      display: inline-flex;
+      align-items: center;
+      gap: .4rem;
+      padding: .32rem .7rem;
+      border-radius: 100rem;
+      font-size: .62rem;
+      font-weight: 800;
+      letter-spacing: .18em;
+      text-transform: uppercase;
+      color: #3a2a00;
+      background: linear-gradient(135deg, #ffe066, #ffc72c);
+      box-shadow: 0 8px 18px -8px rgba(255, 199, 44, .8);
+    }
+
+    .ceres-auth-copy h1 {
+      margin: 1rem 0 .7rem;
+      font-size: clamp(1.9rem, 3vw, 2.6rem);
+      font-weight: 800;
+      letter-spacing: -.035em;
+      line-height: 1.08;
+    }
+
+    .ceres-auth-copy h1 span { color: #ffd04a; }
+
+    .ceres-auth-copy p {
+      color: rgba(255, 255, 255, .72);
+      font-size: .9rem;
+      line-height: 1.55;
+      margin: 0;
+    }
+
+    .ceres-auth-livery {
+      position: relative;
+      z-index: 2;
+      display: flex;
+      gap: .4rem;
+      margin-top: auto;
+      padding-top: 2rem;
+    }
+
+    .ceres-auth-livery span {
+      height: 5px;
+      border-radius: 100rem;
+    }
+
+    .ceres-auth-livery .l-red { width: 42%; background: #c8102e; }
+    .ceres-auth-livery .l-yellow { width: 34%; background: #ffc72c; }
+    .ceres-auth-livery .l-blue { width: 24%; background: #1d4ed8; }
+
+    .ceres-auth-bus {
+      position: absolute;
+      right: -4.5rem;
+      bottom: -3.4rem;
+      width: 116%;
+      max-width: 560px;
+      z-index: 1;
+      pointer-events: none;
+      opacity: .96;
+      filter: drop-shadow(0 30px 38px rgba(0, 0, 0, .42));
+    }
+
+    .ceres-auth-form {
+      display: flex;
+      flex-direction: column;
+      justify-content: center;
+      padding: 3rem 3rem 2.5rem;
+    }
+
+    .ceres-auth-form-inner { width: 100%; max-width: 23rem; margin: 0 auto; }
+
+    .ceres-auth-eyebrow {
+      font-size: .68rem;
+      font-weight: 800;
+      letter-spacing: .2em;
+      text-transform: uppercase;
+      color: #b28a00;
+    }
+
+    .ceres-auth-form h2 {
+      font-size: 1.65rem;
+      font-weight: 800;
+      letter-spacing: -.03em;
+      color: #171b2e;
+      margin: .35rem 0 .35rem;
+    }
+
+    .ceres-auth-form .auth-sub {
+      color: #767b8f;
+      font-size: .85rem;
+      margin-bottom: 1.6rem;
+    }
+
+    .ceres-auth-form .form-label {
+      font-size: .76rem;
+      font-weight: 700;
+      color: #3b4056;
+    }
+
+    .ceres-auth-form .form-control {
+      border-color: #e3dac6;
+      background: #fffdf8;
+      padding: .62rem .8rem;
+    }
+
+    .ceres-auth-form .form-control:focus {
+      border-color: #ffc72c;
+      box-shadow: 0 0 0 .25rem rgba(255, 199, 44, .22);
+      background: #fff;
+    }
+
+    .ceres-auth-form .btn-primary {
+      padding: .68rem 1rem;
+      font-weight: 800;
+      letter-spacing: .01em;
+    }
+
+    .ceres-auth-foot {
+      margin-top: 1.4rem;
+      text-align: center;
+      font-size: .7rem;
+      color: #9aa0b4;
+    }
+
+    .ceres-auth-foot strong { color: #6b7188; }
+
+    @media (max-width: 899.98px) {
+      .ceres-auth-shell { grid-template-columns: 1fr; }
+      .ceres-auth-visual { min-height: 0; padding: 1.6rem 1.6rem 1.4rem; }
+      .ceres-auth-copy { margin-top: 1.4rem; max-width: 100%; }
+      .ceres-auth-copy h1 { font-size: 1.6rem; }
+      .ceres-auth-copy p { display: none; }
+      .ceres-auth-bus { width: 66%; right: -2rem; bottom: -.8rem; opacity: .5; }
+      .ceres-auth-livery { padding-top: 1.2rem; }
+      .ceres-auth-form { padding: 2rem 1.6rem 2.2rem; }
+    }
+  </style>
+</head>
+
+<body class="ceres-auth">
+  <script src="{% static 'js/tabler-theme.js' %}"></script>
+  <div class="page page-center">
+    <div class="container py-4">
+
+      <div class="ceres-auth-shell">
+        <section class="ceres-auth-visual" aria-label="Ceres Liner fleet tracker">
+          <div class="ceres-auth-brand">
+            <img src="{% static 'img/ceres-mark.svg' %}" alt="Ceres Liner logo">
+            <span>
+              <span class="ceres-auth-brand-name">CERES LINER</span>
+              <span class="ceres-auth-brand-sub">Vallacar Transit Inc.</span>
+            </span>
+          </div>
+
+          <div class="ceres-auth-copy">
+            <span class="ceres-auth-kicker"><i class="fa-solid fa-bolt"></i> Fleet operations</span>
+            <h1>Every bus.<br>Every route.<br><span>On time.</span></h1>
+            <p>Live tracking, terminal boards, and fleet insights for the Ceres Liner network across Negros.</p>
+          </div>
+
+          <div class="ceres-auth-livery" aria-hidden="true">
+            <span class="l-red"></span>
+            <span class="l-yellow"></span>
+            <span class="l-blue"></span>
+          </div>
+
+          <img class="ceres-auth-bus" src="{% static 'img/ceres-bus.svg' %}" alt="Ceres Liner bus">
+        </section>
+
+        <section class="ceres-auth-form">
+          <div class="ceres-auth-form-inner">
+            <div class="ceres-auth-eyebrow">Operations console</div>
+            <h2>Welcome back</h2>
+            <p class="auth-sub">Sign in to start your session.</p>
+
+            <form method="post">
+              {% csrf_token %}
+
+              {% for message in messages %}
+              {% if message.tags != 'success' %}
+              <div id="error-message" class="alert alert-danger">
+                {{ message }}
+              </div>
+              {% endif %}
+              {% endfor %}
+
+              <div class="mb-3">
+                <label class="form-label">Username</label>
+                <input type="text" class="form-control" name="username" autocomplete="off" {% if locked %}disabled{% endif %} />
+              </div>
+
+              <div class="mb-3">
+                <label class="form-label">Password</label>
+                <div class="input-group input-group-flat">
+                  <input type="password" class="form-control" name="password" autocomplete="off" {% if locked %}disabled{% endif %} />
+                </div>
+              </div>
+
+              <div class="form-footer">
+                <button type="submit" class="btn btn-primary w-100">
+                  <i class="fas fa-sign-in-alt me-1"></i> Sign in
+                </button>
+              </div>
+            </form>
+
+            <div class="ceres-auth-foot">
+              <strong>Ceres Liner</strong> &middot; Vallacar Transit Inc.<br>
+              Authorized personnel only.
+            </div>
+          </div>
+        </section>
+      </div>
+
+    </div>
+  </div>
+
+  {% include 'theme/settings.html' %}
+
+  <script src="{% static 'js/tabler.js' %}" defer></script>
+  <script src="{% static 'js/demo.js' %}" defer></script>
+  {% if locked %}
+  <script>
+    let remaining = {{ remaining }};
+    const messageBox = document.getElementById("error-message");
+
+    let interval = setInterval(function() {
+      remaining--;
+
+      if (remaining > 0) {
+        messageBox.innerHTML =
+        "Too many failed attempts. Try again in " + remaining + " seconds.";
+      } else {
+        clearInterval(interval);
+        window.location.href = "{% url 'login' %}";
+      }
+
+    }, 1000);
+  </script>
+  {% endif %}
+  <script>
+    document.addEventListener("DOMContentLoaded", function () {
+      var themeConfig = {
+        theme: "light",
+        "theme-base": "gray",
+        "theme-font": "sans-serif",
+        "theme-primary": "ceres",
+        "theme-radius": "1",
+      };
+
+      var url = new URL(window.location);
+      var form = document.getElementById("offcanvasSettings");
+      var resetButton = document.getElementById("reset-changes");
+      if (!form) return;
+
+      var checkItems = function () {
+        for (var key in themeConfig) {
+          var value =
+          window.localStorage["tabler-" + key] || themeConfig[key];
+
+          if (!!value) {
+            var radios = form.querySelectorAll(`[name="${key}"]`);
+
+            if (!!radios) {
+              radios.forEach((radio) => {
+                radio.checked = radio.value === value;
+              });
+            }
           }
         }
-      }
-    };
+      };
 
-    form.addEventListener("change", function (event) {
-      var target = event.target,
-      name = target.name,
-      value = target.value;
+      form.addEventListener("change", function (event) {
+        var target = event.target,
+        name = target.name,
+        value = target.value;
 
-      for (var key in themeConfig) {
-        if (name === key) {
-          document.documentElement.setAttribute("data-bs-" + key, value);
-          window.localStorage.setItem("tabler-" + key, value);
-          url.searchParams.set(key, value);
+        for (var key in themeConfig) {
+          if (name === key) {
+            document.documentElement.setAttribute("data-bs-" + key, value);
+            window.localStorage.setItem("tabler-" + key, value);
+            url.searchParams.set(key, value);
+          }
         }
-      }
 
-      window.history.pushState({}, "", url);
-    });
+        window.history.pushState({}, "", url);
+      });
 
-    resetButton.addEventListener("click", function () {
-      for (var key in themeConfig) {
-        var value = themeConfig[key];
-        document.documentElement.removeAttribute("data-bs-" + key);
-        window.localStorage.removeItem("tabler-" + key);
-        url.searchParams.delete(key);
+      if (resetButton) {
+        resetButton.addEventListener("click", function () {
+          for (var key in themeConfig) {
+            var value = themeConfig[key];
+            document.documentElement.removeAttribute("data-bs-" + key);
+            window.localStorage.removeItem("tabler-" + key);
+            url.searchParams.delete(key);
+          }
+
+          checkItems();
+
+          window.history.pushState({}, "", url);
+        });
       }
 
       checkItems();
-
-      window.history.pushState({}, "", url);
     });
-
-    checkItems();
-  });
-</script>
+  </script>
 </body>
 </html>

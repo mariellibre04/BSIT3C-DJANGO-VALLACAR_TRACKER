@@ -1,4 +1,5 @@
-{# Ceres Liner welcome card (photo-style, polished). Usage: #}
+{# Ceres Liner welcome card (livery styled). Usage: #}
+{% load static %}
 {# {% include 'theme/ceres_welcome.html' with btn_href='#fleet-overview' %} #}
 <style>
   .ceres-welcome {
@@ -6,45 +7,37 @@
     background: #fff;
     border: 1px solid var(--tblr-border-color);
     border-radius: 20px;
-    box-shadow: 0 18px 44px -20px rgba(193, 18, 31, .25), var(--tblr-shadow-card);
+    box-shadow: 0 18px 44px -20px rgba(200, 16, 46, .25), var(--tblr-shadow-card);
     overflow: hidden;
   }
   .ceres-welcome::before {
     content: "";
     position: absolute;
     top: 0; left: 0; right: 0; height: 6px;
-    background: linear-gradient(90deg, #C1121F 0%, #C1121F 55%, #F4A100 55%, #F4A100 100%);
+    background: linear-gradient(90deg, #c8102e 0 36%, #ffc72c 36% 72%, #1d4ed8 72% 100%);
   }
-  .ceres-star {
-    width: 4.2rem; height: 4.2rem; flex-shrink: 0;
-    display: inline-flex; align-items: center; justify-content: center;
-    border-radius: 50%;
-    background: radial-gradient(circle at 50% 38%, #FFD666 0%, #F4A100 62%, #D98200 100%);
-    border: 4px solid #C1121F;
-    outline: 2px solid rgba(193, 18, 31, .25);
-    outline-offset: 3px;
-    color: #FFF7E0;
-    font-size: 2rem; line-height: 1;
-    text-shadow: 0 1px 2px rgba(122, 58, 0, .55);
-    box-shadow: 0 8px 18px -8px rgba(244, 161, 0, .8);
+  .ceres-welcome-mark {
+    width: 4.4rem; height: 4.4rem; flex-shrink: 0;
+    border-radius: 1.1rem;
+    box-shadow: 0 12px 26px -12px rgba(240, 165, 0, .9);
   }
-  .ceres-brand { color: #C1121F; font-weight: 800; letter-spacing: .04em; font-size: .95rem; }
+  .ceres-brand { color: #c8102e; font-weight: 800; letter-spacing: .14em; font-size: .95rem; }
   .ceres-sub { color: var(--tblr-muted); font-size: .68rem; font-weight: 700; letter-spacing: .22em; }
-  .ceres-title { color: #8f0e18; font-weight: 800; letter-spacing: -.02em; }
+  .ceres-title { color: #171b2e; font-weight: 800; letter-spacing: -.02em; }
   .ceres-btn {
-    background: linear-gradient(180deg, #FFC53D 0%, #F4A100 100%);
-    border: 1px solid #d98a00;
-    color: #7a2e00; font-weight: 800;
+    background: linear-gradient(135deg, #ffe066 0%, #ffc72c 55%, #f0a500 100%);
+    border: 1px solid #d99a00;
+    color: #332400; font-weight: 800;
     border-radius: 10px;
-    box-shadow: 0 8px 18px -8px rgba(244, 161, 0, .9);
+    box-shadow: 0 8px 18px -8px rgba(240, 165, 0, .9);
     transition: transform .12s ease, box-shadow .12s ease, filter .12s ease;
   }
-  .ceres-btn:hover { color: #7a2e00; filter: brightness(1.04); transform: translateY(-1px); box-shadow: 0 12px 22px -8px rgba(244, 161, 0, .95); }
+  .ceres-btn:hover { color: #241900; filter: brightness(1.04); transform: translateY(-1px); box-shadow: 0 12px 22px -8px rgba(240, 165, 0, .95); }
 </style>
 
 <div class="ceres-welcome px-4 py-4 p-md-5 mb-3 mx-auto text-center" style="max-width:42rem;">
   <div class="d-flex flex-column align-items-center gap-1">
-    <span class="ceres-star">&#9733;</span>
+    <img class="ceres-welcome-mark" src="{% static 'img/ceres-mark.svg' %}" alt="Ceres Liner logo">
     <div class="ceres-brand mt-2">CERES LINER</div>
     <div class="ceres-sub">VALLACAR TRANSIT</div>
     <h2 class="ceres-title mt-2 mb-1 fs-1">Welcome, Passenger!</h2>

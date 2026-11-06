@@ -1,5 +1,5 @@
 :root {
-  --k-bg: #070b16;
+  --k-bg: #060a14;
   --k-panel: rgba(15, 22, 42, .86);
   --k-panel-soft: rgba(255, 255, 255, .028);
   --k-line: rgba(148, 163, 184, .14);
@@ -7,11 +7,12 @@
   --k-text: #f1f5f9;
   --k-muted: #8b98b4;
   --k-red: #e11d2e;
-  --k-gold: #f5a623;
-  --k-blue: #38bdf8;
+  --k-gold: #ffc72c;
+  --k-blue: #3b82f6;
   --k-green: #22c55e;
   --k-amber: #f59e0b;
   --k-teal: #2dd4bf;
+  --k-stripe: linear-gradient(90deg, #e11d2e 0 36%, #ffc72c 36% 72%, #3b82f6 72% 100%);
 }
 
 html {
@@ -26,10 +27,21 @@ body.kiosk-body {
   font-family: "Inter", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
   -webkit-font-smoothing: antialiased;
   background:
-    radial-gradient(1100px 620px at 8% -12%, rgba(225, 29, 46, .20), transparent 62%),
-    radial-gradient(900px 520px at 102% -4%, rgba(245, 166, 35, .11), transparent 58%),
-    radial-gradient(900px 650px at 50% 118%, rgba(56, 189, 248, .07), transparent 62%),
+    radial-gradient(1100px 620px at 8% -12%, rgba(225, 29, 46, .22), transparent 62%),
+    radial-gradient(950px 540px at 102% -4%, rgba(255, 199, 44, .14), transparent 58%),
+    radial-gradient(900px 650px at 50% 118%, rgba(59, 130, 246, .12), transparent 62%),
     var(--k-bg);
+}
+
+body.kiosk-body::after {
+  content: "";
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 4px;
+  background: var(--k-stripe);
+  z-index: 60;
 }
 
 body.kiosk-body::before {
@@ -74,13 +86,19 @@ body.kiosk-body::before {
   width: 52px;
   height: 52px;
   flex: none;
+  overflow: hidden;
   border-radius: 16px;
   display: grid;
   place-items: center;
-  font-size: 1.35rem;
-  color: #fff;
-  background: linear-gradient(135deg, #e11d2e 0%, #f5a623 100%);
-  box-shadow: 0 12px 34px -12px rgba(225, 29, 46, .7);
+  background: #ffc72c;
+  box-shadow: 0 12px 34px -12px rgba(255, 199, 44, .72);
+}
+
+.k-brand-mark img {
+  width: 100%;
+  height: 100%;
+  display: block;
+  object-fit: cover;
 }
 
 .k-brand-name {
