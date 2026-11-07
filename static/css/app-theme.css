@@ -298,8 +298,8 @@ html {
   border-radius: 0.75rem;
   color: #fff;
   font-size: 1rem;
-  background: #ffc72c;
-  box-shadow: 0 8px 20px -8px rgba(255, 199, 44, 0.7);
+  background: #08101f;
+  box-shadow: 0 8px 20px -12px rgba(0, 0, 0, 0.8);
 }
 
 .dh-brand-mark img {
@@ -312,10 +312,11 @@ html {
 .dh-brand-name {
   display: block;
   font-weight: 800;
-  font-size: 1.05rem;
-  letter-spacing: -0.02em;
+  font-size: 0.96rem;
+  letter-spacing: -0.035em;
   color: #ffffff;
   line-height: 1.15;
+  white-space: nowrap;
 }
 
 .dh-brand-sub {
@@ -799,7 +800,7 @@ html {
   display: inline-block;
   border-radius: 0.7rem;
   object-fit: cover;
-  box-shadow: 0 8px 18px -8px rgba(240, 165, 0, 0.85);
+  box-shadow: 0 8px 18px -12px rgba(8, 16, 31, 0.75);
 }
 
 .ceres-wordmark {
@@ -810,4 +811,43 @@ html {
 
 .ceres-wordmark span {
   color: var(--ceres-red);
+}
+
+/* Bus management: fit every column without clipping the action buttons. */
+.bus-table {
+  min-width: 1040px;
+}
+
+.bus-table thead th {
+  white-space: normal;
+}
+
+.bus-table td {
+  white-space: normal;
+}
+
+/* Keep the floating theme control out of the sidebar/user card. */
+.settings {
+  position: fixed;
+  right: 1.1rem;
+  bottom: 1.1rem;
+  left: auto;
+  z-index: 1040;
+}
+
+.settings > .btn-floating {
+  width: 2.4rem;
+  height: 2.4rem;
+  border-radius: 0.75rem;
+  color: var(--ceres-red);
+  background: #fffdf8;
+  border: 1px solid var(--tblr-border-color);
+  box-shadow: 0 10px 24px -14px rgba(8, 16, 31, 0.55);
+}
+
+.settings > .btn-floating:hover,
+.settings > .btn-floating:focus {
+  color: #fff;
+  background: var(--ceres-red);
+  border-color: var(--ceres-red);
 }

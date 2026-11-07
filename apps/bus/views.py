@@ -84,6 +84,7 @@ def _to_datetime(t):
 TERMINALS = [
     {'name': 'Bacolod', 'keywords': ('bacolod',), 'lat': 10.6765, 'lng': 122.9509},
     {'name': 'Kabankalan', 'keywords': ('kabankalan', 'kabnakalan'), 'lat': 9.9917, 'lng': 122.8128},
+    {'name': 'Narra', 'keywords': ('narra',), 'lat': 9.967, 'lng': 122.617},
     {'name': 'Mabinay', 'keywords': ('mabinay',), 'lat': 9.7264, 'lng': 122.9256},
     {'name': 'Dumaguete', 'keywords': ('dumaguete',), 'lat': 9.3072, 'lng': 123.3080},
     {'name': 'San Carlos', 'keywords': ('san carlos', 'sancarlos'), 'lat': 10.4966, 'lng': 123.4224},
@@ -175,12 +176,12 @@ STATIC_DEMO_BUSES = [
         'bus_number': '103',
         'plate_number': 'VTI 2003',
         'capacity': 53,
-        'route': 'Cauayan - Bacolod',
-        'terminal': 'Cauayan Negros',
+        'route': 'Narra - Bacolod',
+        'terminal': 'Narra',
         'in_minutes': 6,
         'out_minutes': None,
         'stops': [
-            'Cauayan Negros', 'Ilog', 'Kabankalan', 'Himamaylan', 'Binalbagan',
+            'Narra', 'Ilog', 'Kabankalan', 'Himamaylan', 'Binalbagan',
             'Hinigaran', 'Pontevedra', 'Valladolid', 'Bago', 'Bacolod',
         ],
     },
@@ -630,6 +631,22 @@ def _bus_gps_payload(bus, occupied=None, use_fallback=False):
     }
 
 
+def _bus_terminal_options():
+    """Every terminal a bus can be assigned to, for the bus form pickers."""
+    names = {
+        (terminal.get('name') or '').strip()
+        for terminal in TERMINALS
+    }
+    names.update(
+        (entry.get('name') or '').strip()
+        for entry in terminal_directory.TERMINAL_DIRECTORY
+    )
+    names.update(
+        Terminal.objects.order_by('name').values_list('name', flat=True)
+    )
+    return sorted((name for name in names if name), key=str.casefold)
+
+
 @admin_required
 def bus_list_page(request):
     query = request.GET.get('q', '').strip()
@@ -649,7 +666,11 @@ def bus_list_page(request):
     buses = paginator.get_page(request.GET.get('page', 1))
     for b in buses.object_list:
         b.seats_left = max(0, b.capacity - b.total_passengers)
-    return render(request, 'bus/list.html', {'buses': buses, 'query': query})
+    return render(request, 'bus/list.html', {
+        'buses': buses,
+        'query': query,
+        'terminal_options': _bus_terminal_options(),
+    })
 
 
 @admin_required
@@ -698,6 +719,14 @@ def _kiosk_bay(bus):
         digits = re.sub(r'\D', '', bus.bus_number or '') or str(bus.id or 0)
         bay = (int(digits[-3:]) % KIOSK_BAY_COUNT) + 1
     return f'Bay {bay:02d}'
+
+
+_LEGACY_BAY_RE = re.compile(r'^\s*bay\b', re.IGNORECASE)
+
+
+def _is_legacy_bay(value):
+    """True for old "Bay 09"-style next-stop values."""
+    return bool(_LEGACY_BAY_RE.match((value or '').strip()))
 
 
 def _kiosk_requested_area(request):
@@ -1123,6 +1152,14 @@ def _kiosk_board_context(selected_terminal=None, area_key=None):
             arrival = {
                 'eta': _to_datetime(bus.next_terminal_eta or bus.next_stop_eta)
             }
+        # The "next terminal stop" chosen by the dispatcher is the immediate
+        # stop shown to passengers. Legacy "Bay 09" values keep their old
+        # meaning so existing records are not broken.
+        if bus.next_stop and not _is_legacy_bay(bus.next_stop):
+            next_destination = {'name': bus.next_stop}
+            arrival = {
+                'eta': _to_datetime(bus.next_stop_eta or bus.next_terminal_eta)
+            }
         if bus.final_destination:
             final_destination = {'name': bus.final_destination}
             final_arrival = {'eta': _to_datetime(bus.final_destination_eta)}
@@ -1177,7 +1214,7 @@ def _kiosk_board_context(selected_terminal=None, area_key=None):
             'next_stop_eta': arrival.get('eta') if arrival else None,
             'next_stop_minutes': arrival.get('minutes') if arrival else None,
             'next_stop_distance_km': arrival.get('distance_km') if arrival else None,
-            'next_bay': bus.next_stop,
+            'next_bay': bus.next_stop if _is_legacy_bay(bus.next_stop) else '',
             'next_terminal': bus.next_terminal,
             'final_destination': final_destination['name'] if final_destination else '',
             'final_destination_eta': final_arrival.get('eta') if final_arrival else None,

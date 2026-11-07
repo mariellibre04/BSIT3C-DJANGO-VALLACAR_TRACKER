@@ -64,7 +64,7 @@ class Bus(models.Model):
     
     next_stop = models.CharField(
         max_length=255, blank=True, default='',
-        help_text='Bay the bus will use at its next terminal.',
+        help_text='Next terminal stop on the route.',
     )
     next_stop_eta = models.TimeField(null=True, blank=True)
     next_terminal = models.CharField(

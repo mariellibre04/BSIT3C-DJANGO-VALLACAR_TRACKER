@@ -38,9 +38,9 @@
   <div class="card">
     <div class="card-header"><div class="card-title">All Buses</div></div>
     <div class="table-responsive">
-      <table class="table table-vcenter table-hover card-table text-nowrap" id="busTable">
+      <table class="table table-vcenter table-hover card-table bus-table" id="busTable">
         <thead>
-          <tr><th>#</th><th>Bus No</th><th>Operator</th><th>Plate No</th><th>Capacity</th><th>Route</th><th>Terminal/Bay</th><th>Movement</th><th>Status</th><th class="w-1">Actions</th></tr>
+          <tr><th>#</th><th>Bus No</th><th>Operator</th><th>Plate No</th><th>Capacity</th><th>Route</th><th>Terminal/Bay</th><th>Next Terminal Stop</th><th>Movement</th><th>Status</th><th class="w-1">Actions</th></tr>
         </thead>
         <tbody id="busTableBody">
         {% for bus in buses %}
@@ -59,6 +59,14 @@
                 <i class="fa-solid fa-location-dot me-1" style="color:#C1121F;"></i>{{ bus.current_location|default:"—" }}
               {% endif %}
             </td>
+            <td class="text-muted small">
+              {% if bus.next_stop %}
+                <span class="badge bg-warning-lt text-warning">{{ bus.next_stop }}</span>
+                {% if bus.next_stop_eta %}<div class="text-muted mt-1" style="font-size: 0.7rem;">ETA {{ bus.next_stop_eta|time:"g:i A" }}</div>{% endif %}
+              {% else %}
+                <span class="text-muted">—</span>
+              {% endif %}
+            </td>
             <td>
               <div class="small">
                 <span class="badge bg-secondary-lt text-secondary">{{ bus.get_movement_status_display }}</span>
@@ -71,7 +79,7 @@
                 <button type="button" class="btn btn-ghost-secondary btn-icon btn-sm" data-bs-toggle="modal" data-bs-target="#busQrModal" data-qr-url="{{ request.scheme }}://{{ request.get_host }}{% url 'bus:bus_tap' bus.qr_token %}" data-bus-number="{{ bus.bus_number }}" title="Bus QR code">
                   <i class="fas fa-qrcode text-secondary"></i>
                 </button>
-                <button type="button" class="btn btn-ghost-secondary btn-icon btn-sm" data-bs-toggle="modal" data-bs-target="#busModal" data-mode="edit" data-id="{{ bus.id }}" data-bus_number="{{ bus.bus_number }}" data-plate_number="{{ bus.plate_number }}" data-operator="{{ bus.operator }}" data-capacity="{{ bus.capacity }}" data-route="{{ bus.route }}" data-scheduled_time="{{ bus.scheduled_time|time:'H:i' }}" data-actual_departure="{{ bus.actual_departure|time:'H:i' }}" data-status="{{ bus.status }}" data-current_terminal="{{ bus.current_terminal }}" data-bay="{{ bus.bay }}" data-current_location="{{ bus.current_location }}" data-latitude="{{ bus.latitude|default:'' }}" data-longitude="{{ bus.longitude|default:'' }}" data-next_stop="{{ bus.next_stop }}" data-next_stop_eta="{{ bus.next_stop_eta|time:'H:i' }}" data-next_terminal="{{ bus.next_terminal }}" data-next_terminal_eta="{{ bus.next_terminal_eta|time:'H:i' }}" data-final_destination="{{ bus.final_destination }}" data-final_destination_eta="{{ bus.final_destination_eta|time:'H:i' }}" data-movement_status="{{ bus.movement_status }}" data-movement_reason="{{ bus.movement_reason }}" title="Edit">
+                <button type="button" class="btn btn-ghost-secondary btn-icon btn-sm" data-bs-toggle="modal" data-bs-target="#busModal" data-mode="edit" data-id="{{ bus.id }}" data-bus_number="{{ bus.bus_number }}" data-plate_number="{{ bus.plate_number }}" data-operator="{{ bus.operator }}" data-capacity="{{ bus.capacity }}" data-route="{{ bus.route }}" data-scheduled_time="{{ bus.scheduled_time|time:'H:i' }}" data-actual_departure="{{ bus.actual_departure|time:'H:i' }}" data-status="{{ bus.status }}" data-current_terminal="{{ bus.current_terminal }}" data-bay="{{ bus.bay }}" data-current_location="{{ bus.current_location }}" data-latitude="{{ bus.latitude|default:'' }}" data-longitude="{{ bus.longitude|default:'' }}" data-next_stop="{{ bus.next_stop }}" data-next_stop_eta="{{ bus.next_stop_eta|time:'H:i' }}" data-final_destination="{{ bus.final_destination }}" data-final_destination_eta="{{ bus.final_destination_eta|time:'H:i' }}" data-movement_status="{{ bus.movement_status }}" data-movement_reason="{{ bus.movement_reason }}" title="Edit">
                   <i class="fas fa-edit text-primary"></i>
                 </button>
                 <button type="button" class="btn btn-ghost-secondary btn-icon btn-sm" data-bs-toggle="modal" data-bs-target="#deleteBusModal" data-id="{{ bus.id }}" data-name="{{ bus.bus_number }}" title="Delete">
@@ -116,19 +124,34 @@
           <div class="col-6"><label class="form-label">Operator</label><input type="text" name="operator" id="bus_operator" class="form-control" placeholder="e.g. Ceres Liner"></div>
           <div class="col-6"><label class="form-label">Status</label><select name="status" id="bus_status" class="form-select"><option value="active">Active</option><option value="maintenance">Maintenance</option><option value="inactive">Inactive</option></select></div>
 
-          <div class="col-6"><label class="form-label">Current Terminal</label><input type="text" name="current_terminal" id="bus_current_terminal" class="form-control" placeholder="e.g. Dumaguete"></div>
+          <div class="col-6">
+            <label class="form-label">Current Terminal</label>
+            <select name="current_terminal" id="bus_current_terminal" class="form-select">
+              <option value="">Select terminal...</option>
+              {% for terminal in terminal_options %}<option value="{{ terminal }}">{{ terminal }}</option>{% endfor %}
+            </select>
+          </div>
           <div class="col-6"><label class="form-label">Bay</label><input type="text" name="bay" id="bus_bay" class="form-control" placeholder="e.g. Bay 09"></div>
 
           <div class="col-6"><label class="form-label">Movement status</label><select name="movement_status" id="bus_movement_status" class="form-select"><option value="at_terminal">At Terminal</option><option value="en_route">En Route</option><option value="stopped">Stopped</option><option value="delayed">Delayed</option><option value="off_route">Off Route</option></select></div>
           <div class="col-6"><label class="form-label">Actual Departure</label><input type="time" name="actual_departure" id="bus_actual_departure" class="form-control"></div>
 
-          <div class="col-6"><label class="form-label">Next Bay</label><input type="text" name="next_stop" id="bus_next_stop" class="form-control" placeholder="e.g. Bay 09"></div>
-          <div class="col-6"><label class="form-label">Next Bay ETA</label><input type="time" name="next_stop_eta" id="bus_next_stop_eta" class="form-control"></div>
+          <div class="col-6">
+            <label class="form-label">Next Terminal Stop</label>
+            <select name="next_stop" id="bus_next_stop" class="form-select">
+              <option value="">Select terminal stop...</option>
+              {% for terminal in terminal_options %}<option value="{{ terminal }}">{{ terminal }}</option>{% endfor %}
+            </select>
+          </div>
+          <div class="col-6"><label class="form-label">Next Terminal Stop ETA</label><input type="time" name="next_stop_eta" id="bus_next_stop_eta" class="form-control"></div>
 
-          <div class="col-6"><label class="form-label">Next Terminal</label><input type="text" name="next_terminal" id="bus_next_terminal" class="form-control" placeholder="e.g. Sibulan"></div>
-          <div class="col-6"><label class="form-label">Next Terminal ETA</label><input type="time" name="next_terminal_eta" id="bus_next_terminal_eta" class="form-control"></div>
-
-          <div class="col-6"><label class="form-label">Final Destination</label><input type="text" name="final_destination" id="bus_final_destination" class="form-control" placeholder="e.g. Bais"></div>
+          <div class="col-6">
+            <label class="form-label">Final Destination</label>
+            <select name="final_destination" id="bus_final_destination" class="form-select">
+              <option value="">Select terminal...</option>
+              {% for terminal in terminal_options %}<option value="{{ terminal }}">{{ terminal }}</option>{% endfor %}
+            </select>
+          </div>
           <div class="col-6"><label class="form-label">Final Destination ETA</label><input type="time" name="final_destination_eta" id="bus_final_destination_eta" class="form-control"></div>
 
           <div class="col-12"><label class="form-label">Current Location</label><input type="text" name="current_location" id="bus_current_location" class="form-control" placeholder="e.g. Bacolod North Terminal - Bay 3"></div>
@@ -182,6 +205,18 @@
   const deleteBtn = document.getElementById('confirmDeleteBusBtn');
   const deleteName = document.getElementById('deleteBusName');
   let currentId = null;
+  function setTerminalValue(id, value) {
+    const select = document.getElementById(id);
+    if (!select) return;
+    value = value || '';
+    if (value && !Array.from(select.options).some(function(option) { return option.value === value; })) {
+      const option = document.createElement('option');
+      option.value = value;
+      option.textContent = value;
+      select.appendChild(option);
+    }
+    select.value = value;
+  }
   function resetForm() {
     form.reset(); document.getElementById('bus_id').value = '';
     document.getElementById('bus_movement_status').value = 'at_terminal';
@@ -205,16 +240,14 @@
       document.getElementById('bus_scheduled_time').value = button.getAttribute('data-scheduled_time') || '';
       document.getElementById('bus_actual_departure').value = button.getAttribute('data-actual_departure') || '';
       document.getElementById('bus_status').value = button.getAttribute('data-status');
-      document.getElementById('bus_current_terminal').value = button.getAttribute('data-current_terminal') || '';
+      setTerminalValue('bus_current_terminal', button.getAttribute('data-current_terminal'));
       document.getElementById('bus_bay').value = button.getAttribute('data-bay') || '';
       document.getElementById('bus_current_location').value = button.getAttribute('data-current_location') || '';
       document.getElementById('bus_latitude').value = button.getAttribute('data-latitude') || '';
       document.getElementById('bus_longitude').value = button.getAttribute('data-longitude') || '';
-      document.getElementById('bus_next_stop').value = button.getAttribute('data-next_stop') || '';
+      setTerminalValue('bus_next_stop', button.getAttribute('data-next_stop'));
       document.getElementById('bus_next_stop_eta').value = button.getAttribute('data-next_stop_eta') || '';
-      document.getElementById('bus_next_terminal').value = button.getAttribute('data-next_terminal') || '';
-      document.getElementById('bus_next_terminal_eta').value = button.getAttribute('data-next_terminal_eta') || '';
-      document.getElementById('bus_final_destination').value = button.getAttribute('data-final_destination') || '';
+      setTerminalValue('bus_final_destination', button.getAttribute('data-final_destination'));
       document.getElementById('bus_final_destination_eta').value = button.getAttribute('data-final_destination_eta') || '';
       document.getElementById('bus_movement_status').value = button.getAttribute('data-movement_status') || 'at_terminal';
       document.getElementById('bus_movement_reason').value = button.getAttribute('data-movement_reason') || '';

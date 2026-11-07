@@ -17,7 +17,7 @@
   .vt-logo-mark {
     width: 2.6rem; height: 2.6rem; flex-shrink: 0;
     object-fit: cover; border-radius: .7rem;
-    box-shadow: 0 8px 18px -8px rgba(240,165,0,.85);
+    box-shadow: 0 8px 18px -12px rgba(8,16,31,.75);
   }
   .vt-brand-title { font-weight: 800; letter-spacing: -.02em; font-size: 1.05rem; line-height: 1.1; color: #1c1e36; }
   .vt-brand-sub { font-size: .72rem; color: var(--tblr-muted); font-weight: 600; }
@@ -37,12 +37,18 @@
     content: ""; position: absolute; top: 0; left: 0; right: 0; height: 4px;
     background: linear-gradient(90deg, #c8102e 0 36%, #ffc72c 36% 72%, #1d4ed8 72% 100%);
   }
-  .vt-hero-home::after {
-    content: ""; position: absolute; right: 4%; top: 8%; width: 20rem; height: 20rem;
-    border-radius: 50%; background: radial-gradient(circle, rgba(255,199,44,.2), transparent 66%);
-    pointer-events: none;
-  }
   .vt-hero-home-body { position: relative; z-index: 2; max-width: 37rem; }
+  .vt-hero-route {
+    position: absolute; right: 1.5rem; top: 50%; transform: translateY(-50%);
+    width: min(44%, 430px); height: auto; z-index: 1; pointer-events: none;
+    opacity: .9;
+  }
+  @media (max-width: 991.98px) {
+    .vt-hero-route { width: 44%; right: -.75rem; opacity: .25; }
+  }
+  @media (max-width: 575.98px) {
+    .vt-hero-route { display: none; }
+  }
   .vt-hero-kicker {
     display: inline-flex; align-items: center; gap: .45rem;
     text-transform: uppercase; letter-spacing: .2em; font-size: .7rem; font-weight: 800;
@@ -50,18 +56,9 @@
   }
   .vt-hero-home h2 { font-size: clamp(1.5rem, 2.6vw, 2.1rem); font-weight: 800; letter-spacing: -.03em; margin: .35rem 0 .4rem; }
   .vt-hero-home p { color: rgba(255,255,255,.78); max-width: 34rem; margin-bottom: 1.1rem; font-size: .92rem; }
-  .vt-hero-home-bus {
-    position: absolute; right: 1.2rem; bottom: -1.4rem;
-    width: min(46%, 430px); z-index: 1; pointer-events: none;
-    filter: drop-shadow(0 22px 28px rgba(0,0,0,.35));
-  }
   @media (max-width: 991.98px) {
     .vt-hero-home { padding: 1.5rem; min-height: 0; }
-    .vt-hero-home-bus { width: 42%; right: -.5rem; bottom: -1rem; opacity: .35; }
     .vt-hero-home-body { max-width: 100%; }
-  }
-  @media (max-width: 575.98px) {
-    .vt-hero-home-bus { display: none; }
   }
   .vt-stat {
     background: #fff; border: 1px solid var(--tblr-border-color);
@@ -157,7 +154,23 @@
         </a>
       </div>
     </div>
-    <img class="vt-hero-home-bus" src="{% static 'img/ceres-bus.svg' %}" alt="Ceres Liner bus">
+    <svg class="vt-hero-route" viewBox="0 0 460 200" aria-hidden="true">
+      <defs>
+        <linearGradient id="vtRouteLine" x1="0" y1="1" x2="1" y2="0">
+          <stop offset="0" stop-color="#c8102e"/>
+          <stop offset=".5" stop-color="#ffc72c"/>
+          <stop offset="1" stop-color="#3b82f6"/>
+        </linearGradient>
+      </defs>
+      <path d="M18 158 C 86 70, 150 168, 226 106 S 356 26, 442 76"
+            fill="none" stroke="url(#vtRouteLine)" stroke-width="3"
+            stroke-linecap="round" stroke-dasharray="2 11"/>
+      <circle cx="18" cy="158" r="7" fill="#c8102e" stroke="#fff" stroke-opacity=".55" stroke-width="2"/>
+      <circle cx="226" cy="106" r="5.5" fill="#ffc72c" stroke="#fff" stroke-opacity=".55" stroke-width="2"/>
+      <circle cx="442" cy="76" r="7" fill="#3b82f6" stroke="#fff" stroke-opacity=".55" stroke-width="2"/>
+      <circle cx="120" cy="111" r="3.2" fill="#ffd45c" opacity=".85"/>
+      <circle cx="330" cy="63" r="3.2" fill="#93b4ff" opacity=".85"/>
+    </svg>
   </section>
 
   <!-- 4 stat cards — same structure as screenshot -->

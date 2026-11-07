@@ -647,9 +647,9 @@ class RouteNextStopTests(TestCase):
         )
         data = self.client.get(reverse('bus:bus_kiosk_refresh')).json()
 
-        self.assertIn('Next stop Mabinay ETA', data['ticker_html'])
+        self.assertIn('Next terminal stop Mabinay ETA', data['ticker_html'])
         self.assertIn('Final Dumaguete ETA', data['ticker_html'])
-        self.assertIn('Next stop: Mabinay', data['board_html'])
+        self.assertIn('Next terminal stop: Mabinay', data['board_html'])
         self.assertIn('Final: Dumaguete', data['board_html'])
 
 class AdminKioskSyncTests(TestCase):
