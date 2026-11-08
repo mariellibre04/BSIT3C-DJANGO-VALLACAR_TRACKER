@@ -305,6 +305,7 @@ def admin_dashboard(request):
         'today': today,
         'total_buses': total_buses,
         'active_buses': active_buses,
+        'available_buses': active_buses,
         'maintenance_buses': maintenance_buses,
         'total_drivers': total_drivers,
         'total_routes': total_routes,

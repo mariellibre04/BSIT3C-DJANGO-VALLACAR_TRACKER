@@ -27,8 +27,8 @@ from apps.core.permissions import admin_required
 from apps.core.roles import ROLE_CONDUCTOR, get_role
 from django.db.models import Count
 from . import route_service, terminal_directory
-from .models import Bus, BusTerminalTap, DemoSeedState, Terminal
-from .route_config import TERMINAL_MASTER_LIST
+from .models import Bus, BusStop, BusTerminalTap, DemoSeedState, Route, Terminal
+from .route_config import SCOPE_PROVINCE, TERMINAL_MASTER_LIST
 
 MIN_CAPACITY = 1
 MAX_CAPACITY = 100
@@ -78,15 +78,13 @@ def _to_datetime(t):
     )
 
 
-# Vallacar / Ceres terminals (Negros / Cebu corridors). Used both for the
+# Vallacar / Ceres terminals inside Negros Occidental only. Used both for the
 # passenger origin-destination picker and to locate a bus on the map when it
 # has no live GPS fix yet.
 TERMINALS = [
     {'name': 'Bacolod', 'keywords': ('bacolod',), 'lat': 10.6765, 'lng': 122.9509},
     {'name': 'Kabankalan', 'keywords': ('kabankalan', 'kabnakalan'), 'lat': 9.9917, 'lng': 122.8128},
     {'name': 'Narra', 'keywords': ('narra',), 'lat': 9.967, 'lng': 122.617},
-    {'name': 'Mabinay', 'keywords': ('mabinay',), 'lat': 9.7264, 'lng': 122.9256},
-    {'name': 'Dumaguete', 'keywords': ('dumaguete',), 'lat': 9.3072, 'lng': 123.3080},
     {'name': 'San Carlos', 'keywords': ('san carlos', 'sancarlos'), 'lat': 10.4966, 'lng': 123.4224},
     {'name': 'Cadiz', 'keywords': ('cadiz',), 'lat': 10.9586, 'lng': 123.1321},
     {'name': 'Victorias', 'keywords': ('victorias',), 'lat': 10.9000, 'lng': 123.0667},
@@ -96,20 +94,23 @@ TERMINALS = [
     {'name': 'Himamaylan', 'keywords': ('himamaylan',), 'lat': 10.1003, 'lng': 122.8702},
     {'name': 'Hinigaran', 'keywords': ('hinigaran',), 'lat': 10.0417, 'lng': 122.8567},
     {'name': 'Binalbagan', 'keywords': ('binalbagan',), 'lat': 10.0739, 'lng': 122.8667},
-    {'name': 'Bais', 'keywords': ('bais',), 'lat': 9.5917, 'lng': 123.1222},
-    {'name': 'Tanjay', 'keywords': ('tanjay',), 'lat': 9.5167, 'lng': 123.1583},
-    {'name': 'Bayawan', 'keywords': ('bayawan',), 'lat': 9.3667, 'lng': 122.8000},
-    {'name': 'Canlaon', 'keywords': ('canlaon',), 'lat': 10.3833, 'lng': 123.2000},
     {'name': 'La Carlota', 'keywords': ('la carlota', 'lacarlota'), 'lat': 10.4167, 'lng': 122.9167},
-    {'name': 'Guihulngan', 'keywords': ('guihulngan',), 'lat': 10.1167, 'lng': 123.2667},
-    {'name': 'Cebu', 'keywords': ('cebu',), 'lat': 10.3157, 'lng': 123.8854},
+    {'name': 'Bago', 'keywords': ('bago',), 'lat': 10.5376, 'lng': 122.8389},
+    {'name': 'Valladolid', 'keywords': ('valladolid',), 'lat': 10.4667, 'lng': 122.8333},
+    {'name': 'Pontevedra', 'keywords': ('pontevedra',), 'lat': 10.3667, 'lng': 122.8667},
+    {'name': 'Candoni', 'keywords': ('candoni',), 'lat': 9.831044, 'lng': 122.642981},
+    {'name': 'Hinoba-an', 'keywords': ('hinoba-an', 'hinobaan'), 'lat': 9.583, 'lng': 122.467},
+    {'name': 'Ilog', 'keywords': ('ilog',), 'lat': 10.033, 'lng': 122.767},
 ]
 
 for _terminal in TERMINALS:
     _terminal.setdefault('label', _terminal['name'])
+    _terminal.setdefault('province', SCOPE_PROVINCE)
 
 _known_terminal_names = {_terminal['name'].lower() for _terminal in TERMINALS}
 for _entry in TERMINAL_MASTER_LIST:
+    if _entry.get('province') != SCOPE_PROVINCE:
+        continue
     if _entry['name'].lower() in _known_terminal_names:
         continue
     _aliases = tuple(
@@ -119,26 +120,28 @@ for _entry in TERMINAL_MASTER_LIST:
     TERMINALS.append({
         'name': _entry['name'],
         'label': _entry['name'],
+        'province': _entry.get('province', SCOPE_PROVINCE),
         'keywords': _aliases + (_entry['name'].lower(),),
         'lat': _entry['lat'],
         'lng': _entry['lng'],
     })
     _known_terminal_names.add(_entry['name'].lower())
 
-DEFAULT_STAFF_TERMINAL_ID = 'CEBU-SOUTH'
+DEFAULT_STAFF_TERMINAL_ID = 'BACOLOD-SOUTH'
 
 STAFF_TERMINALS = {
-    'CEBU-SOUTH': {
-        'name': 'CEBU-SOUTH',
-        'label': 'CEBU-SOUTH',
-        'lat': 10.2958,
-        'lng': 123.8934,
+    'BACOLOD-SOUTH': {
+        'name': 'Bacolod South',
+        'label': 'Bacolod South',
+        'lat': 10.6550,
+        'lng': 122.9550,
     },
 }
 
 # Terminals shown as summary cards on the terminal-monitor kiosk.
 KIOSK_TERMINAL_NAMES = [
-    'Bacolod', 'Kabankalan', 'Mabinay', 'Dumaguete', 'Sipalay', 'San Carlos', 'Hinigaran',
+    'Bacolod', 'Kabankalan', 'Sipalay', 'San Carlos', 'Hinigaran', 'Bago',
+    'Himamaylan',
 ]
 
 # Static fallback data so the webcam time-in / time-out flow can be demonstrated
@@ -302,7 +305,7 @@ KIOSK_STATUS_CLASS = {
 
 
 def _load_city_places():
-    """Load every Philippine city/municipality for the passenger city picker."""
+    """Load Negros Occidental cities/municipalities for the passenger pickers."""
     path = Path(__file__).with_name('data') / 'ph_cities.json'
     try:
         rows = json.loads(path.read_text(encoding='utf-8'))
@@ -312,7 +315,7 @@ def _load_city_places():
     for row in rows:
         name = (row.get('name') or '').strip()
         province = (row.get('province') or '').strip()
-        if not name:
+        if not name or province != SCOPE_PROVINCE:
             continue
         places.append({
             'name': name,
@@ -328,9 +331,8 @@ def _load_city_places():
 CITY_PLACES = _load_city_places()
 PLACES = TERMINALS + CITY_PLACES
 
-# Place search must work without the remote geocoder, and must cover every
-# city/municipality visible inside the map bounds (Negros, Panay, Cebu, Bohol,
-# ...) so searching a place shown on the map finds it.
+# Place search must work without the remote geocoder, and only covers the
+# Negros Occidental cities/municipalities served by this tracker.
 MAP_LAT_MIN, MAP_LNG_MIN, MAP_LAT_MAX, MAP_LNG_MAX = 8.5, 121.8, 11.5, 124.2
 
 
@@ -632,19 +634,158 @@ def _bus_gps_payload(bus, occupied=None, use_fallback=False):
 
 
 def _bus_terminal_options():
-    """Every terminal a bus can be assigned to, for the bus form pickers."""
+    """Every Negros Occidental terminal a bus can be assigned to."""
     names = {
         (terminal.get('name') or '').strip()
         for terminal in TERMINALS
+        if terminal.get('province', SCOPE_PROVINCE) == SCOPE_PROVINCE
     }
     names.update(
         (entry.get('name') or '').strip()
         for entry in terminal_directory.TERMINAL_DIRECTORY
+        if entry.get('province') == SCOPE_PROVINCE
     )
     names.update(
-        Terminal.objects.order_by('name').values_list('name', flat=True)
+        Terminal.objects.filter(province=SCOPE_PROVINCE)
+        .order_by('name')
+        .values_list('name', flat=True)
     )
     return sorted((name for name in names if name), key=str.casefold)
+
+
+def _route_in_scope(route):
+    """True when every endpoint and stop of the route is in Negros Occidental."""
+    if (
+        (route.origin.province or '') != SCOPE_PROVINCE
+        or (route.destination.province or '') != SCOPE_PROVINCE
+    ):
+        return False
+    stops = list(route.stops.all())
+    return bool(stops) and all(
+        (stop.terminal.province or '') == SCOPE_PROVINCE for stop in stops
+    )
+
+
+def _route_alias_list(route):
+    return [
+        part.strip()
+        for part in (route.aliases or '').split(',')
+        if part.strip()
+    ]
+
+
+def _route_catalog():
+    """Configured routes and their ordered stops for the bus form.
+
+    The returned mapping is keyed by the route name and every alias so the
+    browser can match whatever spelling the dispatcher types, e.g.
+    ``Kabankalan - Bacolod`` and ``Kabankalan-Bacolod`` behave the same.
+    """
+    route_names = []
+    stop_map = {}
+    alias_map = {}
+    meta_map = {}
+    routes = (
+        Route.objects.select_related('origin', 'destination')
+        .prefetch_related('stops__terminal')
+        .order_by('name')
+    )
+    for route in routes:
+        if not _route_in_scope(route):
+            continue
+        route_names.append(route.name)
+        stop_entries = []
+        cumulative_km = 0.0
+        for stop in route.stops.all():
+            cumulative_km += float(stop.distance_from_previous_km or 0)
+            stop_entries.append({
+                'name': stop.terminal.name,
+                'distance_km': round(cumulative_km, 2),
+                'speed_kmh': int(stop.average_speed_kmh or 45),
+            })
+        stops = [entry['name'] for entry in stop_entries]
+        for label in [route.name, *_route_alias_list(route)]:
+            stop_map[label] = stops
+            meta_map[label] = stop_entries
+            alias_map[route_service.normalize_place(label)] = route.name
+    return route_names, stop_map, alias_map, meta_map
+
+
+def _find_route_by_name(name):
+    """Resolve a route label to a configured Negros Occidental Route."""
+    wanted = route_service.normalize_place(name)
+    if not wanted:
+        return None
+    routes = (
+        Route.objects.select_related('origin', 'destination')
+        .prefetch_related('stops__terminal')
+    )
+    for route in routes:
+        if not _route_in_scope(route):
+            continue
+        labels = [route.name, *_route_alias_list(route)]
+        if any(route_service.normalize_place(label) == wanted for label in labels):
+            return route
+    return None
+
+
+MAX_BUS_STOPS = 60
+
+
+def _parse_assigned_stops(raw, route):
+    """Parse the admin's ordered stop list from the bus form.
+
+    Returns ``(stops, error)`` where ``stops`` is a list of
+    ``(canonical_name, eta_time_or_None)`` pairs in sequence order.
+    """
+    raw = (raw or '').strip()
+    if not raw:
+        return [], None
+    try:
+        parsed = json.loads(raw)
+    except (TypeError, ValueError):
+        return [], 'Bus stops could not be read. Please try again.'
+    if not isinstance(parsed, list):
+        return [], 'Bus stops could not be read. Please try again.'
+    if len(parsed) > MAX_BUS_STOPS:
+        return [], f'A bus can have at most {MAX_BUS_STOPS} stops.'
+
+    route_has_stops = route.stops.exists()
+    terminal_options = {
+        route_service.normalize_place(name): name
+        for name in _bus_terminal_options()
+    }
+    stops = []
+    seen = set()
+    for item in parsed:
+        if isinstance(item, str):
+            name, eta_raw = item, ''
+        elif isinstance(item, dict):
+            name = str(item.get('name') or '').strip()
+            eta_raw = item.get('eta') or ''
+        else:
+            return [], 'Bus stops could not be read. Please try again.'
+        if not name:
+            continue
+
+        if route_has_stops:
+            matched = route_service.find_stop(route, name)
+            canonical = matched.terminal.name if matched else None
+        else:
+            canonical = terminal_options.get(route_service.normalize_place(name))
+        if canonical is None:
+            return [], f'"{name}" is not a stop on the selected route.'
+
+        key = route_service.normalize_place(canonical)
+        if key in seen:
+            return [], f'"{canonical}" is assigned more than once.'
+        seen.add(key)
+
+        eta = _parse_time(eta_raw)
+        if eta_raw and eta is None:
+            return [], f'Enter a valid ETA for {canonical}.'
+        stops.append((canonical, eta))
+    return stops, None
 
 
 @admin_required
@@ -652,7 +793,7 @@ def bus_list_page(request):
     query = request.GET.get('q', '').strip()
     buses_list = Bus.objects.annotate(
         total_passengers=Count('passengers')
-    ).order_by('bus_number')
+    ).prefetch_related('assigned_stops').order_by('bus_number')
     if query:
         buses_list = buses_list.filter(
             Q(bus_number__icontains=query) |
@@ -664,12 +805,26 @@ def bus_list_page(request):
         )
     paginator = Paginator(buses_list, 10)
     buses = paginator.get_page(request.GET.get('page', 1))
+    bus_stops_map = {}
     for b in buses.object_list:
         b.seats_left = max(0, b.capacity - b.total_passengers)
+        bus_stops_map[str(b.id)] = [
+            {
+                'name': stop.name,
+                'eta': stop.eta.strftime('%H:%M') if stop.eta else '',
+            }
+            for stop in b.assigned_stops.all()
+        ]
+    route_options, route_stop_map, route_alias_map, route_stop_meta = _route_catalog()
     return render(request, 'bus/list.html', {
         'buses': buses,
         'query': query,
         'terminal_options': _bus_terminal_options(),
+        'route_options': route_options,
+        'route_stop_map': route_stop_map,
+        'route_alias_map': route_alias_map,
+        'route_stop_meta': route_stop_meta,
+        'bus_stops_map': bus_stops_map,
     })
 
 
@@ -1736,8 +1891,8 @@ def _next_destination_for_bus(bus, terminal_name, tap=None):
     """Best-effort next stop for a bus based on its route and travel direction.
 
     Endpoints come from the route text. For an intermediate stop (for example
-    Mabinay on Kabankalan-Dumaguete) the previous tap tells us which way the bus
-    is heading; otherwise the route's second endpoint is used.
+    Bago on Bacolod-Kabankalan) the previous tap tells us which way the bus is
+    heading; otherwise the route's second endpoint is used.
     """
     route_from, route_to = route_endpoints(bus.route)
     if not (route_from and route_to):
@@ -2598,6 +2753,68 @@ def bus_save_ajax(request):
         )
     if not route:
         return JsonResponse({'error': 'Route is required.'}, status=400)
+
+    # Every bus must use a configured Negros Occidental route, and the next
+    # stop / final destination must be one of that route's terminal stops.
+    route_record = _find_route_by_name(route)
+    if route_record is None:
+        return JsonResponse(
+            {'error': 'Choose a configured Negros Occidental route.'},
+            status=400,
+        )
+    if next_stop:
+        matched_stop = route_service.find_stop(route_record, next_stop)
+        if matched_stop is None:
+            return JsonResponse(
+                {'error': 'Next terminal stop must be a stop on the selected route.'},
+                status=400,
+            )
+        next_stop = matched_stop.terminal.name
+    if final_destination:
+        matched_destination = route_service.find_stop(
+            route_record, final_destination
+        )
+        if matched_destination is None:
+            return JsonResponse(
+                {'error': 'Final destination must be a stop on the selected route.'},
+                status=400,
+            )
+        final_destination = matched_destination.terminal.name
+
+    stops_submitted = 'stops_json' in request.POST
+    assigned_stops = []
+    if stops_submitted:
+        assigned_stops, stops_error = _parse_assigned_stops(
+            request.POST.get('stops_json', ''), route_record
+        )
+        if stops_error:
+            return JsonResponse({'error': stops_error}, status=400)
+        # The admin-defined stop sequence is the source of truth for the
+        # immediate next stop and the final destination when those fields were
+        # left blank.
+        if assigned_stops:
+            if not next_stop:
+                current_key = route_service.normalize_place(
+                    current_terminal or current_location
+                )
+                upcoming = next(
+                    (
+                        stop for stop in assigned_stops
+                        if route_service.normalize_place(stop[0]) != current_key
+                    ),
+                    assigned_stops[0],
+                )
+                next_stop = upcoming[0]
+                if not next_stop_eta and upcoming[1] is not None:
+                    next_stop_eta = upcoming[1].strftime('%H:%M')
+            if not final_destination:
+                final_destination = assigned_stops[-1][0]
+                if (
+                    not final_destination_eta
+                    and assigned_stops[-1][1] is not None
+                ):
+                    final_destination_eta = assigned_stops[-1][1].strftime('%H:%M')
+
     if status not in dict(Bus.STATUS_CHOICES):
         return JsonResponse({'error': 'Invalid status.'}, status=400)
     if movement_status not in dict(Bus.MOVEMENT_CHOICES):
@@ -2662,7 +2879,22 @@ def bus_save_ajax(request):
         bus.user = request.user
 
     try:
-        bus.save()
+        with transaction.atomic():
+            bus.save()
+            if stops_submitted:
+                bus.assigned_stops.all().delete()
+                if assigned_stops:
+                    BusStop.objects.bulk_create([
+                        BusStop(
+                            bus=bus,
+                            name=name,
+                            sequence=sequence,
+                            eta=eta,
+                        )
+                        for sequence, (name, eta) in enumerate(
+                            assigned_stops, start=1
+                        )
+                    ])
     except IntegrityError:
         return JsonResponse({'error': 'Could not save bus due to a conflict.'}, status=400)
 
@@ -2714,7 +2946,7 @@ def build_eta_results(buses, origin, dest, waiting, today, now):
         route_has_waiting = any(k in text for k in waiting['keywords'])
         # Relevant when the bus serves the requested corridor and the waiting
         # place is either named on the route or lies between the endpoints
-        # (e.g. Himamaylan is on the Bacolod → Dumaguete highway).
+        # (e.g. Himamaylan is on the Bacolod → Kabankalan highway).
         if not (endpoints_match or text_match):
             continue
         if not (route_has_waiting or corridor_match):
@@ -2792,7 +3024,11 @@ def map_all_buses_json(buses, waiting, search_target=None, show_waiting=True):
         if frm is None:
             frm = terminal_by_name('Bacolod')
         if to is None:
-            to = terminal_by_name('Dumaguete') if frm['name'] != 'Dumaguete' else terminal_by_name('Bacolod')
+            to = (
+                terminal_by_name('Sipalay')
+                if frm['name'] != 'Sipalay'
+                else terminal_by_name('Bacolod South')
+            ) or terminal_by_name('Bacolod')
         _status_trip, departure, reason = _bus_status_context(b, now)
         items.append({
             'bus_id': b.id,

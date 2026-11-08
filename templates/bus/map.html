@@ -236,7 +236,7 @@
             <div class="live-track-search-inner">
               <label class="live-track-search-label" for="place-search">
                 <i class="fa-solid fa-magnifying-glass" aria-hidden="true"></i>
-                <input type="text" name="place" value="{{ search_query }}" id="place-search" placeholder="Search a place on the map (e.g. Kabankalan, Iloilo City)…" autocomplete="off" aria-label="Search for a place on the map" aria-autocomplete="list" aria-controls="place-search-results" aria-expanded="false">
+                <input type="text" name="place" value="{{ search_query }}" id="place-search" placeholder="Search a place on the map (e.g. Kabankalan, Bacolod, or Sipalay)…" autocomplete="off" aria-label="Search for a place on the map" aria-autocomplete="list" aria-controls="place-search-results" aria-expanded="false">
               </label>
               <button type="submit" class="live-track-search-btn">Search</button>
             </div>
@@ -937,7 +937,7 @@
       };
     });
     if (!all.length) return;
-    const featured = ['Bacolod', 'Kabankalan', 'Dumaguete', 'Iloilo City', 'Cebu', 'Tagbilaran', 'San Carlos', 'Sipalay'];
+    const featured = ['Bacolod', 'Kabankalan', 'Sipalay', 'San Carlos', 'Hinigaran', 'Bago', 'Victorias', 'Hinoba-an'];
     const picked = [];
     const push = function(p) {
       if (picked.length < 8 && !picked.some(function(x) { return x.display_name === p.display_name; })) picked.push(p);
@@ -971,7 +971,7 @@
       .catch(function(err) {
         if (err.name === 'AbortError') return;
         if (!local.length) {
-          showSearchMessage('Search is unavailable right now. Try a town like Kabankalan, Bacolod, or Dumaguete.', true);
+          showSearchMessage('Search is unavailable right now. Try a town like Kabankalan, Bacolod, or Sipalay.', true);
         }
       });
   }

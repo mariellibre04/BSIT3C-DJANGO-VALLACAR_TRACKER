@@ -2,9 +2,7 @@
 
 The terminal monitor kiosk uses this catalogue for its sidebar so a display
 can be locked to one terminal location and only show that terminal's
-movements and available buses. The local Negros Occidental/Negros Oriental
-coverage is kept for everyday operations, while every terminal Vallacar owns
-nationwide is merged in from the terminal master list.
+movements and available buses. Coverage is limited to Negros Occidental.
 """
 
 import json
@@ -691,7 +689,7 @@ def match_terminal(value):
 
 _GROUP_ORDER = ['Negros Island', 'Luzon', 'Visayas', 'Mindanao']
 _GROUP_SUBTITLES = {
-    'Negros Island': 'Negros Occidental & Oriental',
+    'Negros Island': 'Negros Occidental',
     'Luzon': 'Vallacar-owned terminals',
     'Visayas': 'Vallacar-owned terminals',
     'Mindanao': 'Vallacar-owned terminals',

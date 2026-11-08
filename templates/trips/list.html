@@ -74,7 +74,7 @@
         <div class="row g-3">
           <div class="col-12"><label class="form-label">Bus</label><select name="bus" id="trip_bus" class="form-select"><option value="">— Unassigned —</option>{% for b in available_buses %}<option value="{{ b.id }}">{{ b.bus_number }} ({{ b.route }})</option>{% endfor %}</select></div>
           <div class="col-6"><label class="form-label">Origin</label><input type="text" name="origin" id="trip_origin" class="form-control" placeholder="Bacolod" required></div>
-          <div class="col-6"><label class="form-label">Destination</label><input type="text" name="destination" id="trip_destination" class="form-control" placeholder="Dumaguete" required></div>
+          <div class="col-6"><label class="form-label">Destination</label><input type="text" name="destination" id="trip_destination" class="form-control" placeholder="Kabankalan" required></div>
           <div class="col-12"><label class="form-label">Route (optional)</label><input type="text" name="route" id="trip_route" class="form-control" placeholder="Defaults to Origin - Destination"></div>
           <div class="col-6"><label class="form-label">Scheduled departure</label><input type="datetime-local" name="scheduled_departure" id="trip_sdep" class="form-control" required></div>
           <div class="col-6"><label class="form-label">Scheduled arrival</label><input type="datetime-local" name="scheduled_arrival" id="trip_sarr" class="form-control" required></div>

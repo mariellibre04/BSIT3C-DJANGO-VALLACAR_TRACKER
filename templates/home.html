@@ -2,25 +2,6 @@
 {% load static %}
 {% block content %}
 <style>
-  .vt-topbar {
-    position: relative;
-    overflow: hidden;
-    background: #fff;
-    border: 1px solid var(--tblr-border-color);
-    border-radius: 14px;
-    box-shadow: var(--tblr-shadow-card);
-  }
-  .vt-topbar::before {
-    content: ""; position: absolute; top: 0; left: 0; right: 0; height: 4px;
-    background: linear-gradient(90deg, #c8102e 0 36%, #ffc72c 36% 72%, #1d4ed8 72% 100%);
-  }
-  .vt-logo-mark {
-    width: 2.6rem; height: 2.6rem; flex-shrink: 0;
-    object-fit: cover; border-radius: .7rem;
-    box-shadow: 0 8px 18px -12px rgba(8,16,31,.75);
-  }
-  .vt-brand-title { font-weight: 800; letter-spacing: -.02em; font-size: 1.05rem; line-height: 1.1; color: #1c1e36; }
-  .vt-brand-sub { font-size: .72rem; color: var(--tblr-muted); font-weight: 600; }
   .vt-hero-home {
     position: relative; overflow: hidden;
     border-radius: 18px; color: #fff;
@@ -97,38 +78,40 @@
 </style>
 
 <div class="container-xl">
-  <!-- Top header bar — Ceres Liner livery -->
-  <div class="vt-topbar d-flex align-items-center gap-3 px-3 px-md-4 py-3 mb-3 flex-wrap">
-    <img class="vt-logo-mark" src="{% static 'img/ceres-mark.svg' %}" alt="Ceres Liner logo">
-    <div class="lh-1 me-auto">
-      <div class="vt-brand-title">VALLACAR TRACKER</div>
-      <div class="vt-brand-sub">Ceres Liner &bull; Fleet Management System</div>
+  <!-- Dashboard page header -->
+  <div class="page-header d-print-none mb-3">
+    <div class="row align-items-center g-2">
+      <div class="col">
+        <div class="page-pretitle">Ceres Liner &bull; Vallacar Transit</div>
+        <h2 class="page-title mb-0">Dashboard</h2>
+        <div class="text-muted small">
+          Fleet overview for {{ today|date:"F d, Y" }} &mdash; track where buses are, seats available and live operations.
+        </div>
+      </div>
+      <div class="col-auto d-flex align-items-center gap-2 flex-wrap">
+        <span class="badge bg-success-lt text-success d-none d-md-inline-flex align-items-center gap-1">
+          <span class="d-inline-block rounded-circle bg-success" style="width:.5rem;height:.5rem;"></span>
+          {{ available_buses }} buses available now
+        </span>
+        {% if is_admin %}
+        <i class="fa-regular fa-bell fs-3 text-muted"></i>
+        <span class="avatar avatar-sm rounded-circle" style="background:#c8102e;color:#fff;font-weight:700;">
+          {{ user.username|first|upper|default:"A" }}
+        </span>
+        <span class="small fw-semibold text-dark d-none d-lg-inline">{{ user.username }}</span>
+        <a href="{% url 'logout' %}" class="btn btn-sm btn-outline-danger">
+          <i class="fa-solid fa-right-from-bracket me-1"></i> Sign out
+        </a>
+        {% else %}
+        <span class="badge bg-warning-lt text-warning d-none d-md-inline-flex align-items-center gap-1">
+          <i class="fa-solid fa-user"></i> Passenger view
+        </span>
+        <a href="{% url 'login' %}" class="btn btn-sm vt-btn-red">
+          <i class="fa-solid fa-user-shield me-1"></i> Staff Sign in
+        </a>
+        {% endif %}
+      </div>
     </div>
-    <span class="badge bg-success-lt text-success d-none d-md-inline-flex align-items-center gap-1">
-      <span class="d-inline-block rounded-circle bg-success" style="width:.5rem;height:.5rem;"></span>
-      {{ available_buses }} buses available now
-    </span>
-    {% if is_admin %}
-    <div class="d-flex align-items-center gap-2 text-muted">
-      <i class="fa-regular fa-bell fs-3"></i>
-      <span class="avatar avatar-sm rounded-circle" style="background:#c8102e;color:#fff;font-weight:700;">
-        {{ user.username|first|upper|default:"A" }}
-      </span>
-      <span class="small fw-semibold text-dark d-none d-lg-inline">Operations Admin <i class="fa-solid fa-chevron-down ms-1 text-muted"></i></span>
-      <a href="{% url 'logout' %}" class="btn btn-sm btn-outline-danger">
-        <i class="fa-solid fa-right-from-bracket me-1"></i> Sign out
-      </a>
-    </div>
-    {% else %}
-    <div class="d-flex align-items-center gap-2">
-      <span class="badge bg-warning-lt text-warning d-none d-md-inline-flex align-items-center gap-1">
-        <i class="fa-solid fa-user"></i> Passenger view
-      </span>
-      <a href="{% url 'login' %}" class="btn btn-sm vt-btn-red">
-        <i class="fa-solid fa-user-shield me-1"></i> Staff Sign in
-      </a>
-    </div>
-    {% endif %}
   </div>
 
   <!-- Fleet hero — Ceres Liner livery -->

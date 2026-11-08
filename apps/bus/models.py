@@ -303,6 +303,38 @@ class BusNextStopLog(models.Model):
         )
 
 
+class BusStop(models.Model):
+    """One admin-assigned stop on a bus's service sequence.
+
+    The dispatcher builds this list by clicking stops on the bus form. The
+    ``sequence`` field is 1-based (1st stop, 2nd stop, ...) and ``eta`` stores
+    the clock time the bus is expected to reach that stop.
+    """
+
+    bus = models.ForeignKey(
+        Bus, related_name='assigned_stops', on_delete=models.CASCADE
+    )
+    name = models.CharField(max_length=255)
+    sequence = models.PositiveIntegerField(
+        help_text='1-based order of the stop for this bus.'
+    )
+    eta = models.TimeField(null=True, blank=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        db_table = 'tblbusstop'
+        ordering = ['bus', 'sequence']
+        constraints = [
+            models.UniqueConstraint(
+                fields=['bus', 'sequence'], name='uniq_bus_stop_sequence'
+            ),
+        ]
+
+    def __str__(self):
+        return f'{self.bus.bus_number} #{self.sequence} {self.name}'
+
+
 class BusTerminalTap(models.Model):
     """A conductor scan of a bus QR code at a terminal."""
 

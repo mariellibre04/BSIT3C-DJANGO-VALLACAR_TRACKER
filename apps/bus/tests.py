@@ -9,6 +9,7 @@ from apps.core.roles import ROLE_ADMIN, ROLE_CONDUCTOR, set_role
 from .models import (
     Bus,
     BusNextStopLog,
+    BusStop,
     BusTerminalTap,
     DemoSeedState,
     Route,
@@ -207,7 +208,7 @@ class KioskRefreshTests(TestCase):
             bus_number='202',
             plate_number='ABC-202',
             capacity=49,
-            route='Mabinay - Dumaguete',
+            route='Sipalay - Kabankalan',
             movement_status=Bus.MOVE_EN_ROUTE,
         )
         self.client.post(
@@ -357,9 +358,9 @@ class TerminalStaffScannerTests(TestCase):
         self.client.force_login(make_conductor())
         self.bus = Bus.objects.create(
             bus_number='909',
-            plate_number='CEB-909',
+            plate_number='BCD-909',
             capacity=54,
-            route='Cebu - Oslob',
+            route='Bacolod - Kabankalan',
             movement_status=Bus.MOVE_EN_ROUTE,
         )
 
@@ -379,7 +380,7 @@ class TerminalStaffScannerTests(TestCase):
             data=json.dumps({
                 'bus_id': str(self.bus.qr_token),
                 'type': 'IN',
-                'terminal_id': 'CEBU-SOUTH',
+                'terminal_id': 'BACOLOD-SOUTH',
             }),
             content_type='application/json',
         )
@@ -387,13 +388,13 @@ class TerminalStaffScannerTests(TestCase):
         self.assertEqual(response.status_code, 200)
         self.bus.refresh_from_db()
         self.assertEqual(self.bus.movement_status, Bus.MOVE_AT_TERMINAL)
-        self.assertEqual(self.bus.current_location, 'CEBU-SOUTH Terminal')
+        self.assertEqual(self.bus.current_location, 'Bacolod South Terminal')
         self.assertEqual(BusTerminalTap.objects.filter(bus=self.bus).count(), 1)
         self.assertEqual(response.json()['type'], 'IN')
 
     def test_api_scan_updates_terminal_monitor_feed(self):
         before = self.client.get(
-            reverse('bus:bus_kiosk_refresh') + '?area=cebu-south'
+            reverse('bus:bus_kiosk_refresh') + '?area=bacolod-south'
         ).json()
 
         self.client.post(
@@ -401,17 +402,17 @@ class TerminalStaffScannerTests(TestCase):
             data=json.dumps({
                 'bus_id': str(self.bus.qr_token),
                 'type': 'IN',
-                'terminal_id': 'CEBU-SOUTH',
+                'terminal_id': 'BACOLOD-SOUTH',
             }),
             content_type='application/json',
         )
         after = self.client.get(
-            reverse('bus:bus_kiosk_refresh') + '?area=cebu-south'
+            reverse('bus:bus_kiosk_refresh') + '?area=bacolod-south'
         ).json()
 
         self.assertNotEqual(before['version'], after['version'])
         self.assertIn('909', after['board_html'])
-        self.assertIn('CEBU-SOUTH', after['board_html'])
+        self.assertIn('Bacolod South', after['board_html'])
 
     def test_api_checkout_marks_bus_en_route(self):
         response = self.client.post(
@@ -419,7 +420,7 @@ class TerminalStaffScannerTests(TestCase):
             data=json.dumps({
                 'bus_id': f'https://example.test/bus/tap/{self.bus.qr_token}/',
                 'type': 'OUT',
-                'terminal_id': 'CEBU-SOUTH',
+                'terminal_id': 'BACOLOD-SOUTH',
             }),
             content_type='application/json',
         )
@@ -427,11 +428,11 @@ class TerminalStaffScannerTests(TestCase):
         self.assertEqual(response.status_code, 200)
         self.bus.refresh_from_db()
         self.assertEqual(self.bus.movement_status, Bus.MOVE_EN_ROUTE)
-        self.assertEqual(self.bus.current_location, 'En route from CEBU-SOUTH Terminal')
+        self.assertEqual(self.bus.current_location, 'En route from Bacolod South Terminal')
 
     def test_api_checkout_also_appears_on_terminal_monitor_feed(self):
         before = self.client.get(
-            reverse('bus:bus_kiosk_refresh') + '?area=cebu-south'
+            reverse('bus:bus_kiosk_refresh') + '?area=bacolod-south'
         ).json()
 
         self.client.post(
@@ -439,18 +440,18 @@ class TerminalStaffScannerTests(TestCase):
             data=json.dumps({
                 'bus_id': str(self.bus.qr_token),
                 'type': 'OUT',
-                'terminal_id': 'CEBU-SOUTH',
+                'terminal_id': 'BACOLOD-SOUTH',
             }),
             content_type='application/json',
         )
         after = self.client.get(
-            reverse('bus:bus_kiosk_refresh') + '?area=cebu-south'
+            reverse('bus:bus_kiosk_refresh') + '?area=bacolod-south'
         ).json()
 
         self.assertNotEqual(before['version'], after['version'])
         self.assertIn('909', after['board_html'])
         self.assertIn('En Route', after['board_html'])
-        self.assertIn('CEBU-SOUTH', after['board_html'])
+        self.assertIn('Bacolod South', after['board_html'])
         self.assertIn('909', after['ticker_html'])
 
     def test_api_rejects_invalid_type(self):
@@ -459,7 +460,7 @@ class TerminalStaffScannerTests(TestCase):
             data=json.dumps({
                 'bus_id': str(self.bus.qr_token),
                 'type': 'MAYBE',
-                'terminal_id': 'CEBU-SOUTH',
+                'terminal_id': 'BACOLOD-SOUTH',
             }),
             content_type='application/json',
         )
@@ -473,7 +474,7 @@ class TerminalStaffScannerTests(TestCase):
             data=json.dumps({
                 'bus_id': 'not-a-bus',
                 'type': 'IN',
-                'terminal_id': 'CEBU-SOUTH',
+                'terminal_id': 'BACOLOD-SOUTH',
             }),
             content_type='application/json',
         )
@@ -490,7 +491,7 @@ class RouteNextStopTests(TestCase):
             bus_number='KDM-900',
             plate_number='VTI 9900',
             capacity=49,
-            route='Kabankalan-Dumaguete',
+            route='Kabankalan-Bacolod',
             movement_status=Bus.MOVE_EN_ROUTE,
         )
 
@@ -512,14 +513,17 @@ class RouteNextStopTests(TestCase):
         )
         self.assertEqual(
             [stop['name'] for stop in data['next_stops']],
-            ['Mabinay', 'Bais', 'Tanjay', 'Sibulan', 'Dumaguete'],
+            [
+                'Himamaylan', 'Binalbagan', 'Hinigaran', 'Pontevedra',
+                'Valladolid', 'Bago', 'Bacolod South',
+            ],
         )
         self.assertTrue(all(stop['eta_minutes'] > 0 for stop in data['next_stops']))
 
     def test_route_stops_rejects_stop_not_on_route(self):
         response = self.client.get(
             reverse('bus:bus_route_stops_ajax'),
-            {'token': str(self.bus.qr_token), 'current': 'Bacolod'},
+            {'token': str(self.bus.qr_token), 'current': 'Sipalay'},
         )
 
         self.assertEqual(response.status_code, 400)
@@ -531,32 +535,32 @@ class RouteNextStopTests(TestCase):
             {
                 'token': str(self.bus.qr_token),
                 'current': 'Kabankalan',
-                'next_stop': 'Bais',
+                'next_stop': 'Himamaylan',
             },
         )
 
         self.assertEqual(response.status_code, 200)
         data = response.json()
-        self.assertEqual(data['next_stop'], 'Bais')
-        self.assertAlmostEqual(float(data['distance_km']), 81.4, places=2)
+        self.assertEqual(data['next_stop'], 'Himamaylan')
+        self.assertAlmostEqual(float(data['distance_km']), 19.0, places=2)
         self.assertGreater(data['eta_minutes'], 0)
-        self.assertEqual(data['final_destination'], 'Dumaguete')
+        self.assertEqual(data['final_destination'], 'Bacolod South')
         self.assertIsNotNone(data['final_destination_eta'])
         self.assertGreater(
             data['final_destination_eta_minutes'], data['eta_minutes']
         )
         log = BusNextStopLog.objects.get(bus=self.bus)
         self.assertEqual(log.current_station.name, 'Kabankalan')
-        self.assertEqual(log.next_stop.name, 'Bais')
-        self.assertAlmostEqual(float(log.distance_km), 81.4, places=2)
+        self.assertEqual(log.next_stop.name, 'Himamaylan')
+        self.assertAlmostEqual(float(log.distance_km), 19.0, places=2)
 
     def test_next_stop_rejects_stop_before_current(self):
         response = self.client.post(
             reverse('bus:bus_next_stop_ajax'),
             {
                 'token': str(self.bus.qr_token),
-                'current': 'Bais',
-                'next_stop': 'Mabinay',
+                'current': 'Bago',
+                'next_stop': 'Himamaylan',
             },
         )
 
@@ -575,16 +579,16 @@ class RouteNextStopTests(TestCase):
                 'token': str(self.bus.qr_token),
                 'terminal': 'Kabankalan',
                 'action': 'time_out',
-                'next_stop': 'Mabinay',
+                'next_stop': 'Himamaylan',
             },
         )
 
         self.assertEqual(response.status_code, 200)
         data = response.json()
-        self.assertEqual(data['selected_next_stop'], 'Mabinay')
+        self.assertEqual(data['selected_next_stop'], 'Himamaylan')
         self.assertIsNotNone(data['next_stop_eta_at'])
         log = BusNextStopLog.objects.get(bus=self.bus)
-        self.assertEqual(log.next_stop.name, 'Mabinay')
+        self.assertEqual(log.next_stop.name, 'Himamaylan')
 
     def test_time_out_rejects_invalid_next_stop(self):
         self.client.post(
@@ -597,7 +601,7 @@ class RouteNextStopTests(TestCase):
                 'token': str(self.bus.qr_token),
                 'terminal': 'Kabankalan',
                 'action': 'time_out',
-                'next_stop': 'Bacolod',
+                'next_stop': 'Sipalay',
             },
         )
 
@@ -620,7 +624,10 @@ class RouteNextStopTests(TestCase):
         )
         self.assertEqual(
             [stop['name'] for stop in data['next_stops']],
-            ['Mabinay', 'Bais', 'Tanjay', 'Sibulan', 'Dumaguete'],
+            [
+                'Himamaylan', 'Binalbagan', 'Hinigaran', 'Pontevedra',
+                'Valladolid', 'Bago', 'Bacolod South',
+            ],
         )
 
     def test_scan_payload_has_different_next_stop_and_final_destination_etas(self):
@@ -631,8 +638,8 @@ class RouteNextStopTests(TestCase):
 
         self.assertEqual(response.status_code, 200)
         data = response.json()
-        self.assertEqual(data['next_stop'], 'Mabinay')
-        self.assertEqual(data['final_destination'], 'Dumaguete')
+        self.assertEqual(data['next_stop'], 'Himamaylan')
+        self.assertEqual(data['final_destination'], 'Bacolod South')
         self.assertIsNotNone(data['next_stop_eta'])
         self.assertIsNotNone(data['final_destination_eta'])
         self.assertLess(
@@ -647,10 +654,10 @@ class RouteNextStopTests(TestCase):
         )
         data = self.client.get(reverse('bus:bus_kiosk_refresh')).json()
 
-        self.assertIn('Next terminal stop Mabinay ETA', data['ticker_html'])
-        self.assertIn('Final Dumaguete ETA', data['ticker_html'])
-        self.assertIn('Next terminal stop: Mabinay', data['board_html'])
-        self.assertIn('Final: Dumaguete', data['board_html'])
+        self.assertIn('Next terminal stop Himamaylan ETA', data['ticker_html'])
+        self.assertIn('Final Bacolod South ETA', data['ticker_html'])
+        self.assertIn('Next terminal stop: Himamaylan', data['board_html'])
+        self.assertIn('Final: Bacolod South', data['board_html'])
 
 class AdminKioskSyncTests(TestCase):
     def setUp(self):
@@ -686,22 +693,20 @@ class AdminKioskSyncTests(TestCase):
                 'movement_status': Bus.MOVE_EN_ROUTE,
                 'current_terminal': 'Kabankalan',
                 'bay': 'Bay 03',
-                'next_stop': 'Bay 09',
-                'next_terminal': 'Sibulan',
+                'next_stop': 'Candoni',
+                'next_terminal': 'Candoni',
                 'next_terminal_eta': '10:30',
-                'final_destination': 'Dumaguete',
+                'final_destination': 'Candoni',
                 'final_destination_eta': '11:45',
             },
         )
 
         self.assertEqual(response.status_code, 200)
         bus.refresh_from_db()
-        self.assertEqual(bus.next_terminal, 'Sibulan')
-        self.assertEqual(bus.next_stop, 'Bay 09')
+        self.assertEqual(bus.next_terminal, 'Candoni')
+        self.assertEqual(bus.next_stop, 'Candoni')
         board = self.client.get(reverse('bus:bus_kiosk_refresh')).json()['board_html']
-        self.assertIn('Sibulan', board)
-        self.assertIn('Bay 09', board)
-        self.assertIn('Dumaguete', board)
+        self.assertIn('Candoni', board)
 
     def test_demo_seed_does_not_overwrite_admin_edits(self):
         bus = Bus.objects.get(bus_number='101')
@@ -729,3 +734,248 @@ class AdminKioskSyncTests(TestCase):
 
         self.assertFalse(Bus.objects.filter(bus_number='101').exists())
         self.assertTrue(DemoSeedState.objects.filter(key=DEMO_SEED_KEY).exists())
+
+
+class BusFormRouteStopsTests(TestCase):
+    """The next-stop picker must follow the stops of the chosen route."""
+
+    def setUp(self):
+        self.client.force_login(make_admin())
+        seed_transit_data(force=True)
+
+    def test_catalog_is_negros_occidental_only(self):
+        response = self.client.get(reverse('bus:bus_list'))
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(
+            set(response.context['route_options']),
+            {definition['name'] for definition in ROUTE_DEFINITIONS},
+        )
+        terminals = set(response.context['terminal_options'])
+        self.assertTrue(terminals)
+        for out_of_scope in (
+            'Dumaguete', 'Bais', 'Mabinay', 'Tanjay', 'Sibulan',
+            'Cebu South', 'Cebu North',
+        ):
+            self.assertNotIn(out_of_scope, terminals)
+
+    def test_bus_list_exposes_route_stop_catalog(self):
+        response = self.client.get(reverse('bus:bus_list'))
+
+        self.assertEqual(response.status_code, 200)
+        stops = response.context['route_stop_map']['Kabankalan-Bacolod']
+        self.assertEqual(
+            stops,
+            [
+                'Kabankalan',
+                'Himamaylan',
+                'Binalbagan',
+                'Hinigaran',
+                'Pontevedra',
+                'Valladolid',
+                'Bago',
+                'Bacolod South',
+            ],
+        )
+        # Aliases resolve to the same ordered stop list.
+        self.assertEqual(
+            response.context['route_stop_map']['Kabankalan - Bacolod'], stops
+        )
+
+    def test_save_rejects_next_stop_outside_the_route(self):
+        response = self.client.post(
+            reverse('bus:bus_save_ajax'),
+            {
+                'bus_number': 'KAB-901',
+                'plate_number': 'VTI 9901',
+                'capacity': 49,
+                'route': 'Kabankalan - Bacolod',
+                'next_stop': 'Dumaguete',
+                'status': Bus.STATUS_ACTIVE,
+                'movement_status': Bus.MOVE_AT_TERMINAL,
+            },
+        )
+
+        self.assertEqual(response.status_code, 400)
+        self.assertIn('selected route', response.json()['error'])
+        self.assertFalse(Bus.objects.filter(bus_number='KAB-901').exists())
+
+    def test_save_accepts_next_stop_on_the_route(self):
+        response = self.client.post(
+            reverse('bus:bus_save_ajax'),
+            {
+                'bus_number': 'KAB-902',
+                'plate_number': 'VTI 9902',
+                'capacity': 49,
+                'route': 'Kabankalan - Bacolod',
+                'current_terminal': 'Kabankalan',
+                'next_stop': 'Bago',
+                'final_destination': 'Bacolod South',
+                'status': Bus.STATUS_ACTIVE,
+                'movement_status': Bus.MOVE_EN_ROUTE,
+            },
+        )
+
+        self.assertEqual(response.status_code, 200)
+        bus = Bus.objects.get(bus_number='KAB-902')
+        self.assertEqual(bus.next_stop, 'Bago')
+        self.assertEqual(bus.final_destination, 'Bacolod South')
+
+    def test_save_accepts_alias_stop_and_stores_canonical_name(self):
+        response = self.client.post(
+            reverse('bus:bus_save_ajax'),
+            {
+                'bus_number': 'KAB-903',
+                'plate_number': 'VTI 9903',
+                'capacity': 49,
+                'route': 'Kabankalan-Bacolod',
+                'next_stop': 'bacolod south',
+                'status': Bus.STATUS_ACTIVE,
+                'movement_status': Bus.MOVE_EN_ROUTE,
+            },
+        )
+
+        self.assertEqual(response.status_code, 200)
+        bus = Bus.objects.get(bus_number='KAB-903')
+        self.assertEqual(bus.next_stop, 'Bacolod South')
+
+    def test_save_stores_stop_sequence_with_etas(self):
+        stops = [
+            {'name': 'Kabankalan', 'eta': '08:00'},
+            {'name': 'Himamaylan', 'eta': '08:25'},
+            {'name': 'Binalbagan', 'eta': '08:40'},
+            {'name': 'Hinigaran', 'eta': '08:52'},
+            {'name': 'Bacolod South', 'eta': '09:30'},
+        ]
+        response = self.client.post(
+            reverse('bus:bus_save_ajax'),
+            {
+                'bus_number': 'KAB-904',
+                'plate_number': 'VTI 9904',
+                'capacity': 49,
+                'route': 'Kabankalan - Bacolod',
+                'scheduled_time': '07:45',
+                'status': Bus.STATUS_ACTIVE,
+                'movement_status': Bus.MOVE_AT_TERMINAL,
+                'stops_json': json.dumps(stops),
+            },
+        )
+
+        self.assertEqual(response.status_code, 200)
+        bus = Bus.objects.get(bus_number='KAB-904')
+        saved = list(bus.assigned_stops.order_by('sequence'))
+        self.assertEqual(
+            [(stop.sequence, stop.name) for stop in saved],
+            [
+                (1, 'Kabankalan'),
+                (2, 'Himamaylan'),
+                (3, 'Binalbagan'),
+                (4, 'Hinigaran'),
+                (5, 'Bacolod South'),
+            ],
+        )
+        self.assertEqual(saved[0].eta.strftime('%H:%M'), '08:00')
+        self.assertEqual(saved[4].eta.strftime('%H:%M'), '09:30')
+        # The first and last assigned stops fill the blank route fields.
+        self.assertEqual(bus.next_stop, 'Kabankalan')
+        self.assertEqual(bus.final_destination, 'Bacolod South')
+
+    def test_stop_sequence_skips_current_terminal_for_next_stop(self):
+        response = self.client.post(
+            reverse('bus:bus_save_ajax'),
+            {
+                'bus_number': 'KAB-908',
+                'plate_number': 'VTI 9908',
+                'capacity': 49,
+                'route': 'Kabankalan - Bacolod',
+                'current_terminal': 'Kabankalan',
+                'status': Bus.STATUS_ACTIVE,
+                'movement_status': Bus.MOVE_AT_TERMINAL,
+                'stops_json': json.dumps([
+                    {'name': 'Kabankalan', 'eta': '08:00'},
+                    {'name': 'Himamaylan', 'eta': '08:25'},
+                    {'name': 'Bago', 'eta': '09:40'},
+                ]),
+            },
+        )
+
+        self.assertEqual(response.status_code, 200)
+        bus = Bus.objects.get(bus_number='KAB-908')
+        self.assertEqual(bus.next_stop, 'Himamaylan')
+        self.assertEqual(bus.next_stop_eta.strftime('%H:%M'), '08:25')
+        self.assertEqual(bus.final_destination, 'Bago')
+
+    def test_save_rejects_stop_outside_the_route(self):
+        response = self.client.post(
+            reverse('bus:bus_save_ajax'),
+            {
+                'bus_number': 'KAB-905',
+                'plate_number': 'VTI 9905',
+                'capacity': 49,
+                'route': 'Kabankalan - Bacolod',
+                'status': Bus.STATUS_ACTIVE,
+                'movement_status': Bus.MOVE_AT_TERMINAL,
+                'stops_json': json.dumps([
+                    {'name': 'Kabankalan', 'eta': '08:00'},
+                    {'name': 'Dumaguete', 'eta': '09:00'},
+                ]),
+            },
+        )
+
+        self.assertEqual(response.status_code, 400)
+        self.assertIn('selected route', response.json()['error'])
+        self.assertFalse(Bus.objects.filter(bus_number='KAB-905').exists())
+
+    def test_edit_replaces_the_assigned_stop_sequence(self):
+        bus = Bus.objects.create(
+            bus_number='KAB-906',
+            plate_number='VTI 9906',
+            capacity=49,
+            route='Kabankalan - Bacolod',
+            status=Bus.STATUS_ACTIVE,
+        )
+        BusStop.objects.create(bus=bus, name='Kabankalan', sequence=1)
+
+        response = self.client.post(
+            reverse('bus:bus_save_ajax'),
+            {
+                'id': bus.id,
+                'bus_number': bus.bus_number,
+                'plate_number': bus.plate_number,
+                'capacity': bus.capacity,
+                'route': bus.route,
+                'status': Bus.STATUS_ACTIVE,
+                'movement_status': Bus.MOVE_AT_TERMINAL,
+                'stops_json': json.dumps([
+                    {'name': 'Himamaylan', 'eta': '09:00'},
+                    {'name': 'Bago', 'eta': '10:15'},
+                ]),
+            },
+        )
+
+        self.assertEqual(response.status_code, 200)
+        bus.refresh_from_db()
+        self.assertEqual(
+            [(stop.sequence, stop.name) for stop in bus.assigned_stops.all()],
+            [(1, 'Himamaylan'), (2, 'Bago')],
+        )
+
+    def test_bus_list_exposes_assigned_stop_sequence_for_editing(self):
+        bus = Bus.objects.create(
+            bus_number='KAB-907',
+            plate_number='VTI 9907',
+            capacity=49,
+            route='Kabankalan - Bacolod',
+            status=Bus.STATUS_ACTIVE,
+        )
+        BusStop.objects.create(
+            bus=bus, name='Kabankalan', sequence=1, eta='07:30'
+        )
+
+        response = self.client.get(reverse('bus:bus_list'))
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(
+            response.context['bus_stops_map'][str(bus.id)],
+            [{'name': 'Kabankalan', 'eta': '07:30'}],
+        )
