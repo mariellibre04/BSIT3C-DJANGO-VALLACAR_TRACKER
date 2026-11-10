@@ -238,8 +238,8 @@
   <div class="vt-table-card">
     <div class="d-flex align-items-center justify-content-between flex-wrap gap-2 px-3 px-md-4 py-3" style="border-bottom:1px solid var(--tblr-border-color);">
       <div>
-        <h3 class="card-title mb-0">Live Buses — Location &amp; Seats</h3>
-        <div class="text-muted small">Where available buses currently are and how many seats are free inside.</div>
+        <h3 class="card-title mb-0">Live Buses — Location</h3>
+        <div class="text-muted small">Where available buses currently are.</div>
       </div>
       <a href="{% url 'bus:bus_list' %}" class="btn vt-btn-red btn-sm">
         <i class="fa-solid fa-table-list me-1"></i> View All Buses
@@ -252,7 +252,6 @@
             <th>Bus No</th>
             <th>Driver</th>
             <th>Current Location / Route</th>
-            <th>Seats Available</th>
             <th>Status</th>
             <th>Last Update</th>
           </tr>
@@ -273,21 +272,6 @@
               <div class="text-muted small">{{ b.get_movement_status_display }}</div>
             </td>
             <td>
-              <div class="d-flex align-items-center gap-2">
-                <div class="seat-bar flex-grow-1">
-                  <span style="width:{{ b.occupancy_pct }}%;{% if b.seats_left <= 0 %}background:#ef4444;{% elif b.seats_left <= 10 %}background:#f59e0b;{% else %}background:#22c55e;{% endif %}"></span>
-                </div>
-                {% if b.seats_left <= 0 %}
-                  <span class="badge bg-danger-lt text-danger">Full ({{ b.total_passengers }}/{{ b.capacity }})</span>
-                {% elif b.seats_left <= 10 %}
-                  <span class="badge bg-warning-lt text-warning">{{ b.seats_left }} left</span>
-                {% else %}
-                  <span class="badge bg-success-lt text-success">{{ b.seats_left }} seats left</span>
-                {% endif %}
-              </div>
-              <div class="text-muted small mt-1">{{ b.total_passengers }}/{{ b.capacity }} occupied</div>
-            </td>
-            <td>
               {% if b.status == 'active' %}
                 <span class="badge bg-success-lt text-success">Active</span>
               {% elif b.status == 'maintenance' %}
@@ -300,11 +284,11 @@
           </tr>
           {% empty %}
           <tr>
-            <td colspan="6">
+            <td colspan="5">
               <div class="empty py-5">
                 <div class="empty-icon mb-2"><i class="fa-solid fa-bus fa-2x text-muted"></i></div>
                 <p class="empty-title">No buses tracked yet</p>
-                <p class="empty-subtitle text-muted">Add buses in Bus Management to start live tracking locations and seats.</p>
+                <p class="empty-subtitle text-muted">Add buses in Bus Management to start live tracking locations.</p>
                 <div class="empty-action">
                   <a href="{% url 'bus:bus_list' %}" class="btn vt-btn-red btn-sm">Add Bus</a>
                 </div>

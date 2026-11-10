@@ -32,7 +32,6 @@ urlpatterns = [
     path('bus/', include('apps.bus.urls')),
     path('driver/', include('apps.driver.urls')),
     path('conductor/', include('apps.conductor.urls')),
-    path('passengers/', include('apps.passengers.urls')),
     path('maintenance/', include('apps.maintenance.urls')),
     path('trips/', include('apps.trips.urls')),
     path('incidents/', include('apps.incidents.urls')),

@@ -249,7 +249,11 @@ def reports_page(request):
 
     from django.db.models import Count as C
     capacity_total = buses_qs.aggregate(v=Sum('capacity'))['v'] or 0
-    occupied_total = sum(b.passengers.count() for b in buses_qs.all())
+    latest_occupancy = {}
+    for b in buses_qs.all():
+        latest_trip = trips_qs.filter(bus=b).order_by('-scheduled_departure').first()
+        latest_occupancy[b.pk] = latest_trip.passenger_count if latest_trip else 0
+    occupied_total = sum(latest_occupancy.values())
     utilization_pct = round(occupied_total * 100.0 / capacity_total, 1) if capacity_total else 0
 
     route_rows = list(
@@ -260,7 +264,7 @@ def reports_page(request):
     )
     bus_rows = []
     for b in buses_qs.order_by('bus_number')[:20]:
-        occ = b.passengers.count()
+        occ = latest_occupancy.get(b.pk, 0)
         bus_trips = trips_qs.filter(bus=b).count()
         bus_rows.append({
             'bus_number': b.bus_number, 'route': b.route, 'capacity': b.capacity,

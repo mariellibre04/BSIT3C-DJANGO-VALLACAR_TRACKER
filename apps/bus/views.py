@@ -25,7 +25,6 @@ from django.utils import timezone
 
 from apps.core.permissions import admin_required
 from apps.core.roles import ROLE_CONDUCTOR, get_role
-from django.db.models import Count
 from . import route_service, terminal_directory
 from .models import Bus, BusStop, BusTerminalTap, DemoSeedState, Route, Terminal
 from .route_config import SCOPE_PROVINCE, TERMINAL_MASTER_LIST
@@ -584,12 +583,8 @@ def bus_map_coords(bus, ignore_gps=False):
     return round(base[0] + jitter_lat, 6), round(base[1] + jitter_lng, 6), True
 
 
-def _bus_gps_payload(bus, occupied=None, use_fallback=False):
-    if occupied is None:
-        try:
-            occupied = bus.total_passengers
-        except AttributeError:
-            occupied = bus.passengers.count()
+def _bus_gps_payload(bus, occupied=0, use_fallback=False):
+    occupied = occupied or 0
     lat = float(bus.latitude) if bus.latitude is not None else None
     lng = float(bus.longitude) if bus.longitude is not None else None
     is_approx = False
@@ -791,9 +786,7 @@ def _parse_assigned_stops(raw, route):
 @admin_required
 def bus_list_page(request):
     query = request.GET.get('q', '').strip()
-    buses_list = Bus.objects.annotate(
-        total_passengers=Count('passengers')
-    ).prefetch_related('assigned_stops').order_by('bus_number')
+    buses_list = Bus.objects.prefetch_related('assigned_stops').order_by('bus_number')
     if query:
         buses_list = buses_list.filter(
             Q(bus_number__icontains=query) |
@@ -807,7 +800,7 @@ def bus_list_page(request):
     buses = paginator.get_page(request.GET.get('page', 1))
     bus_stops_map = {}
     for b in buses.object_list:
-        b.seats_left = max(0, b.capacity - b.total_passengers)
+        b.seats_left = b.capacity or 0
         bus_stops_map[str(b.id)] = [
             {
                 'name': stop.name,
@@ -831,9 +824,7 @@ def bus_list_page(request):
 @admin_required
 def bus_list_ajax(request):
     query = request.GET.get('q', '').strip()
-    buses_list = Bus.objects.annotate(
-        total_passengers=Count('passengers')
-    ).order_by('bus_number')
+    buses_list = Bus.objects.order_by('bus_number')
     if query:
         buses_list = buses_list.filter(
             Q(bus_number__icontains=query) |
@@ -847,7 +838,7 @@ def bus_list_ajax(request):
     buses = paginator.get_page(request.GET.get('page', 1))
     data = []
     for b in buses.object_list:
-        occupied = b.total_passengers
+        occupied = 0
         data.append(_bus_gps_payload(b, occupied))
     return JsonResponse({
         'data': data,
@@ -1179,7 +1170,6 @@ def _kiosk_board_context(selected_terminal=None, area_key=None):
         Bus.objects.filter(status=Bus.STATUS_ACTIVE)
         .annotate(
             latest_tap_id=Subquery(latest_tap_id),
-            passenger_count=Count('passengers'),
         )
         .order_by('bus_number')
     )
@@ -1347,7 +1337,7 @@ def _kiosk_board_context(selected_terminal=None, area_key=None):
         )
         area_hit = area_info.get(area_key) if selected_area else None
 
-        seated = bus.passenger_count or 0
+        seated = 0
         seats_left = max(0, (bus.capacity or 0) - seated)
         item = {
             'number': bus.bus_number,
@@ -2834,14 +2824,6 @@ def bus_save_ajax(request):
     if dup.filter(plate_number=plate_number).exists():
         return JsonResponse({'error': 'That plate number already exists.'}, status=400)
 
-    if bus_id:
-        occupied = bus.passengers.count()
-        if capacity_value < occupied:
-            return JsonResponse(
-                {'error': f'Capacity cannot be less than assigned passengers ({occupied}).'},
-                status=400,
-            )
-
     gps_changed = (
         (bus.pk is None and (current_location or latitude is not None))
         or (bus.pk and (
@@ -2951,7 +2933,7 @@ def build_eta_results(buses, origin, dest, waiting, today, now):
             continue
         if not (route_has_waiting or corridor_match):
             continue
-        occupied = b.total_passengers or 0
+        occupied = 0
         lat, lng, is_approx = bus_map_coords(b)
         if not (8.4 <= lat <= 11.6 and 121.7 <= lng <= 124.3):
             lat, lng, is_approx = bus_map_coords(b, ignore_gps=True)
@@ -3011,9 +2993,7 @@ def map_all_buses_json(buses, waiting, search_target=None, show_waiting=True):
     items = []
     now = timezone.now()
     for b in buses:
-        occupied = getattr(b, 'total_passengers', None)
-        if occupied is None:
-            occupied = b.passengers.count()
+        occupied = 0
         lat, lng, is_approx = bus_map_coords(b)
         # Keep every bus on-screen: ignore GPS fixes outside the Negros region.
         if not (8.4 <= lat <= 11.6 and 121.7 <= lng <= 124.3):
@@ -3086,9 +3066,7 @@ def bus_map_page(request):
     now = timezone.now()
     buses_qs = Bus.objects.all()
     active_buses = list(
-        buses_qs.annotate(total_passengers=Count('passengers'))
-        .filter(status=Bus.STATUS_ACTIVE)
-        .order_by('bus_number')
+        buses_qs.filter(status=Bus.STATUS_ACTIVE).order_by('bus_number')
     )
     if origin is None or dest is None or waiting is None:
         error = 'Please select a valid origin, destination, and waiting place.'
@@ -3138,8 +3116,8 @@ def bus_locations_ajax(request):
     (flagged with is_approx).
     """
     buses_qs = Bus.objects.all()
-    buses = buses_qs.annotate(total_passengers=Count('passengers')).order_by('bus_number')
-    return JsonResponse({'buses': [_bus_gps_payload(b, b.total_passengers, use_fallback=True) for b in buses]})
+    buses = buses_qs.order_by('bus_number')
+    return JsonResponse({'buses': [_bus_gps_payload(b, use_fallback=True) for b in buses]})
 
 
 NEGROS_VIEWBOX = '121.8,8.5,124.2,11.5'  # lon_min, lat_min, lon_max, lat_max

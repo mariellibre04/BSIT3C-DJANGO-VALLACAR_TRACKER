@@ -111,7 +111,7 @@
     <div class="table-responsive">
       <table class="table table-vcenter table-hover card-table bus-table" id="busTable">
         <thead>
-          <tr><th>#</th><th>Bus No</th><th>Operator</th><th>Plate No</th><th>Capacity</th><th>Route</th><th>Assigned Stops</th><th>Terminal/Bay</th><th>Next Terminal Stop</th><th>Final Destination</th><th>Movement</th><th>Status</th><th class="w-1">Actions</th></tr>
+          <tr><th>#</th><th>Bus No</th><th>Operator</th><th>Plate No</th><th>Route</th><th>Assigned Stops</th><th>Terminal/Bay</th><th>Next Terminal Stop</th><th>Final Destination</th><th>Movement</th><th>Status</th><th class="w-1">Actions</th></tr>
         </thead>
         <tbody id="busTableBody">
         {% for bus in buses %}
@@ -120,7 +120,6 @@
             <td class="fw-semibold">{{ bus.bus_number }}</td>
             <td class="text-muted small">{{ bus.operator|default:"Ceres Liner" }}</td>
             <td class="text-muted">{{ bus.plate_number }}</td>
-            <td><span class="badge bg-primary-lt text-primary">{{ bus.capacity }}</span></td>
             <td class="text-muted small">{{ bus.route }}</td>
             <td class="small">
               {% if bus.assigned_stops.all %}
@@ -182,7 +181,7 @@
             </td>
         </tr>
         {% empty %}
-        <tr><td colspan="13"><div class="empty py-5"><p class="empty-title">No buses found</p><p class="empty-subtitle">Try adjusting your search or add a new bus.</p></div></td></tr>
+        <tr><td colspan="12"><div class="empty py-5"><p class="empty-title">No buses found</p><p class="empty-subtitle">Try adjusting your search or add a new bus.</p></div></td></tr>
         {% endfor %}
         </tbody>
       </table>

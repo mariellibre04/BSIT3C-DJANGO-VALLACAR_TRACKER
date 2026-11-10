@@ -146,15 +146,14 @@ def logout_view(request):
 
 def welcome_view(request):
     """Public landing: eye-catching passenger greeting with live fleet snapshot."""
-    from django.db.models import Count, Sum
+    from django.db.models import Sum
     from apps.bus.models import Bus
 
-    buses = Bus.objects.annotate(total_passengers=Count('passengers', distinct=True))
+    buses = Bus.objects.all()
     on_road = buses.filter(status=Bus.STATUS_ACTIVE).count()
     routes = buses.values('route').distinct().count()
     capacity = buses.aggregate(total=Sum('capacity'))['total'] or 0
-    occupied = sum(b.total_passengers or 0 for b in buses)
-    free_seats = max(0, capacity - occupied)
+    free_seats = capacity
 
     from apps.bus.views import _kiosk_board_context, terminal_monitor_context
     context = terminal_monitor_context(request)
@@ -176,21 +175,17 @@ def dashboard(request):
     if request.user.is_authenticated and get_role(request.user) == ROLE_CONDUCTOR:
         return redirect('conductor_dashboard')
 
-    from django.db.models import Count
     from apps.bus.models import Bus
     from apps.bus.views import (
         _bus_status_context, bus_map_coords, estimate_arrival, route_endpoints,
     )
 
-    buses = list(
-        Bus.objects.annotate(total_passengers=Count('passengers')).order_by('bus_number')
-    )
+    buses = list(Bus.objects.order_by('bus_number'))
     free_seats = 0
     on_road = 0
     for b in buses:
-        occupied = b.total_passengers or 0
-        b.seats_left = max(0, (b.capacity or 0) - occupied)
-        b.occupancy_pct = int(round(occupied * 100.0 / b.capacity)) if b.capacity else 0
+        b.seats_left = b.capacity or 0
+        b.occupancy_pct = 0
         b.display_location = b.current_location or b.route
         free_seats += b.seats_left
         if b.status == Bus.STATUS_ACTIVE:
@@ -220,7 +215,7 @@ def admin_dashboard(request):
 
     Signed-in staff get the full, scoped fleet-management dashboard.
     """
-    from django.db.models import Avg, Count, Sum
+    from django.db.models import Avg, Sum
     from django.utils import timezone as dj_timezone
     from apps.scoping import (
         scoped_drivers, scoped_incidents,
@@ -237,9 +232,7 @@ def admin_dashboard(request):
     maintenances_qs = scoped_maintenances(request.user)
     trips_qs = scoped_trips(request.user)
 
-    buses_qs = buses_qs.annotate(
-        total_passengers=Count('passengers', distinct=True)
-    )
+    buses_qs = Bus.objects.all()
 
     total_buses = buses_qs.count()
     active_buses = buses_qs.filter(status=Bus.STATUS_ACTIVE).count()
@@ -255,9 +248,8 @@ def admin_dashboard(request):
         buses_qs.prefetch_related('drivers').order_by('-updated_at')[:8]
     )
     for b in recent_buses:
-        occupied = b.total_passengers or 0
-        b.seats_left = max(0, (b.capacity or 0) - occupied)
-        b.occupancy_pct = int(round(occupied * 100.0 / b.capacity)) if b.capacity else 0
+        b.seats_left = b.capacity or 0
+        b.occupancy_pct = 0
         first_driver = None
         try:
             first_driver = b.drivers.all()[0] if hasattr(b, 'drivers') else None

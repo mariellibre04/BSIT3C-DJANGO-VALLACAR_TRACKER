@@ -44,7 +44,6 @@ INSTALLED_APPS = [
     'apps.bus',
     'apps.driver',
     'apps.conductor',
-    'apps.passengers',
     'apps.maintenance',
     'apps.trips',
     'apps.incidents',

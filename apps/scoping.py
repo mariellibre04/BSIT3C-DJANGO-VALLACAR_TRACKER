@@ -3,7 +3,6 @@ from apps.info.models import Info
 from apps.bus.models import Bus
 from apps.driver.models import Driver
 from apps.conductor.models import Conductor
-from apps.passengers.models import Passenger
 from apps.maintenance.models import MaintenanceRecord
 from apps.trips.models import Trip
 from apps.incidents.models import Incident
@@ -31,12 +30,6 @@ def scoped_conductors(user):
 
 def scoped_conductor(user, pk):
     return get_object_or_404(scoped_conductors(user), pk=pk)
-
-def scoped_passengers(user):
-    return Passenger.objects.filter(user=user)
-
-def scoped_passenger(user, pk):
-    return get_object_or_404(scoped_passengers(user), pk=pk)
 
 def scoped_maintenances(user):
     return MaintenanceRecord.objects.filter(user=user)

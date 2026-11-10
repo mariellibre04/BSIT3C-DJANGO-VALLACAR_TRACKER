@@ -100,18 +100,6 @@ class Bus(models.Model):
     def __str__(self):
         return f'{self.bus_number} ({self.plate_number})'
 
-    @property
-    def assigned_count(self):
-        return self.passengers.count()
-
-    @property
-    def available_seats(self):
-        return max(0, self.capacity - self.assigned_count)
-
-    @property
-    def is_full(self):
-        return self.available_seats <= 0
-
 
 class DemoSeedState(models.Model):
     """Marks one-time demo seeding so admin edits and deletions are respected."""
