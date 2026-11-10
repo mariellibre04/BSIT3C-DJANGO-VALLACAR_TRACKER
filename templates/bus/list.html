@@ -7,20 +7,21 @@
     gap: .4rem;
     max-height: 190px;
     overflow-y: auto;
+    background: #fffdf2;
   }
   .bus-stop-chip {
     border: 1px solid var(--tblr-border-color, #dce1e7);
     border-radius: 999px;
-    background: transparent;
+    background: #ffffff;
     color: inherit;
     padding: .2rem .7rem;
     font-size: .78rem;
     line-height: 1.4;
   }
-  .bus-stop-chip:hover { border-color: #206bc4; color: #206bc4; }
+  .bus-stop-chip:hover { border-color: #0047ab; color: #0047ab; background: #eef4ff; }
   .bus-stop-chip.is-selected {
-    background: #206bc4;
-    border-color: #206bc4;
+    background: #d71920;
+    border-color: #d71920;
     color: #fff;
   }
   .bus-stop-selected { display: flex; flex-direction: column; gap: .4rem; }
@@ -29,26 +30,29 @@
     align-items: center;
     gap: .5rem;
     border: 1px solid var(--tblr-border-color, #dce1e7);
+    border-left: 4px solid #ffd200;
     border-radius: .5rem;
     padding: .35rem .5rem;
-    background: var(--tblr-bg-surface, #fff);
+    background: #fffdf5;
   }
   .bus-stop-seq {
     min-width: 64px;
-    font-weight: 600;
-    color: #206bc4;
+    font-weight: 700;
+    color: #0047ab;
   }
   .bus-stop-name { flex: 1 1 auto; font-weight: 600; }
   .bus-stop-eta { max-width: 135px; }
   .bus-stop-empty {
-    border: 1px dashed var(--tblr-border-color, #dce1e7);
+    border: 1px dashed #e6c85a;
     border-radius: .5rem;
     padding: .75rem;
     text-align: center;
-    color: #6c7a91;
+    color: #667085;
+    background: #fffdf2;
     font-size: .8rem;
   }
   .bus-stop-list li { margin-bottom: .15rem; }
+  .bus-stop-list li::marker { color: #d71920; font-weight: 700; }
 </style>
 {% endblock %}
 {% block content %}
@@ -62,8 +66,8 @@
           <div class="text-muted small">Buses with GPS location, movement status, route, and seat availability.</div>
         </div>
         <div class="col-auto d-flex align-items-center gap-2 flex-wrap">
-          <a href="{% url 'bus:bus_map' %}" class="btn btn-outline-primary"><i class="fa-solid fa-satellite-dish me-1"></i> Live Tracking</a>
-          <button type="button" class="btn btn-primary" data-bs-toggle="modal" data-bs-target="#busModal" data-mode="create">
+          <a href="{% url 'bus:bus_map' %}" class="btn btn-ceres-blue"><i class="fa-solid fa-satellite-dish me-1"></i> Live Tracking</a>
+          <button type="button" class="btn btn-ceres" data-bs-toggle="modal" data-bs-target="#busModal" data-mode="create">
             <i class="fas fa-plus-circle me-2"></i> Add Bus
           </button>
         </div>

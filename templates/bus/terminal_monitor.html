@@ -6,7 +6,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
   <meta name="description" content="Vallacar Tracker passenger terminal monitor — choose your area and see every bus that departs from, passes through, or ends there.">
   <title>{% if kiosk_selected %}{{ kiosk_selected.name }} Terminal — {% endif %}Terminal Monitor — Vallacar Tracker</title>
-  <meta name="theme-color" content="#ffc72c">
+  <meta name="theme-color" content="#ffd200">
   <link rel="icon" type="image/svg+xml" href="{% static 'img/ceres-mark.svg' %}?v=3">
   <link rel="icon" type="image/png" sizes="64x64" href="{% static 'img/favicon.png' %}?v=3">
   <link rel="shortcut icon" href="{% static 'favicon.ico' %}?v=3">
@@ -14,7 +14,7 @@
   <link href="{% static 'css/tabler.css' %}" rel="stylesheet">
   <link href="{% static 'css/app-theme.css' %}" rel="stylesheet">
   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
-  <link href="{% static 'css/terminal-monitor.css' %}?v=9" rel="stylesheet">
+  <link href="{% static 'css/terminal-monitor.css' %}?v=17" rel="stylesheet">
   <style>@import url("https://rsms.me/inter/inter.css");</style>
 </head>
 <body class="kiosk-body" data-selected-terminal="{{ kiosk_selected_slug }}" data-destination="{{ kiosk_destination }}">
@@ -202,11 +202,11 @@
     <!-- Footer -->
     <footer class="k-footer">
       <div class="k-legend" aria-label="Status legend">
-        <span><i class="legend-at"></i> At Terminal</span>
-        <span><i class="legend-boarding"></i> Boarding</span>
-        <span><i class="legend-arriving"></i> Arriving</span>
-        <span><i class="legend-enroute"></i> En Route</span>
-        <span><i class="legend-delayed"></i> Delayed</span>
+        <span class="legend-item-at"><i class="legend-at"></i> At Terminal</span>
+        <span class="legend-item-boarding"><i class="legend-boarding"></i> Boarding</span>
+        <span class="legend-item-arriving"><i class="legend-arriving"></i> Arriving</span>
+        <span class="legend-item-enroute"><i class="legend-enroute"></i> En Route</span>
+        <span class="legend-item-delayed"><i class="legend-delayed"></i> Delayed</span>
       </div>
       <div class="k-ticker" id="kioskTicker" aria-label="Terminal announcements">
         <div class="k-ticker-track">

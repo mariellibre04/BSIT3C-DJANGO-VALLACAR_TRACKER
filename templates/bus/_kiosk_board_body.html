@@ -7,7 +7,7 @@
 {% for b in kiosk_at_terminal %}
   {% include 'bus/_kiosk_bus_row.html' with b=b %}
 {% empty %}
-<tr class="k-bus-row"><td colspan="7"><span class="k-empty-row">{% if kiosk_selected %}No buses are checked in at {{ kiosk_selected.name }} right now.{% else %}No buses checked in at a terminal yet. Scan a bus QR to check in.{% endif %}</span></td></tr>
+<tr class="k-bus-row"><td colspan="7"><span class="k-empty-row"><i class="fa-regular fa-circle-check" aria-hidden="true"></i><span>{% if kiosk_selected %}No buses are checked in at {{ kiosk_selected.name }} right now.{% else %}No buses checked in at a terminal yet. Scan a bus QR to check in.{% endif %}</span></span></td></tr>
 {% endfor %}
 
 <tr class="k-section inbound">
@@ -19,7 +19,7 @@
 {% for b in kiosk_inbound %}
   {% include 'bus/_kiosk_bus_row.html' with b=b %}
 {% empty %}
-<tr class="k-bus-row"><td colspan="7"><span class="k-empty-row">{% if kiosk_selected %}No buses are currently heading to {{ kiosk_selected.name }}.{% else %}No other active buses right now.{% endif %}</span></td></tr>
+<tr class="k-bus-row"><td colspan="7"><span class="k-empty-row"><i class="fa-solid fa-route" aria-hidden="true"></i><span>{% if kiosk_selected %}No buses are currently heading to {{ kiosk_selected.name }}.{% else %}No other active buses right now.{% endif %}</span></span></td></tr>
 {% endfor %}
 
 {% if kiosk_selected %}
@@ -32,6 +32,6 @@
 {% for b in kiosk_departed %}
   {% include 'bus/_kiosk_bus_row.html' with b=b %}
 {% empty %}
-<tr class="k-bus-row"><td colspan="7"><span class="k-empty-row">No departures from {{ kiosk_selected.name }} yet today.</span></td></tr>
+<tr class="k-bus-row"><td colspan="7"><span class="k-empty-row"><i class="fa-regular fa-clock" aria-hidden="true"></i><span>No departures from {{ kiosk_selected.name }} yet today.</span></span></td></tr>
 {% endfor %}
 {% endif %}
