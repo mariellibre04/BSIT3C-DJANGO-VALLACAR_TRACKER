@@ -11,12 +11,13 @@ from django.utils import timezone
 from django.views.decorators.http import require_POST
 
 from apps.scoping import (
-    scoped_buses, scoped_incidents, scoped_maintenances,
+    manageable_buses, scoped_buses, scoped_incidents, scoped_maintenances,
     scoped_trip, scoped_trips,
 )
 from apps.bus.models import Bus
 from apps.incidents.models import Incident
 from apps.maintenance.models import MaintenanceRecord
+from .live import live_trips, matches_query
 from .models import Trip
 from apps.core.permissions import admin_required
 
@@ -42,20 +43,35 @@ def _parse_dt(raw):
 def trip_list_page(request):
     query = request.GET.get('q', '').strip()
     status_filter = request.GET.get('status', '').strip()
-    trips = scoped_trips(request.user).select_related('bus').order_by('-scheduled_departure')
+    status_labels = dict(Trip.STATUS_CHOICES)
+
+    trips = scoped_trips(request.user).select_related('bus')
     if query:
         trips = trips.filter(
             Q(origin__icontains=query) | Q(destination__icontains=query)
             | Q(route__icontains=query) | Q(bus__bus_number__icontains=query)
         )
-    if status_filter in dict(Trip.STATUS_CHOICES):
+    if status_filter in status_labels:
         trips = trips.filter(status=status_filter)
-    paginator = Paginator(trips, 10)
+
+    # Buses that are already running have no saved Trip row yet. Show them as
+    # read-only live rows so the board reflects the fleet instead of "No trips".
+    live_rows = live_trips(request.user)
+    if query:
+        live_rows = [t for t in live_rows if matches_query(t, query)]
+    if status_filter in status_labels:
+        live_rows = [t for t in live_rows if t.status == status_filter]
+
+    fallback = timezone.now()
+    rows = list(trips) + live_rows
+    rows.sort(key=lambda t: t.scheduled_departure or fallback, reverse=True)
+
+    paginator = Paginator(rows, 10)
     page = paginator.get_page(request.GET.get('page', 1))
     return render(request, 'trips/list.html', {
         'trips': page, 'query': query, 'status_filter': status_filter,
         'status_choices': Trip.STATUS_CHOICES,
-        'available_buses': scoped_buses(request.user).filter(status=Bus.STATUS_ACTIVE).order_by('bus_number'),
+        'available_buses': manageable_buses(request.user).filter(status=Bus.STATUS_ACTIVE).order_by('bus_number'),
     })
 
 
@@ -97,7 +113,7 @@ def trip_save_ajax(request):
 
     bus = None
     if bus_id:
-        bus = scoped_buses(request.user).filter(pk=bus_id).first()
+        bus = manageable_buses(request.user).filter(pk=bus_id).first()
         if bus is None:
             return JsonResponse({'error': 'Selected bus is invalid.'}, status=400)
     if not origin:

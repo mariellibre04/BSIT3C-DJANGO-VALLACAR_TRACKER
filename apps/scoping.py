@@ -1,3 +1,4 @@
+from django.db.models import Q
 from django.shortcuts import get_object_or_404
 from apps.info.models import Info
 from apps.bus.models import Bus
@@ -15,6 +16,14 @@ def scoped_info(user, pk):
 
 def scoped_buses(user):
     return Bus.objects.filter(user=user)
+
+def manageable_buses(user):
+    """Fleet the user may dispatch: their own buses plus unowned kiosk buses.
+
+    Kiosk demo buses have ``user_id = NULL`` so every dispatcher can see and
+    schedule them; buses owned by another admin stay private.
+    """
+    return Bus.objects.filter(Q(user=user) | Q(user__isnull=True))
 
 def scoped_bus(user, pk):
     return get_object_or_404(scoped_buses(user), pk=pk)

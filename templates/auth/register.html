@@ -11,6 +11,8 @@
   <title>
     Register - Vallacar Tracker
 </title>
+<script src="{% static 'js/theme.js' %}?v=1"></script>
+<script src="{% static 'js/tabler-theme.js' %}?v=1"></script>
 <link rel="icon" type="image/svg+xml" href="{% static 'img/ceres-mark.svg' %}?v=3" />
 <link rel="icon" type="image/png" sizes="64x64" href="{% static 'img/favicon.png' %}?v=3" />
 <link rel="shortcut icon" href="{% static 'favicon.ico' %}?v=3" />
@@ -26,16 +28,19 @@ rel="stylesheet"
 <link href="{% static 'css/tabler-vendors.css' %}" rel="stylesheet" />
 <link href="{% static 'css/tabler-marketing.css' %}" rel="stylesheet" />
 <link href="{% static 'css/tabler-themes.css' %}" rel="stylesheet" />
-<link href="{% static 'css/app-theme.css' %}" rel="stylesheet" />
+<link href="{% static 'css/app-theme.css' %}?v=6" rel="stylesheet" />
 <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
 <style>
     @import url("https://rsms.me/inter/inter.css");
 </style>
 </head>
 <body class="antialiased">
-    <script src="{% static 'js/tabler-theme.js' %}"></script>
     <div class="page page-center">
         <div class="container container-tight py-4">
+
+            <div class="d-flex justify-content-center mb-3">
+                {% include 'theme/theme_toggle.html' %}
+            </div>
 
             <!-- Logo / Brand -->
             <div class="d-flex flex-column align-items-center mb-3">

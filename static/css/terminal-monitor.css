@@ -2262,3 +2262,102 @@ a.k-terminal:focus-visible {
   outline: 2px solid var(--k-blue);
   outline-offset: 2px;
 }
+
+/* ---------- Dark mode ---------- */
+.k-theme-switch {
+  display: flex;
+  align-items: center;
+}
+
+[data-bs-theme="dark"] {
+  --k-yellow-soft: #2b2611;
+  --k-yellow-mist: #141a2a;
+  --k-white: #111728;
+  --k-bg: #0a0f1c;
+  --k-panel: #111728;
+  --k-panel-soft: #161d31;
+  --k-line: rgba(255, 255, 255, 0.09);
+  --k-line-strong: rgba(255, 255, 255, 0.18);
+  --k-text: #e8eaf4;
+  --k-text-soft: #b6c0d8;
+  --k-ink: #f5f7ff;
+  --k-muted: #93a0ba;
+  --k-blue: #8ab4ff;
+  --k-red-dark: #ff8b91;
+  --k-shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.4);
+  --k-shadow-md: 0 14px 34px -24px rgba(0, 0, 0, 0.8);
+  --k-shadow-lg: 0 30px 70px -44px rgba(0, 0, 0, 0.9);
+}
+
+[data-bs-theme="dark"] body.kiosk-body {
+  background-image:
+    repeating-linear-gradient(135deg, rgba(255, 210, 0, 0.035) 0 2px, transparent 2px 26px),
+    repeating-linear-gradient(45deg, rgba(138, 180, 255, 0.035) 0 2px, transparent 2px 32px),
+    radial-gradient(1100px 620px at 8% -12%, rgba(255, 210, 0, 0.10), transparent 62%),
+    radial-gradient(950px 540px at 102% -4%, rgba(0, 71, 171, 0.18), transparent 58%),
+    radial-gradient(900px 650px at 50% 118%, rgba(215, 25, 32, 0.12), transparent 62%);
+}
+
+[data-bs-theme="dark"] body.kiosk-body::before {
+  background-image:
+    linear-gradient(rgba(255, 255, 255, 0.025) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(255, 255, 255, 0.025) 1px, transparent 1px);
+}
+
+[data-bs-theme="dark"] .k-board-head,
+[data-bs-theme="dark"] .k-footer,
+[data-bs-theme="dark"] .k-sidebar-head {
+  background: linear-gradient(90deg, rgba(255, 210, 0, 0.08) 0%, transparent 72%);
+}
+
+[data-bs-theme="dark"] .k-table th {
+  background: linear-gradient(180deg, rgba(255, 210, 0, 0.10) 0%, rgba(255, 210, 0, 0.04) 100%);
+  color: #ffd766;
+}
+
+[data-bs-theme="dark"] .k-table td {
+  border-bottom-color: rgba(255, 255, 255, 0.07);
+}
+
+[data-bs-theme="dark"] .k-section td {
+  border-color: rgba(255, 210, 0, 0.22);
+}
+
+[data-bs-theme="dark"] .k-section.inbound td {
+  border-color: rgba(138, 180, 255, 0.18);
+}
+
+[data-bs-theme="dark"] .k-section-count,
+[data-bs-theme="dark"] .k-legend span {
+  background: rgba(255, 255, 255, 0.06);
+  border-color: rgba(255, 255, 255, 0.10);
+}
+
+[data-bs-theme="dark"] .k-status.is-arriving,
+[data-bs-theme="dark"] .k-ticker-status.is-arriving {
+  background: var(--k-panel);
+  color: #8ab4ff;
+  border-color: rgba(138, 180, 255, 0.35);
+}
+
+[data-bs-theme="dark"] .legend-item-arriving {
+  background: var(--k-panel) !important;
+  color: #8ab4ff !important;
+  border-color: rgba(138, 180, 255, 0.35) !important;
+}
+
+[data-bs-theme="dark"] .k-side-item.is-active {
+  border-color: rgba(255, 210, 0, 0.45);
+  background: linear-gradient(90deg, rgba(255, 210, 0, 0.14) 0%, rgba(255, 210, 0, 0.04) 100%);
+}
+
+[data-bs-theme="dark"] .k-sidebar-scroll::-webkit-scrollbar-thumb {
+  background: rgba(138, 180, 255, 0.32);
+  background-clip: content-box;
+}
+
+/* QR codes must keep a light background so phones can scan them. */
+[data-bs-theme="dark"] .k-qr-code {
+  background: #ffffff;
+}
+

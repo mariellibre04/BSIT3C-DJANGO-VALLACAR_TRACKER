@@ -219,6 +219,13 @@
         {% endif %}
 
         <li class="nav-item mt-2">
+          <div class="dh-theme-picker">
+            <span class="dh-theme-picker-label">Appearance</span>
+            {% include 'theme/theme_toggle.html' %}
+          </div>
+        </li>
+
+        <li class="nav-item mt-2">
           <div class="mx-3 px-3 py-2 rounded-3 d-flex align-items-center gap-2" style="background:rgba(34,197,94,.12);border:1px solid rgba(34,197,94,.25);">
             <span class="d-inline-block rounded-circle" style="width:.6rem;height:.6rem;background:#22c55e;box-shadow:0 0 0 4px rgba(34,197,94,.2);"></span>
             <span class="small fw-semibold text-white">System Status: Online</span>

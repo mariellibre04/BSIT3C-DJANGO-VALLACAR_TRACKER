@@ -106,8 +106,11 @@
 <script>
 document.addEventListener('DOMContentLoaded', function () {
   if (!window.ApexCharts) return;
-  new ApexCharts(document.getElementById('chart-delays-by-day'), {
+  var mode = window.VallacarTheme ? window.VallacarTheme.get() : 'light';
+  var charts = [];
+  charts.push(new ApexCharts(document.getElementById('chart-delays-by-day'), {
     chart: { type: 'bar', height: 260, fontFamily: 'inherit', toolbar: { show: false } },
+    theme: { mode: mode },
     plotOptions: { bar: { columnWidth: '55%' } },
     dataLabels: { enabled: false },
     series: [
@@ -118,14 +121,22 @@ document.addEventListener('DOMContentLoaded', function () {
     xaxis: { categories: {{ delay_days|safe }} },
     colors: ['#ef4444', '#2563eb', '#f59e0b'],
     legend: { position: 'bottom' },
-  }).render();
-  new ApexCharts(document.getElementById('chart-fleet-status'), {
+  }));
+  charts.push(new ApexCharts(document.getElementById('chart-fleet-status'), {
     chart: { type: 'donut', height: 260, fontFamily: 'inherit' },
+    theme: { mode: mode },
     series: [{{ in_service }}, {{ in_maintenance }}, {{ out_of_service }}],
     labels: ['In Service: {{ operational_pct }}%', 'Maintenance', 'Out of Service'],
     colors: ['#1d4ed8', '#f59e0b', '#ef4444'],
     legend: { position: 'bottom' },
-  }).render();
+  }));
+  charts.forEach(function (chart) { chart.render(); });
+
+  document.addEventListener('vallacar:themechange', function (event) {
+    charts.forEach(function (chart) {
+      chart.updateOptions({ theme: { mode: event.detail.theme } });
+    });
+  });
 });
 </script>
 {% endblock %}

@@ -1,0 +1,17 @@
+{% comment %}
+Visible light / dark mode switch.
+
+Usage:
+  {% include 'theme/theme_toggle.html' %}
+  {% include 'theme/theme_toggle.html' with compact=True %}
+{% endcomment %}
+<div class="theme-switch{% if compact %} theme-switch--compact{% endif %}" role="group" aria-label="Colour mode">
+  <button type="button" class="theme-switch-btn" data-theme-set="light" title="Light mode" aria-label="Light mode" aria-pressed="false">
+    <i class="fa-solid fa-sun" aria-hidden="true"></i>
+    <span class="theme-switch-label">Light</span>
+  </button>
+  <button type="button" class="theme-switch-btn" data-theme-set="dark" title="Dark mode" aria-label="Dark mode" aria-pressed="false">
+    <i class="fa-solid fa-moon" aria-hidden="true"></i>
+    <span class="theme-switch-label">Dark</span>
+  </button>
+</div>

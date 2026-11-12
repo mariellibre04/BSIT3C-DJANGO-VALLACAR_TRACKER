@@ -7,6 +7,8 @@
   <meta http-equiv="X-UA-Compatible" content="ie=edge" />
   <meta name="theme-color" content="#08101f" />
   <title>Sign in &middot; Ceres Liner — Vallacar Tracker</title>
+  <script src="{% static 'js/theme.js' %}?v=1"></script>
+  <script src="{% static 'js/tabler-theme.js' %}?v=1"></script>
   <link rel="icon" type="image/svg+xml" href="{% static 'img/ceres-mark.svg' %}?v=3" />
   <link rel="icon" type="image/png" sizes="64x64" href="{% static 'img/favicon.png' %}?v=3" />
   <link rel="shortcut icon" href="{% static 'favicon.ico' %}?v=3" />
@@ -18,7 +20,7 @@
   <link href="{% static 'css/tabler-vendors.css' %}" rel="stylesheet" />
   <link href="{% static 'css/tabler-marketing.css' %}" rel="stylesheet" />
   <link href="{% static 'css/tabler-themes.css' %}" rel="stylesheet" />
-  <link href="{% static 'css/app-theme.css' %}" rel="stylesheet" />
+  <link href="{% static 'css/app-theme.css' %}?v=6" rel="stylesheet" />
   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
   <style>
     @import url("https://rsms.me/inter/inter.css");
@@ -221,11 +223,52 @@
       .ceres-auth-form { padding: 1.5rem 1.4rem 1.2rem; }
       .ceres-auth-foot { padding: 0 1.4rem 1.15rem; }
     }
+
+    /* Dark mode: the backdrop stays dark, the card follows the palette. */
+    [data-bs-theme="dark"] .ceres-auth-card {
+      background: #111728;
+      border-color: rgba(255, 255, 255, .12);
+      color: #e8eaf4;
+    }
+
+    [data-bs-theme="dark"] .ceres-auth-form,
+    [data-bs-theme="dark"] .ceres-auth-foot {
+      background: #111728;
+    }
+
+    [data-bs-theme="dark"] .ceres-auth-form h1 {
+      color: #f5f7ff;
+    }
+
+    [data-bs-theme="dark"] .ceres-auth-form .auth-sub,
+    [data-bs-theme="dark"] .ceres-auth-foot {
+      color: #9aa6c4;
+    }
+
+    [data-bs-theme="dark"] .ceres-auth-form .form-label {
+      color: #c7cfe4;
+    }
+
+    [data-bs-theme="dark"] .ceres-auth-form .form-control {
+      background: #0c1220;
+      border-color: #26304a;
+      color: #e8eaf4;
+    }
+
+    [data-bs-theme="dark"] .ceres-auth-form .form-control:focus {
+      background: #0e1526;
+      border-color: #e0aa13;
+      color: #ffffff;
+    }
+
+    [data-bs-theme="dark"] .ceres-auth-foot strong {
+      color: #c7cfe4;
+    }
   </style>
 </head>
 
 <body class="ceres-auth">
-  <script src="{% static 'js/tabler-theme.js' %}"></script>
+  <div class="auth-theme-toggle">{% include 'theme/theme_toggle.html' with compact=True %}</div>
   <div class="ceres-auth-shell">
     <main class="ceres-auth-card">
       <div class="ceres-auth-livery" aria-hidden="true"></div>

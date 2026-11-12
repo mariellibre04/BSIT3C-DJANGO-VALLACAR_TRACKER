@@ -7,14 +7,16 @@
   <meta name="description" content="Vallacar Tracker passenger terminal monitor — choose your area and see every bus that departs from, passes through, or ends there.">
   <title>{% if kiosk_selected %}{{ kiosk_selected.name }} Terminal — {% endif %}Terminal Monitor — Vallacar Tracker</title>
   <meta name="theme-color" content="#ffd200">
+  <script src="{% static 'js/theme.js' %}?v=1"></script>
+  <script src="{% static 'js/tabler-theme.js' %}?v=1"></script>
   <link rel="icon" type="image/svg+xml" href="{% static 'img/ceres-mark.svg' %}?v=3">
   <link rel="icon" type="image/png" sizes="64x64" href="{% static 'img/favicon.png' %}?v=3">
   <link rel="shortcut icon" href="{% static 'favicon.ico' %}?v=3">
   <link rel="apple-touch-icon" href="{% static 'img/favicon.png' %}?v=3">
   <link href="{% static 'css/tabler.css' %}" rel="stylesheet">
-  <link href="{% static 'css/app-theme.css' %}" rel="stylesheet">
+  <link href="{% static 'css/app-theme.css' %}?v=6" rel="stylesheet">
   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
-  <link href="{% static 'css/terminal-monitor.css' %}?v=17" rel="stylesheet">
+  <link href="{% static 'css/terminal-monitor.css' %}?v=18" rel="stylesheet">
   <style>@import url("https://rsms.me/inter/inter.css");</style>
 </head>
 <body class="kiosk-body" data-selected-terminal="{{ kiosk_selected_slug }}" data-destination="{{ kiosk_destination }}">
@@ -56,6 +58,7 @@
           <i class="fa-solid fa-user-shield"></i>
         </a>
         {% endif %}
+        <div class="k-theme-switch">{% include 'theme/theme_toggle.html' with compact=True %}</div>
         <button class="k-icon-btn" id="kioskFullscreen" type="button" title="Toggle fullscreen" aria-label="Toggle fullscreen">
           <i class="fa-solid fa-expand"></i>
         </button>

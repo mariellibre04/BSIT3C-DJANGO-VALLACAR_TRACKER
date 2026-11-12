@@ -4,7 +4,7 @@
   <div class="page-header d-print-none"><div class="row align-items-center"><div class="col">
     <div class="page-pretitle">Trips &amp; Schedules</div>
     <h2 class="page-title mb-0">Trips</h2>
-    <div class="text-muted small">Scheduled runs with delay, reroute, and unexpected-stop tracking. See <a href="{% url 'trips:alerts' %}">Delay Alerts</a> and <a href="{% url 'trips:reports' %}">Analytics &amp; Reports</a>.</div>
+    <div class="text-muted small">Scheduled runs with delay, reroute, and unexpected-stop tracking. Buses that are already moving appear as <span class="badge bg-azure-lt text-azure">Live</span> rows from their movement status — save one to track riders and delays. See <a href="{% url 'trips:alerts' %}">Delay Alerts</a> and <a href="{% url 'trips:reports' %}">Analytics &amp; Reports</a>.</div>
   </div><div class="col-auto">
     <a href="{% url 'trips:alerts' %}" class="btn btn-outline-warning btn-sm"><i class="fa-solid fa-bell me-1"></i> Alerts</a>
     <a href="{% url 'trips:reports' %}" class="btn btn-outline-primary btn-sm"><i class="fa-solid fa-chart-line me-1"></i> Reports</a>
@@ -34,8 +34,8 @@
       {% for t in trips %}
       <tr>
         <td class="text-muted">{{ forloop.counter0|add:trips.start_index }}</td>
-        <td class="fw-semibold">{% if t.bus %}{{ t.bus.bus_number }}{% else %}—{% endif %}</td>
-        <td>{{ t.origin }} → {{ t.destination }}<div class="text-muted small">{{ t.route }}</div></td>
+        <td class="fw-semibold">{% if t.bus %}{{ t.bus.bus_number }}{% else %}—{% endif %}{% if not t.pk %} <span class="badge bg-azure-lt text-azure ms-1" title="Derived from this bus&rsquo;s current movement status">Live</span>{% endif %}</td>
+        <td>{{ t.origin }} → {{ t.destination }}<div class="text-muted small">{{ t.route }}{% if not t.pk and t.bus %} &middot; {{ t.bus.get_movement_status_display }}{% endif %}</div></td>
         <td class="text-muted small">{{ t.scheduled_departure|date:"M d, h:i A" }} → {{ t.scheduled_arrival|date:"M d, h:i A" }}</td>
         <td>
           {% if t.status == 'delayed' %}<span class="badge bg-danger-lt text-danger">Delayed</span>
@@ -47,11 +47,19 @@
         </td>
         <td>{% if t.delay_minutes %}<span class="badge bg-danger-lt text-danger">+{{ t.delay_minutes }} min</span>{% else %}<span class="text-muted">—</span>{% endif %}</td>
         <td><div class="d-flex gap-1">
+          {% if t.pk %}
           <button type="button" class="btn btn-ghost-secondary btn-icon btn-sm trip-edit-btn" data-bs-toggle="modal" data-bs-target="#tripModal" data-id="{{ t.id }}" title="Edit"><i class="fas fa-edit text-primary"></i></button>
           <button type="button" class="btn btn-ghost-secondary btn-icon btn-sm" data-bs-toggle="modal" data-bs-target="#deleteTripModal" data-id="{{ t.id }}" data-name="{{ t.origin }} to {{ t.destination }}" title="Delete"><i class="fas fa-trash-alt text-danger"></i></button>
+          {% else %}
+          <button type="button" class="btn btn-ghost-primary btn-icon btn-sm trip-live-btn" data-bs-toggle="modal" data-bs-target="#tripModal"
+            data-bus="{{ t.bus_id }}" data-origin="{{ t.origin }}" data-destination="{{ t.destination }}"
+            data-route="{{ t.route }}" data-status="{{ t.status }}"
+            data-sdep="{{ t.scheduled_departure|date:'Y-m-d\TH:i' }}" data-sarr="{{ t.scheduled_arrival|date:'Y-m-d\TH:i' }}"
+            data-notes="{{ t.notes }}" title="Save this live run as a trip"><i class="fas fa-clipboard-check"></i></button>
+          {% endif %}
         </div></td>
       </tr>
-      {% empty %}<tr><td colspan="7"><div class="empty py-5"><p class="empty-title">No trips yet</p><p class="empty-subtitle">Schedule trips to track delays and route performance.</p></div></td></tr>{% endfor %}
+      {% empty %}<tr><td colspan="7"><div class="empty py-5"><p class="empty-title">No trips yet</p><p class="empty-subtitle">Add an active bus or schedule a trip to see runs here.</p></div></td></tr>{% endfor %}
       </tbody>
     </table></div>
     {% if trips.paginator.num_pages > 1 %}
@@ -109,7 +117,19 @@
   modalEl.addEventListener('show.bs.modal', function(e) {
     const btn = e.relatedTarget;
     const mode = btn ? btn.getAttribute('data-mode') : 'create';
-    if (btn && btn.classList.contains('trip-edit-btn')) {
+    if (btn && btn.classList.contains('trip-live-btn')) {
+      form.reset(); currentId = null;
+      document.getElementById('trip_id').value = '';
+      document.getElementById('trip_bus').value = btn.getAttribute('data-bus') || '';
+      document.getElementById('trip_origin').value = btn.getAttribute('data-origin') || '';
+      document.getElementById('trip_destination').value = btn.getAttribute('data-destination') || '';
+      document.getElementById('trip_route').value = btn.getAttribute('data-route') || '';
+      document.getElementById('trip_sdep').value = btn.getAttribute('data-sdep') || '';
+      document.getElementById('trip_sarr').value = btn.getAttribute('data-sarr') || '';
+      document.getElementById('trip_status').value = btn.getAttribute('data-status') || 'scheduled';
+      document.getElementById('trip_notes').value = btn.getAttribute('data-notes') || '';
+      document.getElementById('tripModalTitle').textContent = 'Log Live Trip';
+    } else if (btn && btn.classList.contains('trip-edit-btn')) {
       currentId = btn.getAttribute('data-id');
       fetch('/trips/ajax/get/' + currentId + '/').then(r => r.json()).then(function(t) {
         document.getElementById('trip_id').value = t.id;

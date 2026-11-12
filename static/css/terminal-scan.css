@@ -701,3 +701,107 @@ button {
     animation: none;
   }
 }
+
+/* ---------- Theme switch ---------- */
+.scanner-theme-row {
+  display: flex;
+  justify-content: flex-end;
+  margin-top: 8px;
+}
+
+.scanner-theme-row .theme-switch {
+  padding: 2px;
+  gap: 1px;
+}
+
+.scanner-theme-row .theme-switch-btn {
+  width: 1.55rem;
+  height: 1.55rem;
+  min-height: 0;
+  padding: 0;
+  font-size: .6rem;
+}
+
+/* ---------- Dark mode ---------- */
+[data-bs-theme="dark"] {
+  --ink: #e8eaf4;
+  --muted: #93a0ba;
+  --line: rgba(255, 255, 255, 0.14);
+  --card: #111728;
+  --blue: #60a5fa;
+  --blue-deep: #93c5fd;
+}
+
+[data-bs-theme="dark"] body {
+  background:
+    radial-gradient(1100px 560px at 50% -180px, rgba(37, 99, 235, 0.20) 0%, rgba(37, 99, 235, 0) 68%),
+    linear-gradient(180deg, #0a0f1c 0%, #0d1424 100%);
+}
+
+[data-bs-theme="dark"] .identity-card {
+  background: rgba(17, 23, 40, 0.94);
+  border-color: rgba(255, 255, 255, 0.08);
+}
+
+[data-bs-theme="dark"] .menu-button {
+  background: rgba(255, 255, 255, 0.06);
+  border-color: rgba(255, 255, 255, 0.12);
+  color: var(--ink);
+}
+
+[data-bs-theme="dark"] .menu-button:hover {
+  background: rgba(255, 255, 255, 0.1);
+  border-color: rgba(255, 255, 255, 0.2);
+}
+
+[data-bs-theme="dark"] .identity-name {
+  color: var(--ink);
+}
+
+[data-bs-theme="dark"] .identity-name span {
+  color: var(--muted);
+}
+
+[data-bs-theme="dark"] .identity-time {
+  color: var(--muted);
+}
+
+[data-bs-theme="dark"] .mode-btn {
+  background: var(--card);
+  color: #b6c0d8;
+}
+
+[data-bs-theme="dark"] .mode-in {
+  background: rgba(22, 163, 74, 0.12);
+  border-color: rgba(74, 222, 128, 0.45);
+  color: #4ade80;
+}
+
+[data-bs-theme="dark"] .mode-out {
+  background: rgba(220, 38, 38, 0.12);
+  border-color: rgba(248, 113, 113, 0.5);
+  color: #f87171;
+}
+
+[data-bs-theme="dark"] .mode-in.is-active,
+[data-bs-theme="dark"] .mode-out.is-active {
+  color: #ffffff;
+}
+
+[data-bs-theme="dark"] .scan-feedback {
+  background: rgba(17, 23, 40, 0.97);
+  border-color: rgba(255, 255, 255, 0.12);
+  color: var(--ink);
+}
+
+[data-bs-theme="dark"] .scan-feedback strong {
+  color: var(--ink);
+}
+
+[data-bs-theme="dark"] .scan-feedback .feedback-icon {
+  background: rgba(37, 99, 235, 0.18);
+}
+
+[data-bs-theme="dark"] .scan-feedback.is-error .feedback-icon {
+  background: rgba(220, 38, 38, 0.18);
+}
