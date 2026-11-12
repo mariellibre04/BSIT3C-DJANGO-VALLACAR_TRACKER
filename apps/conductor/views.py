@@ -6,7 +6,7 @@ from django.core.paginator import Paginator
 from django.db import IntegrityError
 from django.db.models import Q
 
-from apps.scoping import scoped_conductor, scoped_conductors, scoped_buses
+from apps.scoping import manageable_buses, scoped_conductor, scoped_conductors
 from .models import Conductor
 from apps.core.permissions import admin_required
 
@@ -24,7 +24,7 @@ def conductor_list_page(request):
         )
     paginator = Paginator(conductors_list, 10)
     conductors = paginator.get_page(request.GET.get('page', 1))
-    buses = scoped_buses(request.user).order_by('bus_number')
+    buses = manageable_buses(request.user).order_by('bus_number')
     return render(request, 'conductor/list.html', {
         'conductors': conductors, 'query': query, 'buses': buses,
     })
@@ -109,7 +109,7 @@ def conductor_save_ajax(request):
 
     bus = None
     if bus_id:
-        buses = scoped_buses(request.user).filter(pk=bus_id)
+        buses = manageable_buses(request.user).filter(pk=bus_id)
         bus = buses.first()
         if bus is None:
             return JsonResponse({'error': 'Selected bus is invalid.'}, status=400)
