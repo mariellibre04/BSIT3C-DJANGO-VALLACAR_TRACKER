@@ -70,6 +70,34 @@ class TerminalScanTests(TestCase):
 
         self.assertEqual(response.status_code, 200)
 
+    def test_scan_accepts_compact_token_without_dashes(self):
+        response = self.client.post(
+            reverse('bus:bus_scan_checkin_ajax'),
+            {
+                'token': f'https://example.test/bus/tap/{self.bus.qr_token.hex}/',
+                'terminal': 'Bacolod',
+            },
+        )
+
+        self.assertEqual(response.status_code, 200)
+        self.assertTrue(BusTerminalTap.objects.filter(bus=self.bus).exists())
+
+    def test_scan_accepts_plain_payload_from_qr_reader(self):
+        response = self.client.post(
+            reverse('bus:bus_scan_checkin_ajax'),
+            {'token': self.bus.bus_number, 'terminal': 'Bacolod'},
+        )
+
+        self.assertEqual(response.status_code, 200)
+        self.assertTrue(BusTerminalTap.objects.filter(bus=self.bus).exists())
+
+    def test_scan_page_does_not_use_native_barcode_detector(self):
+        response = self.client.get(reverse('bus:bus_scan'))
+
+        self.assertEqual(response.status_code, 200)
+        self.assertNotContains(response, 'useBarCodeDetectorIfSupported')
+        self.assertContains(response, 'handleScanMiss')
+
     def test_invalid_token_is_rejected(self):
         response = self.client.post(
             reverse('bus:bus_scan_checkin_ajax'),
@@ -96,6 +124,90 @@ class TerminalScanTests(TestCase):
         self.assertContains(response, 'startWithCamera')
         self.assertNotContains(response, 'qr_upload')
         self.assertNotContains(response, 'scanFile')
+
+    def test_scan_page_terminal_selection_is_optional(self):
+        response = self.client.get(reverse('bus:bus_scan'))
+
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, '1. Terminal (optional)')
+        self.assertContains(response, 'Choose next terminal stop')
+        self.assertNotContains(response, 'Choose the terminal first')
+
+    def test_scan_without_terminal_uses_bus_next_stop(self):
+        self.bus.next_stop = 'Bago'
+        self.bus.save(update_fields=['next_stop'])
+
+        response = self.client.post(
+            reverse('bus:bus_scan_checkin_ajax'),
+            {'token': str(self.bus.qr_token)},
+        )
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.json()['place'], 'Bago')
+        self.assertTrue(
+            BusTerminalTap.objects.filter(
+                bus=self.bus, terminal_name='Bago', left_at__isnull=True
+            ).exists()
+        )
+
+    def test_scan_without_terminal_falls_back_to_current_terminal(self):
+        self.bus.current_terminal = 'Kabankalan'
+        self.bus.save(update_fields=['current_terminal'])
+
+        response = self.client.post(
+            reverse('bus:bus_scan_checkin_ajax'),
+            {'token': str(self.bus.qr_token)},
+        )
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.json()['place'], 'Kabankalan')
+
+    def test_rescan_without_terminal_times_out_at_inferred_terminal(self):
+        self.bus.next_stop = 'Bago'
+        self.bus.save(update_fields=['next_stop'])
+        self.client.post(
+            reverse('bus:bus_scan_checkin_ajax'),
+            {'token': str(self.bus.qr_token)},
+        )
+
+        response = self.client.post(
+            reverse('bus:bus_scan_checkin_ajax'),
+            {'token': str(self.bus.qr_token), 'action': 'time_out'},
+        )
+
+        self.assertEqual(response.status_code, 200)
+        data = response.json()
+        self.assertEqual(data['status'], 'time_out')
+        self.assertEqual(data['place'], 'Bago')
+
+    def test_scan_page_has_tolerant_jsqr_decoder(self):
+        response = self.client.get(reverse('bus:bus_scan'))
+
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, 'jsqr.min.js')
+        self.assertContains(response, 'startJsQrFallback')
+        self.assertContains(response, 'decodeJsQrRegion')
+
+    def test_scan_page_offers_manual_bus_entry(self):
+        response = self.client.get(reverse('bus:bus_scan'))
+
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, 'manual_bus')
+        self.assertContains(response, 'manual_tap')
+
+
+class BusQrCodeTests(TestCase):
+    """Bus QR codes must render large, with a quiet zone, so they scan."""
+
+    def setUp(self):
+        self.client.force_login(make_admin())
+
+    def test_bus_list_builds_qr_with_quiet_zone(self):
+        response = self.client.get(reverse('bus:bus_list'))
+
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, 'buildQrCanvas')
+        self.assertContains(response, 'buildQrCanvas(qrUrl, 640)')
 
 
 class KioskRefreshTests(TestCase):
@@ -554,6 +666,25 @@ class RouteNextStopTests(TestCase):
         self.assertEqual(log.next_stop.name, 'Himamaylan')
         self.assertAlmostEqual(float(log.distance_km), 19.0, places=2)
 
+    def test_confirmed_next_stop_is_shown_on_the_kiosk(self):
+        response = self.client.post(
+            reverse('bus:bus_next_stop_ajax'),
+            {
+                'token': str(self.bus.qr_token),
+                'current': 'Kabankalan',
+                'next_stop': 'Himamaylan',
+            },
+        )
+
+        self.assertEqual(response.status_code, 200)
+        self.bus.refresh_from_db()
+        self.assertEqual(self.bus.next_stop, 'Himamaylan')
+        self.assertIsNotNone(self.bus.next_stop_eta)
+        self.assertEqual(self.bus.final_destination, 'Bacolod South')
+        board = self.client.get(reverse('bus:bus_kiosk_refresh')).json()['board_html']
+        self.assertIn('Next terminal stop: Himamaylan', board)
+        self.assertIn('Final: Bacolod South', board)
+
     def test_next_stop_rejects_stop_before_current(self):
         response = self.client.post(
             reverse('bus:bus_next_stop_ajax'),
@@ -589,6 +720,13 @@ class RouteNextStopTests(TestCase):
         self.assertIsNotNone(data['next_stop_eta_at'])
         log = BusNextStopLog.objects.get(bus=self.bus)
         self.assertEqual(log.next_stop.name, 'Himamaylan')
+
+        self.bus.refresh_from_db()
+        self.assertEqual(self.bus.next_stop, 'Himamaylan')
+        self.assertIsNotNone(self.bus.next_stop_eta)
+        self.assertEqual(self.bus.final_destination, 'Bacolod South')
+        board = self.client.get(reverse('bus:bus_kiosk_refresh')).json()['board_html']
+        self.assertIn('Next terminal stop: Himamaylan', board)
 
     def test_time_out_rejects_invalid_next_stop(self):
         self.client.post(

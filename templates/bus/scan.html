@@ -1,4 +1,5 @@
 {% extends "theme/base.html" %}
+{% load static %}
 {% block extra_css %}
 <style>
   .terminal-combobox { position: relative; }
@@ -87,7 +88,7 @@
     <div class="col-12 col-lg-5">
       <div class="card">
         <div class="card-header">
-          <h3 class="card-title">1. Choose terminal</h3>
+          <h3 class="card-title">1. Terminal (optional)</h3>
         </div>
         <div class="card-body">
           {% if locked_terminal %}
@@ -107,10 +108,10 @@
             same bus again records its time out.
           </div>
           {% else %}
-          <label class="form-label required" for="terminal_input">Terminal / City</label>
+          <label class="form-label" for="terminal_input">Terminal / City</label>
           <div class="terminal-combobox" id="terminal_combobox">
             <input type="text" id="terminal_input" class="form-control form-control-lg terminal-combobox-input"
-                   placeholder="Choose the terminal you are at…" autocomplete="off"
+                   placeholder="Choose next terminal stop" autocomplete="off"
                    role="combobox" aria-expanded="false" aria-controls="terminal_listbox" aria-autocomplete="list">
             <button type="button" class="terminal-combobox-toggle" id="terminal_toggle" tabindex="-1"
                     aria-label="Show terminals and cities">
@@ -118,7 +119,7 @@
             </button>
             <div class="terminal-combobox-list" id="terminal_listbox" role="listbox" hidden></div>
             <select id="scan_terminal" class="d-none" tabindex="-1" aria-hidden="true">
-              <option value="">Choose the terminal you are at…</option>
+              <option value="">Auto-detect from the bus's next stop</option>
               <optgroup label="Bus terminals">
                 {% for t in terminals %}
                 <option value="{{ t.name }}" {% if selected_terminal == t.name %}selected{% endif %}>{{ t.label }}</option>
@@ -135,8 +136,9 @@
             </select>
           </div>
           <div class="form-hint mt-2">
-            Type to search all Philippine cities and municipalities. The first tap
-            records the time in and an estimated departure
+            Leave this empty and the terminal is detected automatically from the
+            bus's next stop. Choose a terminal only when you need to override it.
+            The first tap records the time in and an estimated departure
             ({{ estimated_stop_minutes }} minutes after arrival). Tapping the same
             bus again lets you record the time out.
           </div>
@@ -152,10 +154,22 @@
           </div>
 
           <div id="scan_status" class="alert alert-info mt-3 mb-0 small" role="status">
-            Choose a terminal, then start the camera and point the bus QR at it.
+            Start the camera and point the bus QR at it. The terminal is detected
+            automatically from the bus's next stop.
           </div>
 
           <div id="scanner_reader" class="mt-3 rounded overflow-hidden bg-dark" style="min-height: 240px;"></div>
+
+          <details class="mt-3">
+            <summary class="text-muted small">Camera not reading the QR? Enter the bus number or QR link</summary>
+            <div class="input-group mt-2">
+              <input type="text" id="manual_bus" class="form-control" autocomplete="off"
+                     placeholder="Bus number or QR link">
+              <button type="button" id="manual_tap" class="btn btn-outline-primary">
+                <i class="fa-solid fa-keyboard me-1"></i> Record tap
+              </button>
+            </div>
+          </details>
 
           <div class="form-hint mt-2">
             Move the QR closer or farther until the modules look sharp (about 15–30 cm),
@@ -267,6 +281,7 @@
 
 {% block extra_js %}
 <script src="https://unpkg.com/html5-qrcode@2.3.8/html5-qrcode.min.js"></script>
+<script src="{% static 'js/jsqr.min.js' %}?v=1"></script>
 <script>
   (function () {
     var readerId = 'scanner_reader';
@@ -287,8 +302,10 @@
     var cooldownUntil = 0;
     var lastToken = '';
     var lastTokenAt = 0;
+    var lastDecodeAt = 0;
     var lastBusRef = null;
-    var SAME_TOKEN_COOLDOWN = 5000;
+    var missFrames = 0;
+    var missHintShown = false;
 
     var terminalInput = document.getElementById('terminal_input');
     var terminalToggle = document.getElementById('terminal_toggle');
@@ -460,15 +477,107 @@
     }
 
     function setStatus(message, className) {
+      if (statusEl.textContent === message && statusEl.className === 'alert mt-3 mb-0 small ' + (className || 'alert-info')) {
+        return;
+      }
       statusEl.className = 'alert mt-3 mb-0 small ' + (className || 'alert-info');
       statusEl.textContent = message;
     }
 
     function tokenFromText(text) {
-      var match = String(text || '').match(
+      var raw = String(text || '').trim();
+      if (!raw) return '';
+      var match = raw.match(
         /[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}/
       );
-      return match ? match[0] : '';
+      if (match) return match[0];
+      // Also accept a 32-character token without dashes.
+      var compact = raw.match(/\b[0-9a-fA-F]{32}\b/);
+      if (compact) return compact[0];
+      // Fall back to the raw payload so the server can resolve a bus number or
+      // a QR URL that carries the token in another shape.
+      if (raw.length <= 200) return raw;
+      return '';
+    }
+
+    function handleScanMiss() {
+      if (!scanning || busy) return;
+      // Forget the last token only once the QR has really left the frame (no
+      // decode from either decoder for a while), so a second scan of the same
+      // bus is possible without duplicate taps while it is still held up.
+      if (lastToken && Date.now() - lastDecodeAt > 1500) {
+        lastToken = '';
+      }
+      missFrames += 1;
+      if (missHintShown || missFrames < 50) return;
+      missHintShown = true;
+      setStatus(
+        'Camera is live but no QR yet. Hold the bus QR inside the frame, fill about half of it, and avoid glare.',
+        'alert-info'
+      );
+    }
+
+    // html5-qrcode's bundled ZXing build is strict and frequently misses bus QR
+    // codes rendered at screen sizes. Decode frames with jsQR too (it is much
+    // more tolerant) so a QR that is visible in the frame is always picked up.
+    var jsQrTimer = null;
+    var jsQrCanvas = document.createElement('canvas');
+    var jsQrCtx = jsQrCanvas.getContext('2d', { willReadFrequently: true });
+
+    function startJsQrFallback() {
+      stopJsQrFallback();
+      if (!window.jsQR) return;
+      jsQrTimer = window.setInterval(scanFrameWithJsQr, 300);
+    }
+
+    function stopJsQrFallback() {
+      if (jsQrTimer) {
+        window.clearInterval(jsQrTimer);
+        jsQrTimer = null;
+      }
+    }
+
+    function decodeJsQrRegion(video, sx, sy, sw, sh, targetWidth) {
+      var width = Math.max(1, Math.round(targetWidth));
+      var height = Math.max(1, Math.round(sh * width / sw));
+      jsQrCanvas.width = width;
+      jsQrCanvas.height = height;
+      jsQrCtx.drawImage(video, sx, sy, sw, sh, 0, 0, width, height);
+      var image;
+      try {
+        image = jsQrCtx.getImageData(0, 0, width, height);
+      } catch (error) {
+        return '';
+      }
+      var found = window.jsQR(image.data, image.width, image.height, {
+        inversionAttempts: 'attemptBoth'
+      });
+      return found && found.data ? found.data : '';
+    }
+
+    function scanFrameWithJsQr() {
+      var video = document.querySelector('#' + readerId + ' video');
+      if (!video || !video.videoWidth || video.readyState < 2) return;
+      var vw = video.videoWidth;
+      var vh = video.videoHeight;
+
+      // First pass: the centre square at (near) native resolution. A full
+      // frame downscaled to 720 px blurs small QRs away; the crop keeps the
+      // module size the camera actually captured.
+      var side = Math.round(Math.min(vw, vh) * 0.62);
+      var text = decodeJsQrRegion(
+        video,
+        Math.round((vw - side) / 2),
+        Math.round((vh - side) / 2),
+        side,
+        side,
+        Math.min(side, 800)
+      );
+      if (!text) {
+        // Second pass: the whole frame, downscaled, for QRs held off-centre.
+        text = decodeJsQrRegion(video, 0, 0, vw, vh, Math.min(vw, 1280));
+      }
+      if (text) handleScan(text);
     }
 
     function cameraErrorText(error) {
@@ -491,30 +600,55 @@
       return (detail ? detail + '. ' : '') + hint;
     }
 
-    async function startWithCamera(cameraConfig, videoConstraints) {
+    function cameraLive() {
+      scanning = true;
+      missFrames = 0;
+      missHintShown = false;
+      lastDecodeAt = Date.now();
+      startBtn.disabled = false;
+      startBtn.classList.add('d-none');
+      stopBtn.classList.remove('d-none');
+      setStatus('Camera is live and scanning. Point the bus QR inside the frame.', 'alert-info');
+      startJsQrFallback();
+    }
+
+    async function startWithCamera(cameraConfig) {
       if (scanner) {
         try { await scanner.stop(); } catch (error) {}
         try { scanner.clear(); } catch (error) {}
       }
       scanner = new Html5Qrcode(readerId, { verbose: false });
+      // Use the bundled ZXing decoder instead of the browser's BarcodeDetector
+      // experimental path: the native detector fails silently on some desktop
+      // browsers, which left the camera live with nothing ever detected.
       await scanner.start(cameraConfig, {
-        fps: 20,
+        fps: 10,
         qrbox: function (viewfinderWidth, viewfinderHeight) {
-          var edge = Math.floor(Math.min(viewfinderWidth, viewfinderHeight) * 0.72);
+          var edge = Math.floor(Math.min(viewfinderWidth, viewfinderHeight) * 0.85);
           return { width: edge, height: edge };
         },
-        disableFlip: false,
-        experimentalFeatures: { useBarCodeDetectorIfSupported: true },
-        videoConstraints: videoConstraints
-      }, handleScan, function () {});
+        disableFlip: false
+      }, handleScan, handleScanMiss);
+      // 'cameraIdOrConfig' only accepts facingMode/deviceId, so the capture
+      // resolution is raised on the live track after the camera starts.
+      boostCameraResolution();
+    }
+
+    function boostCameraResolution() {
+      try {
+        var video = document.querySelector('#' + readerId + ' video');
+        var stream = video && video.srcObject;
+        var track = stream && stream.getVideoTracks && stream.getVideoTracks()[0];
+        if (track && track.applyConstraints) {
+          track.applyConstraints({
+            width: { ideal: 1920 },
+            height: { ideal: 1080 }
+          }).catch(function () {});
+        }
+      } catch (error) {}
     }
 
     async function startCamera() {
-      if (!getTerminal()) {
-        setStatus('Choose the terminal first, then start the camera.', 'alert-warning');
-        if (terminalInput) terminalInput.focus();
-        return;
-      }
       if (!window.isSecureContext) {
         setStatus('Camera access needs localhost or HTTPS. Open this page from localhost or use manual check-in.', 'alert-warning');
         return;
@@ -532,24 +666,15 @@
       setStatus('Starting camera…', 'alert-info');
 
       var attempts = [
-        {
-          camera: { facingMode: 'environment' },
-          constraints: { facingMode: 'environment', width: { ideal: 1280 }, height: { ideal: 720 } }
-        },
-        {
-          camera: { facingMode: 'user' },
-          constraints: { facingMode: 'user', width: { ideal: 1280 }, height: { ideal: 720 } }
-        }
+        { facingMode: 'environment' },
+        { facingMode: 'user' }
       ];
       var lastError = null;
 
       for (var i = 0; i < attempts.length; i++) {
         try {
-          await startWithCamera(attempts[i].camera, attempts[i].constraints);
-          scanning = true;
-          startBtn.classList.add('d-none');
-          stopBtn.classList.remove('d-none');
-          setStatus('Camera is live. Point the bus QR inside the frame.', 'alert-info');
+          await startWithCamera(attempts[i]);
+          cameraLive();
           return;
         } catch (error) {
           lastError = error;
@@ -560,14 +685,8 @@
         var cameras = await Html5Qrcode.getCameras();
         for (var j = 0; j < cameras.length; j++) {
           try {
-            await startWithCamera(
-              { deviceId: { exact: cameras[j].id } },
-              { deviceId: { exact: cameras[j].id }, width: { ideal: 1280 }, height: { ideal: 720 } }
-            );
-            scanning = true;
-            startBtn.classList.add('d-none');
-            stopBtn.classList.remove('d-none');
-            setStatus('Camera is live. Point the bus QR inside the frame.', 'alert-info');
+            await startWithCamera({ deviceId: { exact: cameras[j].id } });
+            cameraLive();
             return;
           } catch (error) {
             lastError = error;
@@ -587,6 +706,11 @@
         await scanner.stop();
       } catch (error) {}
       scanning = false;
+      missFrames = 0;
+      missHintShown = false;
+      lastToken = '';
+      lastDecodeAt = 0;
+      stopJsQrFallback();
       startBtn.disabled = false;
       startBtn.classList.remove('d-none');
       stopBtn.classList.add('d-none');
@@ -690,10 +814,6 @@
 
     function submitTap(busRef) {
       if (busy) return;
-      if (!getTerminal()) {
-        setStatus('Choose the terminal first, then scan again.', 'alert-warning');
-        return;
-      }
 
       busy = true;
       lastBusRef = busRef;
@@ -736,15 +856,19 @@
       if (busy || Date.now() < cooldownUntil) return;
 
       var token = tokenFromText(decodedText);
-      if (!token) return;
-      if (!getTerminal()) {
-        setStatus('Choose the terminal first, then scan again.', 'alert-warning');
+      if (!token) {
+        setStatus(
+          'QR code detected, but it is not a bus QR. Use the QR code from the Bus list.',
+          'alert-warning'
+        );
         return;
       }
-      if (token === lastToken && Date.now() - lastTokenAt < SAME_TOKEN_COOLDOWN) {
-        setStatus('Bus just tapped. Scan again in a few seconds, or use the Time Out button below.', 'alert-warning');
-        return;
-      }
+      missFrames = 0;
+      missHintShown = false;
+      lastDecodeAt = Date.now();
+
+      // The same QR is still in front of the camera: it was already handled.
+      if (token === lastToken) return;
 
       cooldownUntil = Date.now() + 2000;
       lastToken = token;
@@ -1041,15 +1165,30 @@
     document.querySelectorAll('.js-demo-tap').forEach(function (button) {
       button.addEventListener('click', function () {
         if (busy) return;
-        var demoTerminal = button.getAttribute('data-terminal') || '';
-        if (demoTerminal && !getTerminal()) setTerminal(demoTerminal);
-        if (!getTerminal()) {
-          setStatus('Choose the terminal first, then simulate a scan.', 'alert-warning');
-          return;
-        }
         submitTap({ bus_number: button.getAttribute('data-bus-number') || '' });
       });
     });
+
+    var manualInput = document.getElementById('manual_bus');
+    var manualBtn = document.getElementById('manual_tap');
+    if (manualBtn) {
+      manualBtn.addEventListener('click', function () {
+        var value = manualInput ? manualInput.value.trim() : '';
+        if (!value) {
+          setStatus('Enter the bus number or paste the bus QR link first.', 'alert-warning');
+          return;
+        }
+        submitTap({ token: value });
+      });
+      if (manualInput) {
+        manualInput.addEventListener('keydown', function (event) {
+          if (event.key === 'Enter') {
+            event.preventDefault();
+            manualBtn.click();
+          }
+        });
+      }
+    }
 
     function onTerminalChange() {
       if (scanning) {

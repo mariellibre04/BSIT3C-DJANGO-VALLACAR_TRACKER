@@ -26,7 +26,9 @@ from django.utils import timezone
 from apps.core.permissions import admin_required
 from apps.core.roles import ROLE_CONDUCTOR, get_role
 from . import route_service, terminal_directory
-from .models import Bus, BusStop, BusTerminalTap, DemoSeedState, Route, Terminal
+from .models import (
+    Bus, BusNextStopLog, BusStop, BusTerminalTap, DemoSeedState, Route, Terminal
+)
 from .route_config import SCOPE_PROVINCE, TERMINAL_MASTER_LIST
 
 MIN_CAPACITY = 1
@@ -1178,6 +1180,13 @@ def _kiosk_board_context(selected_terminal=None, area_key=None):
         tap.bus_id: tap
         for tap in BusTerminalTap.objects.filter(id__in=tap_ids)
     }
+    latest_stop_logs = {}
+    for log in (
+        BusNextStopLog.objects.filter(bus_id__in=[bus.id for bus in buses])
+        .select_related('next_stop', 'current_station')
+        .order_by('bus_id', '-logged_at')
+    ):
+        latest_stop_logs.setdefault(log.bus_id, log)
     directory_counts = {
         entry['slug']: {'at_terminal': 0, 'inbound': 0, 'departed': 0}
         for entry in terminal_directory.TERMINAL_DIRECTORY
@@ -1188,6 +1197,7 @@ def _kiosk_board_context(selected_terminal=None, area_key=None):
 
     for bus in buses:
         tap = latest_taps.get(bus.id)
+        _apply_logged_next_stop(bus, tap, latest_stop_logs.get(bus.id))
         is_at = bus.movement_status == Bus.MOVE_AT_TERMINAL
         route_from, route_to = _bus_route_endpoints(bus)
         dest = route_to['name'] if route_to else ''
@@ -1847,6 +1857,7 @@ def _announce_kiosk_tap(request, bus, entry, tap, action, created, switched):
 _QR_TOKEN_RE = re.compile(
     r'[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-'
     r'[0-9a-fA-F]{4}-[0-9a-fA-F]{12}'
+    r'|\b[0-9a-fA-F]{32}\b'
 )
 
 
@@ -1869,6 +1880,39 @@ def _open_tap_for(bus, terminal_name=None):
     if terminal_name:
         taps = taps.filter(terminal_name=terminal_name)
     return taps.order_by('-tapped_at').first()
+
+
+def _infer_scan_terminal(bus):
+    """Pick the scan terminal automatically from the bus's own state.
+
+    A bus that is still parked at a terminal (open tap) keeps that terminal so
+    a second scan records the time out there. Otherwise the bus's next stop is
+    used: the conductor scans at the terminal the bus is scheduled to reach.
+    """
+    open_tap = _open_tap_for(bus)
+    if open_tap is not None:
+        terminal = _find_terminal(open_tap.terminal_name)
+        if terminal is not None:
+            return terminal
+
+    if bus.next_stop and not _is_legacy_bay(bus.next_stop):
+        terminal = _find_terminal(bus.next_stop)
+        if terminal is not None:
+            return terminal
+
+    if bus.current_terminal:
+        terminal = _find_terminal(bus.current_terminal)
+        if terminal is not None:
+            return terminal
+
+    route = route_service.find_route_for_bus(bus)
+    if route is not None:
+        first_stop = (
+            route.stops.select_related('terminal').order_by('sequence').first()
+        )
+        if first_stop is not None:
+            return _find_terminal(first_stop.terminal.name)
+    return None
 
 
 def _estimated_departure(tap):
@@ -2495,6 +2539,68 @@ def _resolve_next_stop(bus, current_name, raw_next_stop):
     return route, current_stop, next_stop
 
 
+def _apply_logged_next_stop(bus, tap, log):
+    """Use a confirmation log when the bus record has not caught up yet.
+
+    Older confirmations only wrote a ``BusNextStopLog`` row. If that log is
+    newer than both the bus record and its latest tap, it still represents the
+    conductor's current choice, so the kiosk should show it.
+    """
+    if log is None:
+        return
+    if tap is not None and log.logged_at <= tap.tapped_at:
+        return
+    if bus.updated_at is not None and log.logged_at <= bus.updated_at:
+        return
+    bus.next_stop = log.next_stop.name
+    bus.next_stop_eta = (
+        timezone.localtime(log.eta_at).time().replace(second=0, microsecond=0)
+    )
+    summary = route_service.route_eta_summary(
+        bus, log.current_station.name, log.logged_at
+    )
+    if summary:
+        bus.final_destination = summary['final_stop'].terminal.name
+        bus.final_destination_eta = (
+            timezone.localtime(summary['final_eta']['eta']).time()
+            .replace(second=0, microsecond=0)
+        )
+
+
+def _sync_next_stop_to_bus(bus, next_stop, log, summary=None):
+    """Mirror a conductor-confirmed next stop onto the bus record.
+
+    The kiosk and terminal monitor read ``Bus.next_stop``/``Bus.next_stop_eta``
+    rather than the ``BusNextStopLog`` audit table, so confirmation has to
+    update the bus itself for the board to change immediately.
+    """
+    if next_stop is None or log is None:
+        return
+    bus.next_stop = next_stop.terminal.name
+    update_fields = ['next_stop']
+    if log.eta_at is not None:
+        bus.next_stop_eta = (
+            timezone.localtime(log.eta_at).time().replace(second=0, microsecond=0)
+        )
+        update_fields.append('next_stop_eta')
+
+    if summary:
+        final_stop = summary.get('final_stop')
+        final_eta = summary.get('final_eta') or {}
+        if final_stop is not None:
+            bus.final_destination = final_stop.terminal.name
+            update_fields.append('final_destination')
+        if final_eta.get('eta') is not None:
+            bus.final_destination_eta = (
+                timezone.localtime(final_eta['eta']).time()
+                .replace(second=0, microsecond=0)
+            )
+            update_fields.append('final_destination_eta')
+
+    update_fields.append('updated_at')
+    bus.save(update_fields=update_fields)
+
+
 @never_cache
 def bus_route_stops_ajax(request):
     """Return the validated route stops and ETA options after the current stop."""
@@ -2510,6 +2616,9 @@ def bus_route_stops_ajax(request):
     current_name = (
         request.GET.get('current') or request.GET.get('terminal') or ''
     ).strip()
+    if not current_name:
+        inferred = _infer_scan_terminal(bus)
+        current_name = inferred['name'] if inferred else ''
     route = route_service.find_route_for_bus(bus)
     if route is None:
         return JsonResponse({
@@ -2556,6 +2665,9 @@ def bus_next_stop_ajax(request):
     current_name = (
         request.POST.get('current') or request.POST.get('terminal') or ''
     ).strip()
+    if not current_name:
+        inferred = _infer_scan_terminal(bus)
+        current_name = inferred['name'] if inferred else ''
     next_name = (request.POST.get('next_stop') or '').strip()
     route, current_stop, next_stop = _resolve_next_stop(bus, current_name, next_name)
     if route is None:
@@ -2571,6 +2683,7 @@ def bus_next_stop_ajax(request):
     summary = route_service.route_eta_summary(
         bus, current_stop.terminal.name, log.logged_at
     )
+    _sync_next_stop_to_bus(bus, next_stop, log, summary)
     final_stop = summary['final_stop'] if summary else None
     final_eta = summary['final_eta'] if summary else None
     return JsonResponse({
@@ -2610,12 +2723,16 @@ def bus_scan_checkin_ajax(request):
     the same bus again returns a prompt so the conductor can choose "Time Out".
     """
     route_service.seed_transit_data()
-    raw_token = request.POST.get('token', '')
+    raw_token = (request.POST.get('token') or '').strip()
     token = _extract_qr_token(raw_token)
     if token is not None:
         bus = Bus.objects.filter(qr_token=token).first()
-    elif raw_token.strip():
-        return JsonResponse({'error': 'That QR code is not a valid bus code.'}, status=400)
+    elif raw_token:
+        # A QR may carry a plain bus number instead of the token/URL. Accept it
+        # when it matches a registered bus; otherwise reject it as before.
+        bus = Bus.objects.filter(bus_number__iexact=raw_token).first()
+        if bus is None:
+            return JsonResponse({'error': 'That QR code is not a valid bus code.'}, status=400)
     else:
         demo_number = (request.POST.get('bus_number') or '').strip()
         bus = _demo_bus_for(demo_number) if demo_number else None
@@ -2624,7 +2741,10 @@ def bus_scan_checkin_ajax(request):
     if bus is None:
         return JsonResponse({'error': 'That QR code does not match a registered bus.'}, status=404)
 
-    terminal = _find_terminal((request.POST.get('terminal') or '').strip())
+    raw_terminal = (request.POST.get('terminal') or '').strip()
+    terminal = _find_terminal(raw_terminal)
+    if terminal is None and not raw_terminal:
+        terminal = _infer_scan_terminal(bus)
     if terminal is None:
         demo = next(
             (b for b in STATIC_DEMO_BUSES if b['bus_number'].lower() == bus.bus_number.lower()),
@@ -2662,6 +2782,10 @@ def bus_scan_checkin_ajax(request):
                 bus, route, current_stop, next_stop, request.user
             )
             if log is not None:
+                summary = route_service.route_eta_summary(
+                    bus, current_stop.terminal.name, log.logged_at
+                )
+                _sync_next_stop_to_bus(bus, next_stop, log, summary)
                 payload['selected_next_stop'] = next_stop.terminal.name
                 payload['next_stop_eta_minutes'] = log.eta_minutes
                 payload['next_stop_eta_at'] = _format_clock(log.eta_at)
