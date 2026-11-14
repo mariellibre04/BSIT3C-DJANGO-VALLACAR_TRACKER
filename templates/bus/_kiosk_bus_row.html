@@ -9,7 +9,7 @@
     <span class="k-route">{{ b.route_from }}{% if b.route_to %} &rarr; {{ b.route_to }}{% endif %}</span>
   </td>
   <td><span class="k-terminal-pill{% if b.is_hub %} hub{% endif %}"><span class="k-dot"></span> {{ b.terminal }}</span></td>
-  <td><span class="k-bay">{{ b.bay }}</span></td>
+  {% include 'bus/_kiosk_stop_cell.html' with b=b %}
   <td><span class="k-time">{% if b.time_in %}{{ b.time_in|date:"g:i A" }}{% else %}&mdash;{% endif %}</span></td>
   <td>
     <span class="k-time">
@@ -19,10 +19,7 @@
         <span class="k-left-at-label">Est.</span> {{ b.estimated_departure|date:"g:i A" }}
       {% else %}&mdash;{% endif %}
     </span>
-    {% if b.next_stop and b.next_stop_eta %}
-    <span class="k-route-sub">Next terminal stop: {{ b.next_stop }}{% if b.next_bay %} &middot; {{ b.next_bay }}{% endif %} &middot; ETA {{ b.next_stop_eta|date:"g:i A" }}</span>
-    {% endif %}
-    {% if b.final_destination and b.final_destination_eta and b.final_destination != b.next_stop %}
+    {% if b.next_stop and b.final_destination and b.final_destination_eta and b.final_destination != b.next_stop %}
     <span class="k-route-sub">Final: {{ b.final_destination }} &middot; ETA {{ b.final_destination_eta|date:"g:i A" }}</span>
     {% endif %}
   </td>

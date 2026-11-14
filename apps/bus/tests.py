@@ -1,8 +1,10 @@
 import json
+from datetime import time, timedelta
 
 from django.contrib.auth import get_user_model
 from django.test import TestCase
 from django.urls import reverse
+from django.utils import timezone
 
 from apps.core.roles import ROLE_ADMIN, ROLE_CONDUCTOR, set_role
 
@@ -17,7 +19,11 @@ from .models import (
 )
 from .route_config import ROUTE_DEFINITIONS, TERMINAL_MASTER_LIST
 from .route_service import INVALID_STOP_MESSAGE, seed_transit_data
-from .views import DEMO_SEED_KEY, seed_static_demo_data
+from .views import (
+    DEMO_SEED_KEY,
+    _kiosk_board_context,
+    seed_static_demo_data,
+)
 
 
 def make_conductor(username='conductor'):
@@ -271,6 +277,98 @@ class KioskRefreshTests(TestCase):
         self.assertIn('Bacolod &rarr; Sipalay', data['board_html'])
         self.assertIn('Passes Kabankalan', data['board_html'])
         self.assertIn('ETA', data['board_html'])
+
+    def test_kiosk_marks_bus_at_destination_when_it_reaches_final_stop(self):
+        self.bus.final_destination = 'Kabankalan'
+        self.bus.current_terminal = 'Kabankalan'
+        self.bus.save(update_fields=['final_destination', 'current_terminal'])
+        BusTerminalTap.objects.create(
+            bus=self.bus, terminal_name='Kabankalan'
+        )
+
+        data = self.client.get(reverse('bus:bus_kiosk_refresh')).json()
+
+        self.assertIn('At Destination', data['board_html'])
+        self.assertNotIn('is-enroute', data['board_html'])
+
+    def test_kiosk_marks_bus_at_destination_after_final_eta(self):
+        self.bus.final_destination = 'Kabankalan'
+        self.bus.final_destination_eta = (
+            timezone.localtime() - timedelta(hours=1)
+        ).time()
+        self.bus.save(update_fields=['final_destination', 'final_destination_eta'])
+
+        data = self.client.get(reverse('bus:bus_kiosk_refresh')).json()
+
+        self.assertIn('At Destination', data['board_html'])
+        self.assertNotIn('is-enroute', data['board_html'])
+
+    def test_kiosk_pass_through_area_is_not_marked_at_destination(self):
+        past = (timezone.localtime() - timedelta(hours=2)).time()
+        Bus.objects.create(
+            bus_number='301',
+            plate_number='ABC-301',
+            capacity=49,
+            route='Bacolod - Sipalay',
+            movement_status=Bus.MOVE_EN_ROUTE,
+            final_destination='Sipalay',
+            final_destination_eta=past,
+        )
+        Bus.objects.create(
+            bus_number='302',
+            plate_number='ABC-302',
+            capacity=49,
+            route='Bacolod - Kabankalan',
+            movement_status=Bus.MOVE_EN_ROUTE,
+            current_terminal='Bacolod',
+            final_destination='Kabankalan',
+            final_destination_eta=past,
+        )
+
+        context = _kiosk_board_context(area_key='kabankalan')
+        rows = {row['number']: row for row in context['kiosk_departures']}
+
+        self.assertEqual(rows['301']['area_role'], 'passes')
+        self.assertEqual(rows['301']['status_label'], 'En Route')
+        self.assertFalse(rows['301']['at_destination'])
+        self.assertEqual(rows['302']['area_role'], 'arrives')
+        self.assertEqual(rows['302']['status_label'], 'At Destination')
+        self.assertTrue(rows['302']['at_destination'])
+
+    def test_kiosk_bus_timed_in_elsewhere_is_not_at_destination(self):
+        self.bus.final_destination = 'Kabankalan'
+        self.bus.final_destination_eta = (
+            timezone.localtime() - timedelta(hours=8)
+        ).time()
+        self.bus.current_terminal = 'Bacolod'
+        self.bus.save(update_fields=[
+            'final_destination', 'final_destination_eta', 'current_terminal',
+        ])
+        BusTerminalTap.objects.create(bus=self.bus, terminal_name='Bacolod')
+
+        data = self.client.get(reverse('bus:bus_kiosk_refresh')).json()
+
+        self.assertNotIn('At Destination', data['board_html'])
+
+    def test_kiosk_bus_still_timed_in_is_not_at_destination(self):
+        self.bus.final_destination = 'Kabankalan'
+        self.bus.final_destination_eta = (
+            timezone.localtime() - timedelta(hours=8)
+        ).time()
+        self.bus.current_terminal = 'Bacolod'
+        self.bus.save(update_fields=[
+            'final_destination', 'final_destination_eta', 'current_terminal',
+        ])
+        tap = BusTerminalTap.objects.create(
+            bus=self.bus, terminal_name='Bacolod'
+        )
+        BusTerminalTap.objects.filter(pk=tap.pk).update(
+            left_at=timezone.now() + timedelta(minutes=15)
+        )
+
+        data = self.client.get(reverse('bus:bus_kiosk_refresh')).json()
+
+        self.assertNotIn('At Destination', data['board_html'])
 
     def test_kiosk_area_filter_keeps_relevant_buses(self):
         Bus.objects.create(
@@ -682,7 +780,7 @@ class RouteNextStopTests(TestCase):
         self.assertIsNotNone(self.bus.next_stop_eta)
         self.assertEqual(self.bus.final_destination, 'Bacolod South')
         board = self.client.get(reverse('bus:bus_kiosk_refresh')).json()['board_html']
-        self.assertIn('Next terminal stop: Himamaylan', board)
+        self.assertIn('Passes Himamaylan', board)
         self.assertIn('Final: Bacolod South', board)
 
     def test_next_stop_rejects_stop_before_current(self):
@@ -726,7 +824,7 @@ class RouteNextStopTests(TestCase):
         self.assertIsNotNone(self.bus.next_stop_eta)
         self.assertEqual(self.bus.final_destination, 'Bacolod South')
         board = self.client.get(reverse('bus:bus_kiosk_refresh')).json()['board_html']
-        self.assertIn('Next terminal stop: Himamaylan', board)
+        self.assertIn('Passes Himamaylan', board)
 
     def test_time_out_rejects_invalid_next_stop(self):
         self.client.post(
@@ -794,7 +892,7 @@ class RouteNextStopTests(TestCase):
 
         self.assertIn('Next terminal stop Himamaylan ETA', data['ticker_html'])
         self.assertIn('Final Bacolod South ETA', data['ticker_html'])
-        self.assertIn('Next terminal stop: Himamaylan', data['board_html'])
+        self.assertIn('Passes Himamaylan', data['board_html'])
         self.assertIn('Final: Bacolod South', data['board_html'])
 
 class AdminKioskSyncTests(TestCase):
@@ -810,6 +908,32 @@ class AdminKioskSyncTests(TestCase):
         self.assertEqual(
             response.context['buses'].paginator.count, Bus.objects.count()
         )
+
+    def test_add_bus_form_hides_actual_departure(self):
+        response = self.client.get(reverse('bus:bus_list'))
+
+        self.assertNotContains(response, 'Actual Departure')
+
+    def test_saving_bus_without_actual_departure_field_keeps_old_value(self):
+        bus = Bus.objects.get(bus_number='101')
+        Bus.objects.filter(pk=bus.pk).update(actual_departure=time(8, 0))
+
+        response = self.client.post(
+            reverse('bus:bus_save_ajax'),
+            {
+                'id': bus.id,
+                'bus_number': bus.bus_number,
+                'plate_number': bus.plate_number,
+                'capacity': bus.capacity,
+                'route': bus.route,
+                'status': Bus.STATUS_ACTIVE,
+                'movement_status': bus.movement_status,
+            },
+        )
+
+        self.assertEqual(response.status_code, 200)
+        bus.refresh_from_db()
+        self.assertEqual(bus.actual_departure, time(8, 0))
 
     def test_admin_dashboard_counts_match_kiosk_buses(self):
         response = self.client.get(reverse('admin_dashboard'))
@@ -1017,6 +1141,33 @@ class BusFormRouteStopsTests(TestCase):
         # The first and last assigned stops fill the blank route fields.
         self.assertEqual(bus.next_stop, 'Kabankalan')
         self.assertEqual(bus.final_destination, 'Bacolod South')
+
+    def test_save_stops_after_the_departure_terminal(self):
+        response = self.client.post(
+            reverse('bus:bus_save_ajax'),
+            {
+                'bus_number': 'KAB-909',
+                'plate_number': 'VTI 9909',
+                'capacity': 49,
+                'route': 'Kabankalan - Candoni',
+                'current_terminal': 'Kabankalan',
+                'status': Bus.STATUS_ACTIVE,
+                'movement_status': Bus.MOVE_AT_TERMINAL,
+                'stops_json': json.dumps([
+                    {'name': 'Candoni', 'eta': '09:50'},
+                ]),
+            },
+        )
+
+        self.assertEqual(response.status_code, 200)
+        bus = Bus.objects.get(bus_number='KAB-909')
+        self.assertEqual(bus.current_terminal, 'Kabankalan')
+        self.assertEqual(
+            [(stop.sequence, stop.name) for stop in bus.assigned_stops.all()],
+            [(1, 'Candoni')],
+        )
+        self.assertEqual(bus.next_stop, 'Candoni')
+        self.assertEqual(bus.final_destination, 'Candoni')
 
     def test_stop_sequence_skips_current_terminal_for_next_stop(self):
         response = self.client.post(

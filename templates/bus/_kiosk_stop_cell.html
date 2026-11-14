@@ -1,0 +1,52 @@
+<td class="k-stop-cell">
+  {% if b.at_destination and not b.area_name %}
+  <span class="k-stop">
+    <span class="k-stop-pill is-arrives">Destination {{ b.final_destination }}</span>
+    <span class="k-stop-eta">
+      {% if b.final_destination_eta %}ETA {{ b.final_destination_eta|date:"g:i A" }}
+      {% else %}&mdash;{% endif %}
+    </span>
+  </span>
+  {% elif b.area_name %}
+  <span class="k-stop">
+    <span class="k-stop-pill{% if b.area_role == 'departs' %} is-departs{% elif b.area_role == 'arrives' %} is-arrives{% endif %}">
+      {% if b.area_role == 'departs' %}Departs {{ b.area_name }}
+      {% elif b.area_role == 'arrives' %}Destination {{ b.area_name }}
+      {% else %}Passes {{ b.area_name }}{% endif %}
+    </span>
+    <span class="k-stop-eta">
+      {% if b.area_role == 'departs' %}Departing now
+      {% elif b.area_eta %}ETA {{ b.area_eta|date:"g:i A" }}
+      {% else %}&mdash;{% endif %}
+    </span>
+  </span>
+  {% elif b.next_stop %}
+  <span class="k-stop">
+    <span class="k-stop-pill{% if b.final_destination and b.final_destination == b.next_stop %} is-arrives{% endif %}">
+      {% if b.final_destination and b.final_destination == b.next_stop %}Destination{% else %}Passes{% endif %} {{ b.next_stop }}
+    </span>
+    <span class="k-stop-eta">
+      {% if b.next_stop_eta %}ETA {{ b.next_stop_eta|date:"g:i A" }}
+      {% else %}&mdash;{% endif %}
+    </span>
+  </span>
+  {% elif b.final_destination %}
+  <span class="k-stop">
+    <span class="k-stop-pill is-arrives">Destination {{ b.final_destination }}</span>
+    <span class="k-stop-eta">
+      {% if b.final_destination_eta %}ETA {{ b.final_destination_eta|date:"g:i A" }}
+      {% else %}&mdash;{% endif %}
+    </span>
+  </span>
+  {% elif b.is_at_terminal and b.terminal %}
+  <span class="k-stop">
+    <span class="k-stop-pill is-departs">Departs {{ b.terminal }}</span>
+    <span class="k-stop-eta">
+      {% if b.estimated_departure %}ETA {{ b.estimated_departure|date:"g:i A" }}
+      {% else %}&mdash;{% endif %}
+    </span>
+  </span>
+  {% else %}
+  <span class="k-stop"><span class="k-stop-eta">&mdash;</span></span>
+  {% endif %}
+</td>

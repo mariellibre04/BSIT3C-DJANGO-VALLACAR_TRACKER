@@ -33,6 +33,7 @@ from .route_config import SCOPE_PROVINCE, TERMINAL_MASTER_LIST
 
 MIN_CAPACITY = 1
 MAX_CAPACITY = 100
+DEFAULT_CAPACITY = 49
 
 
 def _parse_capacity(raw):
@@ -889,6 +890,71 @@ def _kiosk_area_key(value):
     return re.sub(r'[^a-z0-9]+', '-', normalized).strip('-')
 
 
+def _kiosk_eta_passed(eta, now=None):
+    """True when an ETA is today and has already passed."""
+    if eta is None:
+        return False
+    if timezone.is_naive(eta):
+        eta = timezone.make_aware(eta)
+    now = now or timezone.localtime()
+    local_eta = timezone.localtime(eta)
+    return local_eta.date() == now.date() and local_eta <= now
+
+
+def _kiosk_at_destination(
+    bus, position, final_destination, final_arrival, area_hit,
+    open_at_terminal=False,
+):
+    """Whether this board row should read "At Destination".
+
+    Only rows that are about the bus's final stop qualify: a row showing the
+    bus merely passing through the selected area keeps its normal status.
+    A bus currently timed in at another terminal is preparing a new trip, so
+    an old final ETA does not make it "At Destination".
+    """
+    if not final_destination:
+        return False
+
+    final_key = _kiosk_area_key(final_destination['name'])
+    area_key = _kiosk_area_key(area_hit['name']) if area_hit else ''
+    if area_hit and area_key != final_key:
+        return False
+
+    position_entry = terminal_directory.match_terminal(position or '')
+    position_key = (
+        position_entry['slug'] if position_entry
+        else _kiosk_area_key(position or '')
+    )
+    if position_key and position_key == final_key:
+        return True
+
+    if open_at_terminal:
+        return False
+
+    if bus.movement_status != Bus.MOVE_EN_ROUTE:
+        return False
+
+    now = timezone.localtime()
+    etas = []
+    if area_hit and area_key == final_key:
+        etas.append(area_hit.get('eta'))
+    if final_arrival:
+        etas.append(final_arrival.get('eta'))
+    return any(_kiosk_eta_passed(eta, now) for eta in etas)
+
+
+def _kiosk_status(bus, at_destination):
+    """Movement label shown on the passenger board."""
+    if at_destination and bus.movement_status in (
+        Bus.MOVE_AT_TERMINAL, Bus.MOVE_EN_ROUTE
+    ):
+        return 'is-at-destination', 'At Destination'
+    return (
+        KIOSK_STATUS_CLASS.get(bus.movement_status, 'is-enroute'),
+        bus.get_movement_status_display(),
+    )
+
+
 def _kiosk_area_catalog():
     """Every terminal and route stop a passenger can choose on the kiosk."""
     options = {}
@@ -1349,6 +1415,21 @@ def _kiosk_board_context(selected_terminal=None, area_key=None):
 
         seated = 0
         seats_left = max(0, (bus.capacity or 0) - seated)
+        at_destination = _kiosk_at_destination(
+            bus,
+            tap.terminal_name if tap else (bus.current_terminal or ''),
+            final_destination,
+            final_arrival,
+            area_hit,
+            open_at_terminal=bool(
+                tap
+                and (
+                    tap.left_at is None
+                    or tap.left_at > timezone.now()
+                )
+            ),
+        )
+        status_class, status_label = _kiosk_status(bus, at_destination)
         item = {
             'number': bus.bus_number,
             'plate': bus.plate_number,
@@ -1379,8 +1460,9 @@ def _kiosk_board_context(selected_terminal=None, area_key=None):
             'final_destination_distance_km': (
                 final_arrival.get('distance_km') if final_arrival else None
             ),
-            'status_class': KIOSK_STATUS_CLASS.get(bus.movement_status, 'is-enroute'),
-            'status_label': bus.get_movement_status_display(),
+            'status_class': status_class,
+            'status_label': status_label,
+            'at_destination': at_destination,
             'is_at_terminal': is_at,
             'is_departed': time_out is not None,
             'area_match': bool(area_hit),
@@ -2836,11 +2918,23 @@ def bus_save_ajax(request):
     capacity = request.POST.get('capacity', '').strip()
     route = request.POST.get('route', '').strip()
     scheduled_time = request.POST.get('scheduled_time', '').strip()
-    actual_departure = request.POST.get('actual_departure', '').strip()
+    actual_departure = (
+        request.POST.get('actual_departure', '').strip()
+        if 'actual_departure' in request.POST
+        else None
+    )
     status = request.POST.get('status', Bus.STATUS_ACTIVE).strip()
-    current_location = request.POST.get('current_location', '').strip()
+    current_location = (
+        request.POST.get('current_location', '').strip()
+        if 'current_location' in request.POST
+        else (bus.current_location if bus.pk else '')
+    )
     current_terminal = request.POST.get('current_terminal', '').strip()
-    bay = request.POST.get('bay', '').strip()
+    bay = (
+        request.POST.get('bay', '').strip()
+        if 'bay' in request.POST
+        else (bus.bay if bus.pk else '')
+    )
     movement_status = request.POST.get('movement_status', Bus.MOVE_AT_TERMINAL).strip()
     movement_reason = request.POST.get('movement_reason', '').strip()
     next_stop = request.POST.get('next_stop', '').strip()
@@ -2850,21 +2944,27 @@ def bus_save_ajax(request):
     final_destination = request.POST.get('final_destination', '').strip()
     final_destination_eta = request.POST.get('final_destination_eta', '').strip()
     
-    latitude, lat_error = _parse_coord(request.POST.get('latitude', ''), Decimal('-90'), Decimal('90'))
-    longitude, lng_error = _parse_coord(request.POST.get('longitude', ''), Decimal('-180'), Decimal('180'))
+    latitude = bus.latitude if bus.pk else None
+    longitude = bus.longitude if bus.pk else None
+    lat_error = lng_error = None
+    if 'latitude' in request.POST:
+        latitude, lat_error = _parse_coord(request.POST.get('latitude', ''), Decimal('-90'), Decimal('90'))
+    if 'longitude' in request.POST:
+        longitude, lng_error = _parse_coord(request.POST.get('longitude', ''), Decimal('-180'), Decimal('180'))
 
     if not bus_number:
         return JsonResponse({'error': 'Bus number is required.'}, status=400)
     if not plate_number:
         return JsonResponse({'error': 'Plate number is required.'}, status=400)
-    if not capacity:
-        return JsonResponse({'error': 'Capacity is required.'}, status=400)
-    capacity_value = _parse_capacity(capacity)
-    if capacity_value is None or capacity_value < MIN_CAPACITY or capacity_value > MAX_CAPACITY:
-        return JsonResponse(
-            {'error': f'Capacity must be a number between {MIN_CAPACITY} and {MAX_CAPACITY}.'},
-            status=400,
-        )
+    if capacity:
+        capacity_value = _parse_capacity(capacity)
+        if capacity_value is None or capacity_value < MIN_CAPACITY or capacity_value > MAX_CAPACITY:
+            return JsonResponse(
+                {'error': f'Capacity must be a number between {MIN_CAPACITY} and {MAX_CAPACITY}.'},
+                status=400,
+            )
+    else:
+        capacity_value = bus.capacity if bus.pk else DEFAULT_CAPACITY
     if not route:
         return JsonResponse({'error': 'Route is required.'}, status=400)
 
@@ -2963,8 +3063,14 @@ def bus_save_ajax(request):
     bus.operator = operator
     bus.capacity = capacity_value
     bus.route = route
-    bus.scheduled_time = _parse_time(scheduled_time)
-    bus.actual_departure = _parse_time(actual_departure)
+    if 'scheduled_time' in request.POST:
+        bus.scheduled_time = _parse_time(scheduled_time)
+    elif not bus.pk:
+        bus.scheduled_time = None
+    if 'actual_departure' in request.POST:
+        bus.actual_departure = _parse_time(actual_departure)
+    elif not bus.pk:
+        bus.actual_departure = None
     bus.status = status
     bus.current_location = current_location
     bus.current_terminal = current_terminal

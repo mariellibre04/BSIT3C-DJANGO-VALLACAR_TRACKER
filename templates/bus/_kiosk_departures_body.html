@@ -1,5 +1,5 @@
 <tr class="k-section">
-  <td colspan="5">
+  <td colspan="4">
     <span>{% if kiosk_area %}Buses to {{ kiosk_area_label }}{% else %}All buses &middot; Negros Occidental{% endif %}</span>
     <span class="k-section-count">{{ kiosk_departure_count }} buses</span>
   </td>
@@ -7,5 +7,5 @@
 {% for b in kiosk_departures %}
   {% include 'bus/_kiosk_departure_row.html' with b=b %}
 {% empty %}
-<tr class="k-bus-row"><td colspan="5"><span class="k-empty-row"><i class="fa-solid fa-bus" aria-hidden="true"></i><span>No buses are scheduled for {{ kiosk_area_label }} right now.</span></span></td></tr>
+<tr class="k-bus-row"><td colspan="4"><span class="k-empty-row"><i class="fa-solid fa-bus" aria-hidden="true"></i><span>No buses are scheduled for {{ kiosk_area_label }} right now.</span></span></td></tr>
 {% endfor %}

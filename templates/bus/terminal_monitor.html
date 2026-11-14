@@ -16,7 +16,7 @@
   <link href="{% static 'css/tabler.css' %}" rel="stylesheet">
   <link href="{% static 'css/app-theme.css' %}?v=6" rel="stylesheet">
   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
-  <link href="{% static 'css/terminal-monitor.css' %}?v=22" rel="stylesheet">
+  <link href="{% static 'css/terminal-monitor.css' %}?v=24" rel="stylesheet">
   <style>@import url("https://rsms.me/inter/inter.css");</style>
 </head>
 <body class="kiosk-body" data-selected-terminal="{{ kiosk_selected_slug }}" data-destination="{{ kiosk_destination }}">
@@ -155,7 +155,7 @@
                   <th scope="col">Bus</th>
                   <th scope="col">Route</th>
                   <th scope="col">Terminal</th>
-                  <th scope="col">Bay</th>
+                  <th scope="col" class="k-stop-head">Stop &amp; ETA</th>
                   <th scope="col">Time In</th>
                   <th scope="col">Departure</th>
                   <th scope="col">Status</th>
@@ -165,7 +165,7 @@
                   <th scope="col">Bus</th>
                   <th scope="col">Route</th>
                   <th scope="col">Departure</th>
-                  <th scope="col">Bay</th>
+                  <th scope="col" class="k-stop-head">Stop &amp; ETA</th>
                   <th scope="col">Status</th>
                 </tr>
                 {% endif %}

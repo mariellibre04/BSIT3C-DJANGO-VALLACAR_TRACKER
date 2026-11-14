@@ -181,7 +181,7 @@
                 <button type="button" class="btn btn-ghost-secondary btn-icon btn-sm" data-bs-toggle="modal" data-bs-target="#busQrModal" data-qr-url="{{ request.scheme }}://{{ request.get_host }}{% url 'bus:bus_tap' bus.qr_token %}" data-bus-number="{{ bus.bus_number }}" title="Bus QR code">
                   <i class="fas fa-qrcode text-secondary"></i>
                 </button>
-                <button type="button" class="btn btn-ghost-secondary btn-icon btn-sm" data-bs-toggle="modal" data-bs-target="#busModal" data-mode="edit" data-id="{{ bus.id }}" data-bus_number="{{ bus.bus_number }}" data-plate_number="{{ bus.plate_number }}" data-operator="{{ bus.operator }}" data-capacity="{{ bus.capacity }}" data-route="{{ bus.route }}" data-scheduled_time="{{ bus.scheduled_time|time:'H:i' }}" data-actual_departure="{{ bus.actual_departure|time:'H:i' }}" data-status="{{ bus.status }}" data-current_terminal="{{ bus.current_terminal }}" data-bay="{{ bus.bay }}" data-current_location="{{ bus.current_location }}" data-latitude="{{ bus.latitude|default:'' }}" data-longitude="{{ bus.longitude|default:'' }}" data-next_stop="{{ bus.next_stop }}" data-next_stop_eta="{{ bus.next_stop_eta|time:'H:i' }}" data-final_destination="{{ bus.final_destination }}" data-final_destination_eta="{{ bus.final_destination_eta|time:'H:i' }}" data-movement_status="{{ bus.movement_status }}" data-movement_reason="{{ bus.movement_reason }}" title="Edit">
+                <button type="button" class="btn btn-ghost-secondary btn-icon btn-sm" data-bs-toggle="modal" data-bs-target="#busModal" data-mode="edit" data-id="{{ bus.id }}" data-bus_number="{{ bus.bus_number }}" data-plate_number="{{ bus.plate_number }}" data-operator="{{ bus.operator }}" data-route="{{ bus.route }}" data-status="{{ bus.status }}" data-current_terminal="{{ bus.current_terminal }}" data-next_stop="{{ bus.next_stop }}" data-next_stop_eta="{{ bus.next_stop_eta|time:'H:i' }}" data-final_destination="{{ bus.final_destination }}" data-final_destination_eta="{{ bus.final_destination_eta|time:'H:i' }}" data-movement_status="{{ bus.movement_status }}" data-movement_reason="{{ bus.movement_reason }}" title="Edit">
                   <i class="fas fa-edit text-primary"></i>
                 </button>
                 <button type="button" class="btn btn-ghost-secondary btn-icon btn-sm" data-bs-toggle="modal" data-bs-target="#deleteBusModal" data-id="{{ bus.id }}" data-name="{{ bus.bus_number }}" title="Delete">
@@ -218,16 +218,13 @@
           <div class="col-6"><label class="form-label">Bus Number</label><input type="text" name="bus_number" id="bus_bus_number" class="form-control" placeholder="e.g. DUM-501" required></div>
           <div class="col-6"><label class="form-label">Plate Number</label><input type="text" name="plate_number" id="bus_plate_number" class="form-control" placeholder="e.g. VTI 5501" required></div>
 
-          <div class="col-6"><label class="form-label">Capacity</label><input type="number" name="capacity" id="bus_capacity" class="form-control" min="1" max="100" required></div>
-          <div class="col-6"><label class="form-label">Scheduled Time</label><input type="time" name="scheduled_time" id="bus_scheduled_time" class="form-control"></div>
-
           <div class="col-12">
             <label class="form-label">Route</label>
             <select name="route" id="bus_route" class="form-select" required>
               <option value="">Select a Negros Occidental route...</option>
               {% for route_name in route_options %}<option value="{{ route_name }}">{{ route_name }}</option>{% endfor %}
             </select>
-            <div class="form-hint">Choose a route to load every terminal stop on that route below.</div>
+            <div class="form-hint">Choose a route to load its stops after the departure terminal.</div>
           </div>
 
           <div class="col-12">
@@ -235,14 +232,16 @@
               <span>Bus Stops</span>
               <span class="text-muted small" id="busStopCount">0 stops assigned</span>
             </label>
+            <div class="form-hint" id="busStopOrigin"></div>
             <div id="busStopPicker" class="bus-stop-picker border rounded p-2 mb-2">
               <span class="text-muted small">Select a route first to load its stops.</span>
             </div>
             <div id="busStopSelected" class="bus-stop-selected"></div>
             <input type="hidden" name="stops_json" id="bus_stops_json" value="[]">
             <div class="form-hint mt-2">
-              Click a stop to add it. Stops appear in the order you click them as
-              1st stop, 2nd stop, and so on. Set an ETA for each stop.
+              The route's departure terminal becomes the Current Terminal
+              automatically. Click the stops after it in order — 1st stop,
+              2nd stop, and so on — and set an ETA for each stop.
             </div>
             <div class="mt-2">
               <button type="button" class="btn btn-sm btn-outline-secondary" id="busStopAutoEta">
@@ -264,10 +263,7 @@
               {% for terminal in terminal_options %}<option value="{{ terminal }}">{{ terminal }}</option>{% endfor %}
             </select>
           </div>
-          <div class="col-6"><label class="form-label">Bay</label><input type="text" name="bay" id="bus_bay" class="form-control" placeholder="e.g. Bay 09"></div>
-
           <div class="col-6"><label class="form-label">Movement status</label><select name="movement_status" id="bus_movement_status" class="form-select"><option value="at_terminal">At Terminal</option><option value="en_route">En Route</option><option value="stopped">Stopped</option><option value="delayed">Delayed</option><option value="off_route">Off Route</option></select></div>
-          <div class="col-6"><label class="form-label">Actual Departure</label><input type="time" name="actual_departure" id="bus_actual_departure" class="form-control"></div>
 
           <div class="col-6">
             <label class="form-label">Next Terminal Stop</label>
@@ -275,7 +271,7 @@
               <option value="">Select terminal stop...</option>
               {% for terminal in terminal_options %}<option value="{{ terminal }}">{{ terminal }}</option>{% endfor %}
             </select>
-            <div class="form-hint">Only stops on the selected route are shown.</div>
+            <div class="form-hint">Filled automatically from the Bus Stops sequence.</div>
           </div>
           <div class="col-6"><label class="form-label">Next Terminal Stop ETA</label><input type="time" name="next_stop_eta" id="bus_next_stop_eta" class="form-control"></div>
 
@@ -287,11 +283,7 @@
             </select>
           </div>
           <div class="col-6"><label class="form-label">Final Destination ETA</label><input type="time" name="final_destination_eta" id="bus_final_destination_eta" class="form-control"></div>
-
-          <div class="col-12"><label class="form-label">Current Location</label><input type="text" name="current_location" id="bus_current_location" class="form-control" placeholder="e.g. Bacolod North Terminal - Bay 3"></div>
-
-          <div class="col-6"><label class="form-label">Latitude</label><input type="number" step="0.000001" name="latitude" id="bus_latitude" class="form-control" placeholder="e.g. 10.676500"></div>
-          <div class="col-6"><label class="form-label">Longitude</label><input type="number" step="0.000001" name="longitude" id="bus_longitude" class="form-control" placeholder="e.g. 122.950900"></div>
+          <div class="col-12"><div class="form-hint">Auto-filled from the route: the departure terminal becomes the Current Terminal, the first stop the Next Terminal Stop, and the last stop the Final Destination.</div></div>
 
           <div class="col-12"><label class="form-label">Movement Reason</label><input type="text" name="movement_reason" id="bus_movement_reason" class="form-control" placeholder="e.g. Engine check at terminal"></div>
         </div>
@@ -382,6 +374,7 @@
   const stopCountEl = document.getElementById('busStopCount');
   const stopsJsonEl = document.getElementById('bus_stops_json');
   let selectedStops = [];
+  let suppressTerminalAutoFill = false;
 
   function stopKey(name) {
     return (name || '').toLowerCase().replace(/[^a-z0-9]+/g, ' ').trim();
@@ -391,11 +384,16 @@
     const v = n % 100;
     return n + (suffixes[(v - 20) % 10] || suffixes[v] || suffixes[0]);
   }
+  function routeOriginStop() {
+    const stops = routeStopsFor(document.getElementById('bus_route').value);
+    return stops && stops.length ? stops[0] : '';
+  }
   function availableStops() {
     const route = document.getElementById('bus_route').value;
     if (!route) return [];
     const stops = routeStopsFor(route);
-    return stops && stops.length ? stops : ALL_TERMINALS;
+    if (stops && stops.length) return stops.slice(1);
+    return ALL_TERMINALS;
   }
   function isStopSelected(name) {
     const key = stopKey(name);
@@ -465,6 +463,11 @@
     renderStops();
   }
   function renderStops() {
+    const origin = routeOriginStop();
+    const originEl = document.getElementById('busStopOrigin');
+    if (originEl) {
+      originEl.textContent = origin ? 'Departing from: ' + origin : '';
+    }
     selectedStopsEl.innerHTML = '';
     if (!selectedStops.length) {
       const empty = document.createElement('div');
@@ -493,6 +496,7 @@
       eta.addEventListener('input', function() {
         stop.eta = eta.value;
         syncStopsJson();
+        syncTerminalFieldsFromStops();
       });
 
       const up = document.createElement('button');
@@ -528,15 +532,23 @@
     });
     updatePickerState();
     syncStopsJson();
+    syncTerminalFieldsFromStops();
   }
-  function setSelectedStops(list) {
+  function setSelectedStops(list, skipTerminalAutoFill) {
+    const originKey = stopKey(routeOriginStop());
     selectedStops = (list || [])
       .filter(function(stop) { return stop && stop.name; })
+      .filter(function(stop) {
+        return !originKey || stopKey(stop.name) !== originKey;
+      })
       .map(function(stop) {
         return {name: stop.name, eta: stop.eta || ''};
       });
+    const previous = suppressTerminalAutoFill;
+    if (skipTerminalAutoFill) suppressTerminalAutoFill = true;
     renderPicker();
     renderStops();
+    suppressTerminalAutoFill = previous;
   }
   function formatTimeValue(date) {
     return String(date.getHours()).padStart(2, '0') + ':' +
@@ -544,22 +556,20 @@
   }
   function autoFillEtas() {
     if (!selectedStops.length) return;
-    const timeInput = document.getElementById('bus_scheduled_time').value ||
-      document.getElementById('bus_actual_departure').value;
     const base = new Date();
-    if (timeInput) {
-      const parts = timeInput.split(':');
-      base.setHours(parseInt(parts[0], 10) || 0, parseInt(parts[1], 10) || 0, 0, 0);
-    }
     const meta = routeMetaFor(document.getElementById('bus_route').value) || [];
     const metaByName = {};
     meta.forEach(function(entry) { metaByName[stopKey(entry.name)] = entry; });
+    // The route's departure terminal is the trip start. When it is not part
+    // of the selected stops, the first selected stop still needs travel time
+    // from that departure point.
+    const startsAtOrigin = Boolean(routeOriginStop());
 
     let clock = new Date(base.getTime());
-    let previousDistance = null;
+    let previousDistance = startsAtOrigin ? 0 : null;
     selectedStops.forEach(function(stop, index) {
       const info = metaByName[stopKey(stop.name)];
-      if (index > 0) {
+      if (index > 0 || startsAtOrigin) {
         let minutes = 15;
         if (info && previousDistance !== null) {
           const deltaKm = Math.abs(info.distance_km - previousDistance);
@@ -599,6 +609,34 @@
       }
     }
     select.value = desired || '';
+  }
+  function setSelectValue(select, value) {
+    if (!select) return;
+    if (value && !Array.from(select.options).some(function(option) {
+      return option.value === value;
+    })) {
+      addOption(select, value);
+    }
+    select.value = value || '';
+  }
+  function syncTerminalFieldsFromStops() {
+    if (suppressTerminalAutoFill) return;
+    const origin = routeOriginStop();
+    const first = selectedStops[0] || null;
+    const last = selectedStops[selectedStops.length - 1] || null;
+    const next = origin
+      ? first
+      : (selectedStops.length > 1 ? selectedStops[1] : null);
+    const currentSelect = document.getElementById('bus_current_terminal');
+    // On a new bus the departure terminal is the current one. When editing,
+    // keep the bus's existing current terminal unless it is still empty.
+    if (!currentId || !currentSelect.value) {
+      setSelectValue(currentSelect, origin || (first ? first.name : ''));
+    }
+    setSelectValue(document.getElementById('bus_next_stop'), next ? next.name : '');
+    setSelectValue(document.getElementById('bus_final_destination'), last ? last.name : '');
+    document.getElementById('bus_next_stop_eta').value = next ? (next.eta || '') : '';
+    document.getElementById('bus_final_destination_eta').value = last ? (last.eta || '') : '';
   }
   function syncRouteStops(nextValue, finalValue, currentValue, keepMissing) {
     const stops = routeStopsFor(document.getElementById('bus_route').value);
@@ -662,15 +700,8 @@
       document.getElementById('bus_bus_number').value = button.getAttribute('data-bus_number');
       document.getElementById('bus_plate_number').value = button.getAttribute('data-plate_number');
       document.getElementById('bus_operator').value = button.getAttribute('data-operator') || '';
-      document.getElementById('bus_capacity').value = button.getAttribute('data-capacity');
       setRouteValue(button.getAttribute('data-route'));
-      document.getElementById('bus_scheduled_time').value = button.getAttribute('data-scheduled_time') || '';
-      document.getElementById('bus_actual_departure').value = button.getAttribute('data-actual_departure') || '';
       document.getElementById('bus_status').value = button.getAttribute('data-status');
-      document.getElementById('bus_bay').value = button.getAttribute('data-bay') || '';
-      document.getElementById('bus_current_location').value = button.getAttribute('data-current_location') || '';
-      document.getElementById('bus_latitude').value = button.getAttribute('data-latitude') || '';
-      document.getElementById('bus_longitude').value = button.getAttribute('data-longitude') || '';
       syncRouteStops(
         button.getAttribute('data-next_stop'),
         button.getAttribute('data-final_destination'),
@@ -681,7 +712,7 @@
       document.getElementById('bus_final_destination_eta').value = button.getAttribute('data-final_destination_eta') || '';
       document.getElementById('bus_movement_status').value = button.getAttribute('data-movement_status') || 'at_terminal';
       document.getElementById('bus_movement_reason').value = button.getAttribute('data-movement_reason') || '';
-      setSelectedStops(BUS_STOPS_MAP[String(currentId)] || []);
+      setSelectedStops(BUS_STOPS_MAP[String(currentId)] || [], true);
     } else { resetForm(); }
   });
   deleteModalEl.addEventListener('show.bs.modal', function(event) {
