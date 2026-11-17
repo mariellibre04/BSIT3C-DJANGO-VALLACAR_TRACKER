@@ -45,6 +45,28 @@
   .live-track-section-title { font-weight:700; color:#1c1e36; margin:0; font-size:1rem; }
   .live-track-badge-count { display:inline-flex; align-items:center; gap:.4rem; background:#d1fae5; color:#065f46; border-radius:999px; padding:.15rem .6rem; font-size:.75rem; font-weight:700; }
   .live-track-list { padding:.5rem 1rem; max-height:calc(100vh - 300px); overflow-y:auto; }
+  .live-track-bus-search {
+    display:flex; align-items:center; gap:.5rem;
+    margin:.6rem 1rem 0; padding:.4rem .7rem;
+    background:#f8f9fa; border:1px solid var(--tblr-border-color); border-radius:8px;
+  }
+  .live-track-bus-search > i { color:#6c757d; font-size:.85rem; pointer-events:none; }
+  .live-track-bus-search input {
+    flex:1; min-width:0; border:none; background:transparent;
+    font-size:.82rem; color:#1c1e36; padding:.1rem 0; outline:none;
+  }
+  .live-track-bus-search input::placeholder { color:#8a94a6; opacity:1; }
+  .live-track-bus-search input::-webkit-search-cancel-button { display:none; }
+  .live-track-bus-search-clear {
+    border:none; background:transparent; color:#6c757d; cursor:pointer;
+    padding:0; line-height:1; font-size:.85rem;
+  }
+  .live-track-bus-search-clear[hidden] { display:none; }
+  .live-track-bus-item { cursor:pointer; }
+  .live-track-bus-item[hidden] { display:none; }
+  .live-track-bus-item:focus-visible {
+    outline:2px solid #c8102e; outline-offset:-2px; border-radius:6px;
+  }
   .live-track-bus-item {
     display:flex; align-items:center; gap:.85rem; padding:.7rem .4rem;
     border-bottom:1px solid #f1f3f5; transition:background .15s;
@@ -177,6 +199,15 @@
     border-bottom-color: var(--tblr-border-color);
   }
 
+  [data-bs-theme="dark"] .live-track-bus-search {
+    background: var(--tblr-bg-surface-secondary);
+    border-color: var(--tblr-border-color);
+  }
+
+  [data-bs-theme="dark"] .live-track-bus-search input {
+    color: var(--tblr-body-color);
+  }
+
   [data-bs-theme="dark"] .live-track-hamburger {
     color: var(--tblr-body-color);
   }
@@ -250,11 +281,16 @@
       <div class="live-track-card">
         <div class="live-track-section-head">
           <h2 class="live-track-section-title">Buses on route</h2>
-          <span class="live-track-badge-count" aria-live="polite" id="bus-count-badge">{{ results|length }}</span>
+          <span class="live-track-badge-count" aria-live="polite" id="bus-count-badge">{{ sidebar_buses|length }}</span>
+        </div>
+        <div class="live-track-bus-search" role="search" aria-label="Search buses on route">
+          <i class="fa-solid fa-magnifying-glass" aria-hidden="true"></i>
+          <input type="search" id="bus-search" placeholder="Search buses (number, plate, route, status)…" aria-label="Search the listed buses" autocomplete="off">
+          <button type="button" class="live-track-bus-search-clear" id="bus-search-clear" aria-label="Clear bus search" hidden><i class="fa-solid fa-xmark" aria-hidden="true"></i></button>
         </div>
         <div class="live-track-list" role="list" id="bus-list">
-          {% for r in results %}
-          <div class="live-track-bus-item" role="listitem" data-bus-id="{{ r.bus_id }}" data-bus-number="{{ r.bus_number }}">
+          {% for r in sidebar_buses %}
+          <div class="live-track-bus-item" role="listitem" tabindex="0" data-bus-id="{{ r.bus_id }}" data-bus-number="{{ r.bus_number }}" data-search="{{ r.bus_number|lower }} {{ r.plate_number|default:''|lower }} {{ r.route|default:''|lower }} {{ r.movement_display|lower }}">
             <div class="live-track-bus-icon" aria-hidden="true"><i class="fa-solid fa-bus"></i></div>
             <div class="live-track-bus-info">
               <div class="live-track-bus-number d-flex align-items-center gap-2">
@@ -294,8 +330,9 @@
             </div>
           </div>
           {% empty %}
-          <div class="text-center py-3 text-muted small" role="status">No buses on this route right now.</div>
+          <div class="text-center py-3 text-muted small" role="status">No active buses right now.</div>
           {% endfor %}
+          <div class="text-center py-3 text-muted small" role="status" id="bus-list-empty" hidden>No buses match your search. Try a bus number, plate, route, or status.</div>
         </div>
       </div>
     </aside>
@@ -597,8 +634,9 @@
   }
 
   // Initialize bus markers, placing each one along its route.
-  data.buses.forEach(function(b, index) {
-    if (b.lat == null || b.lng == null) return;
+  function addBusMarker(b, index) {
+    if (b.lat == null || b.lng == null) return null;
+    if (busMarkers[b.bus_number]) return busMarkers[b.bus_number];
     let track = null;
     if (b.route_from && b.route_to && b.route_from.lat != null && b.route_to.lat != null) {
       const from = { lat: b.route_from.lat, lng: b.route_from.lng };
@@ -609,7 +647,7 @@
     }
 
     // Skip bogus/out-of-region fixes that would otherwise zoom the map away.
-    if (!track && !inNegros(b.lat, b.lng)) return;
+    if (!track && !inNegros(b.lat, b.lng)) return null;
 
     let progress = 0.5;
     let useExactFix = false;
@@ -623,7 +661,7 @@
         progress = 0.02;
       } else if (b.is_approx) {
         // No GPS fix: spread buses along the corridor so they do not stack.
-        const seed = b.bus_id != null ? Number(b.bus_id) : index;
+        const seed = b.bus_id != null ? Number(b.bus_id) : (index || 0);
         progress = 0.12 + ((seed * 37) % 76) / 100;
       } else {
         progress = projectOnSegment(b.lat, b.lng, track.from, track.to);
@@ -658,7 +696,10 @@
       dir: 1,
       rotation: rotation
     };
-  });
+    return busMarkers[b.bus_number];
+  }
+
+  data.buses.forEach(addBusMarker);
 
   // Waiting place marker. Shown to passengers only — the human icon marks
   // where a rider is standing, so the staff operations map omits it.
@@ -726,6 +767,23 @@
   }
   requestAnimationFrame(animateBusMovement);
 
+  // A bus that reached its destination leaves the live feed, so drop its
+  // marker and its row from "Buses on route" (terminal monitor keeps it).
+  function removeBusMarker(number) {
+    const bus = busMarkers[number];
+    if (!bus) return;
+    if (bus.marker) map.removeLayer(bus.marker);
+    delete busMarkers[number];
+    const list = document.getElementById('bus-list');
+    if (!list) return;
+    Array.prototype.forEach.call(
+      list.querySelectorAll('.live-track-bus-item'),
+      function(item) {
+        if (item.getAttribute('data-bus-number') === String(number)) item.remove();
+      }
+    );
+  }
+
   // --- Fetch live positions and re-anchor buses that have real GPS ---
   async function fetchLivePositions() {
     try {
@@ -733,9 +791,34 @@
       const json = await res.json();
       if (!json.buses) return;
 
+      const activeNumbers = {};
       json.buses.forEach(function(b) {
-        const bus = busMarkers[b.bus_number];
-        if (!bus) return;
+        if (b.status && b.status !== 'active') return;
+        activeNumbers[b.bus_number] = true;
+        let bus = busMarkers[b.bus_number];
+        if (!bus) {
+          // A bus added since the page loaded must show up on the map and in
+          // the list too, exactly like it does on the terminal monitor.
+          const created = addBusMarker({
+            bus_id: b.id,
+            bus_number: b.bus_number,
+            plate_number: b.plate_number,
+            route: b.route,
+            lat: b.latitude,
+            lng: b.longitude,
+            is_approx: b.is_approx,
+            seats_free: b.available_seats,
+            movement_status: b.movement_status,
+            movement_display: b.movement_display,
+            bus_status: b.status,
+            route_from: b.route_from,
+            route_to: b.route_to,
+            departure: null,
+            reason: b.movement_reason
+          });
+          if (created) addBusListItem(b);
+          return;
+        }
 
         bus.seats = b.available_seats != null ? b.available_seats : b.seats_free;
         bus.route = b.route || bus.route;
@@ -782,6 +865,13 @@
 
         updateBusETA(bus);
       });
+
+      // Buses missing from the feed have finished their trip: hide them from
+      // live tracking only.
+      Object.keys(busMarkers).forEach(function(number) {
+        if (!activeNumbers[number]) removeBusMarker(number);
+      });
+      filterBusList();
     } catch (e) { console.error('Position fetch failed', e); }
   }
 
@@ -814,6 +904,110 @@
   function updateAllETAs() {
     Object.values(busMarkers).forEach(updateBusETA);
   }
+
+  // --- "Buses on route" panel: search, selection, live additions ---
+  const busListEl = document.getElementById('bus-list');
+  const busSearchInput = document.getElementById('bus-search');
+  const busSearchClear = document.getElementById('bus-search-clear');
+  const busCountBadge = document.getElementById('bus-count-badge');
+  const busListEmpty = document.getElementById('bus-list-empty');
+
+  function filterBusList() {
+    if (!busListEl) return;
+    const q = ((busSearchInput && busSearchInput.value) || '').trim().toLowerCase();
+    let visible = 0;
+    busListEl.querySelectorAll('.live-track-bus-item').forEach(function(item) {
+      const hay = (item.getAttribute('data-search') || '').toLowerCase();
+      const show = !q || hay.indexOf(q) !== -1;
+      item.hidden = !show;
+      if (show) visible += 1;
+    });
+    const hasRows = busListEl.querySelector('.live-track-bus-item') !== null;
+    if (busListEmpty) busListEmpty.hidden = !hasRows || visible !== 0;
+    if (busCountBadge) busCountBadge.textContent = String(visible);
+    if (busSearchClear) busSearchClear.hidden = !q;
+  }
+
+  function focusBusItem(item) {
+    if (!item) return;
+    const bus = busMarkers[item.getAttribute('data-bus-number')];
+    if (!bus || !bus.marker) return;
+    map.setView([bus.lat, bus.lng], Math.max(map.getZoom(), 12), { animate: true });
+    bus.marker.openPopup();
+  }
+
+  // Create a list row for a bus discovered by the live feed after page load.
+  function addBusListItem(b) {
+    if (!busListEl || b.bus_number == null) return;
+    const existing = Array.prototype.some.call(
+      busListEl.querySelectorAll('.live-track-bus-item'),
+      function(item) {
+        return item.getAttribute('data-bus-number') === String(b.bus_number);
+      }
+    );
+    if (existing) return;
+    const item = document.createElement('div');
+    item.className = 'live-track-bus-item';
+    item.setAttribute('role', 'listitem');
+    item.tabIndex = 0;
+    item.setAttribute('data-bus-id', b.id != null ? b.id : '');
+    item.setAttribute('data-bus-number', b.bus_number);
+    item.setAttribute('data-search', (
+      [b.bus_number, b.plate_number, b.route, b.movement_display]
+        .filter(Boolean).join(' ')
+    ).toLowerCase());
+    item.innerHTML =
+      '<div class="live-track-bus-icon" aria-hidden="true"><i class="fa-solid fa-bus"></i></div>' +
+      '<div class="live-track-bus-info">' +
+        '<div class="live-track-bus-number d-flex align-items-center gap-2">' +
+          escapeHtml(b.bus_number) +
+          '<span class="badge bg-secondary-lt text-secondary">' +
+            escapeHtml(b.movement_display || 'At Terminal') +
+          '</span>' +
+        '</div>' +
+        '<div class="live-track-bus-plate">' +
+          escapeHtml(b.plate_number || '') + ' &bull; ' + escapeHtml(b.route || '') +
+        '</div>' +
+      '</div>';
+    if (busListEmpty && busListEmpty.parentNode === busListEl) {
+      busListEl.insertBefore(item, busListEmpty);
+    } else {
+      busListEl.appendChild(item);
+    }
+    filterBusList();
+  }
+
+  if (busSearchInput) {
+    busSearchInput.addEventListener('input', filterBusList);
+    busSearchInput.addEventListener('keydown', function(e) {
+      if (e.key === 'Escape') {
+        this.value = '';
+        filterBusList();
+      }
+    });
+  }
+  if (busSearchClear) {
+    busSearchClear.addEventListener('click', function() {
+      if (busSearchInput) {
+        busSearchInput.value = '';
+        busSearchInput.focus();
+      }
+      filterBusList();
+    });
+  }
+  if (busListEl) {
+    busListEl.addEventListener('click', function(e) {
+      focusBusItem(e.target.closest('.live-track-bus-item'));
+    });
+    busListEl.addEventListener('keydown', function(e) {
+      if (e.key !== 'Enter' && e.key !== ' ') return;
+      const item = e.target.closest('.live-track-bus-item');
+      if (!item) return;
+      e.preventDefault();
+      focusBusItem(item);
+    });
+  }
+  filterBusList();
 
   // Start periodic position updates
   setInterval(fetchLivePositions, REFRESH_INTERVAL);

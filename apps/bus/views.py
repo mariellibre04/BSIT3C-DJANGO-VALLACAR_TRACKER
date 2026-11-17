@@ -70,11 +70,26 @@ def _parse_time(raw):
     return None
 
 
-def _to_datetime(t):
-    """Convert a time object to a datetime object for today."""
+def _to_datetime(t, date_source=None):
+    """Convert a time object to a datetime on the relevant service date.
+
+    A time-only field belongs to the trip that produced the surrounding data,
+    not necessarily to today: a left-over "5:30 PM" from a bus whose last
+    update was days ago must not look like a departure/arrival due later today.
+    ``date_source`` supplies that service date (any datetime); today is used
+    when it is omitted.
+    """
     if not t:
         return None
     now = timezone.localtime(timezone.now())
+    if date_source is not None:
+        source = (
+            timezone.localtime(date_source)
+            if timezone.is_aware(date_source) else date_source
+        )
+        now = now.replace(
+            year=source.year, month=source.month, day=source.day
+        )
     return now.replace(
         hour=t.hour, minute=t.minute, second=t.second, microsecond=t.microsecond
     )
@@ -890,15 +905,62 @@ def _kiosk_area_key(value):
     return re.sub(r'[^a-z0-9]+', '-', normalized).strip('-')
 
 
-def _kiosk_eta_passed(eta, now=None):
-    """True when an ETA is today and has already passed."""
+def _kiosk_eta_local(eta):
+    """An ETA as an aware local datetime, or None when it is not set."""
     if eta is None:
-        return False
+        return None
     if timezone.is_naive(eta):
         eta = timezone.make_aware(eta)
+    return timezone.localtime(eta)
+
+
+def _kiosk_eta_passed(eta, now=None):
+    """True when an ETA is due: today at/before now, or on an earlier day.
+
+    Previous-day ETAs still count as passed so a bus whose arrival was never
+    cleared does not stay "En Route" forever.
+    """
+    local_eta = _kiosk_eta_local(eta)
+    if local_eta is None:
+        return False
     now = now or timezone.localtime()
-    local_eta = timezone.localtime(eta)
-    return local_eta.date() == now.date() and local_eta <= now
+    return local_eta <= now
+
+
+def _kiosk_place_key(name):
+    """Normalized key for a place name, preferring the terminal directory slug."""
+    entry = terminal_directory.match_terminal(name or '')
+    if entry:
+        return entry['slug']
+    return _kiosk_area_key(name or '')
+
+
+def _kiosk_arrival_reached(
+    bus, position, place_name, eta, open_at_terminal=False, now=None,
+):
+    """True when a bus has reached ``place_name``: it is there, or it is due.
+
+    ``eta`` may be None when only the position can prove the arrival.
+    """
+    place_key = _kiosk_place_key(place_name)
+    if not place_key:
+        return False
+    if _kiosk_place_key(position) == place_key:
+        return True
+
+    if open_at_terminal:
+        return False
+
+    if not _kiosk_eta_passed(eta, now):
+        return False
+    if bus.movement_status == Bus.MOVE_EN_ROUTE:
+        return True
+
+    # A due ETA from an earlier day means that trip is over; the board should
+    # still read "At Destination" even if the movement status was not updated.
+    local_eta = _kiosk_eta_local(eta)
+    now = now or timezone.localtime()
+    return local_eta is not None and local_eta.date() < now.date()
 
 
 def _kiosk_at_destination(
@@ -920,39 +982,69 @@ def _kiosk_at_destination(
     if area_hit and area_key != final_key:
         return False
 
-    position_entry = terminal_directory.match_terminal(position or '')
-    position_key = (
-        position_entry['slug'] if position_entry
-        else _kiosk_area_key(position or '')
-    )
-    if position_key and position_key == final_key:
-        return True
-
-    if open_at_terminal:
-        return False
-
-    if bus.movement_status != Bus.MOVE_EN_ROUTE:
-        return False
-
-    now = timezone.localtime()
-    etas = []
+    etas = [None]
     if area_hit and area_key == final_key:
         etas.append(area_hit.get('eta'))
     if final_arrival:
         etas.append(final_arrival.get('eta'))
-    return any(_kiosk_eta_passed(eta, now) for eta in etas)
+    return any(
+        _kiosk_arrival_reached(
+            bus, position, final_destination['name'], eta, open_at_terminal,
+        )
+        for eta in etas
+    )
+
+
+def _kiosk_stop_cell_destination(row):
+    """The "Destination (place)" stop and ETA the stop cell will render.
+
+    Mirrors the branch order in ``bus/_kiosk_stop_cell.html`` so the status
+    badge can agree with the stop and ETA column. Returns ``(None, None)``
+    when the cell does not show a destination pill.
+    """
+    if row['at_destination'] and not row['area_name']:
+        return row['final_destination'], row['final_destination_eta']
+    if row['area_name']:
+        if row['area_role'] == 'arrives':
+            return row['area_name'], row['area_eta']
+        return None, None
+    if row['next_stop']:
+        if (
+            row['final_destination']
+            and row['final_destination'] == row['next_stop']
+        ):
+            return row['next_stop'], row['next_stop_eta']
+        return None, None
+    if row['final_destination']:
+        return row['final_destination'], row['final_destination_eta']
+    return None, None
 
 
 def _kiosk_status(bus, at_destination):
-    """Movement label shown on the passenger board."""
-    if at_destination and bus.movement_status in (
-        Bus.MOVE_AT_TERMINAL, Bus.MOVE_EN_ROUTE
-    ):
+    """Movement label shown on the passenger board.
+
+    Whenever the row's stop cell names a destination the bus has reached, the
+    status must agree with it and read "At Destination".
+    """
+    if at_destination:
         return 'is-at-destination', 'At Destination'
     return (
         KIOSK_STATUS_CLASS.get(bus.movement_status, 'is-enroute'),
         bus.get_movement_status_display(),
     )
+
+
+def _kiosk_at_destination_numbers():
+    """Bus numbers whose current trip already ended at their final stop.
+
+    Reuses the terminal-monitor rows so the live tracking page and the
+    terminal monitor always agree on which buses are still on a trip.
+    """
+    return {
+        row['number']
+        for row in _kiosk_board_context()['kiosk_departures']
+        if row['at_destination']
+    }
 
 
 def _kiosk_area_catalog():
@@ -1336,12 +1428,19 @@ def _kiosk_board_context(selected_terminal=None, area_key=None):
         if next_destination is None and bus.next_terminal:
             next_destination = {'name': bus.next_terminal}
             arrival = {
-                'eta': _to_datetime(bus.next_terminal_eta or bus.next_stop_eta)
+                'eta': _to_datetime(
+                    bus.next_terminal_eta or bus.next_stop_eta,
+                    date_source=when,
+                )
             }
 
         if final_destination is None and bus.final_destination:
             final_destination = {'name': bus.final_destination}
-            final_arrival = {'eta': _to_datetime(bus.final_destination_eta)}
+            final_arrival = {
+                'eta': _to_datetime(
+                    bus.final_destination_eta, date_source=when
+                )
+            }
 
         if stop_plan:
             upcoming = [stop for stop in stop_plan if stop['role'] != 'departs']
@@ -1371,7 +1470,10 @@ def _kiosk_board_context(selected_terminal=None, area_key=None):
         if bus.next_terminal:
             next_destination = {'name': bus.next_terminal}
             arrival = {
-                'eta': _to_datetime(bus.next_terminal_eta or bus.next_stop_eta)
+                'eta': _to_datetime(
+                    bus.next_terminal_eta or bus.next_stop_eta,
+                    date_source=when,
+                )
             }
         # The "next terminal stop" chosen by the dispatcher is the immediate
         # stop shown to passengers. Legacy "Bay 09" values keep their old
@@ -1379,11 +1481,18 @@ def _kiosk_board_context(selected_terminal=None, area_key=None):
         if bus.next_stop and not _is_legacy_bay(bus.next_stop):
             next_destination = {'name': bus.next_stop}
             arrival = {
-                'eta': _to_datetime(bus.next_stop_eta or bus.next_terminal_eta)
+                'eta': _to_datetime(
+                    bus.next_stop_eta or bus.next_terminal_eta,
+                    date_source=when,
+                )
             }
         if bus.final_destination:
             final_destination = {'name': bus.final_destination}
-            final_arrival = {'eta': _to_datetime(bus.final_destination_eta)}
+            final_arrival = {
+                'eta': _to_datetime(
+                    bus.final_destination_eta, date_source=when
+                )
+            }
 
         last_tap_terminal = tap.terminal_name if tap else ''
         tap_entry = terminal_directory.match_terminal(last_tap_terminal)
@@ -1411,23 +1520,32 @@ def _kiosk_board_context(selected_terminal=None, area_key=None):
             ),
             stop_plan=stop_plan,
         )
+        # Only the bus's real final stop may be shown as "Destination (place)";
+        # an earlier route end point is a place the bus merely passes through.
+        if destination_name:
+            final_area_key = _kiosk_area_key(destination_name)
+            for key, info in area_info.items():
+                if key != final_area_key and info.get('role') == 'arrives':
+                    info['role'] = 'passes'
         area_hit = area_info.get(area_key) if selected_area else None
 
         seated = 0
         seats_left = max(0, (bus.capacity or 0) - seated)
+        position = tap.terminal_name if tap else (bus.current_terminal or '')
+        open_at_terminal = bool(
+            tap
+            and (
+                tap.left_at is None
+                or tap.left_at > timezone.now()
+            )
+        )
         at_destination = _kiosk_at_destination(
             bus,
-            tap.terminal_name if tap else (bus.current_terminal or ''),
+            position,
             final_destination,
             final_arrival,
             area_hit,
-            open_at_terminal=bool(
-                tap
-                and (
-                    tap.left_at is None
-                    or tap.left_at > timezone.now()
-                )
-            ),
+            open_at_terminal=open_at_terminal,
         )
         status_class, status_label = _kiosk_status(bus, at_destination)
         item = {
@@ -1478,6 +1596,20 @@ def _kiosk_board_context(selected_terminal=None, area_key=None):
             '_destination_slug': destination_entry['slug'] if destination_entry else '',
             '_tap_slug': tap_entry['slug'] if tap_entry else '',
         }
+        # The Stop & ETA column can name a destination place that the route
+        # plan knows even when the final-destination fields are empty. Keep the
+        # badge consistent: a "Destination (place)" pill on a bus that has
+        # reached that place must read "At Destination".
+        if not at_destination:
+            cell_place, cell_eta = _kiosk_stop_cell_destination(item)
+            if cell_place and _kiosk_arrival_reached(
+                bus, position, cell_place, cell_eta, open_at_terminal,
+            ):
+                at_destination = True
+                status_class, status_label = _kiosk_status(bus, at_destination)
+                item['at_destination'] = True
+                item['status_class'] = status_class
+                item['status_label'] = status_label
         signature_parts.append(
             '|'.join([
                 str(bus.id),
@@ -1495,6 +1627,8 @@ def _kiosk_board_context(selected_terminal=None, area_key=None):
                 bus.next_stop or '',
                 bus.next_terminal or '',
                 f'{seats_left}/{bus.capacity or 0}',
+                status_label,
+                'at-destination' if at_destination else '',
             ])
         )
 
@@ -3214,11 +3348,11 @@ def _find_search_place(query):
     return None
 
 
-def map_all_buses_json(buses, waiting, search_target=None, show_waiting=True):
-    """Map payload listing every active bus with its movement status label.
+def map_bus_items(buses, waiting, results_by_bus=None):
+    """One entry per active bus, shared by the map payload and the sidebar.
 
-    ``show_waiting`` controls the passenger waiting pin: it is drawn on the
-    public passenger map but suppressed on the staff operations map.
+    The live map and its "Buses on route" panel use the exact same fleet the
+    terminal monitor lists, so the two screens never disagree.
     """
     items = []
     now = timezone.now()
@@ -3240,9 +3374,11 @@ def map_all_buses_json(buses, waiting, search_target=None, show_waiting=True):
                 else terminal_by_name('Bacolod South')
             ) or terminal_by_name('Bacolod')
         _status_trip, departure, reason = _bus_status_context(b, now)
+        corridor = (results_by_bus or {}).get(b.id) or {}
         items.append({
             'bus_id': b.id,
             'bus_number': b.bus_number,
+            'plate_number': b.plate_number,
             'route': b.route,
             'lat': lat,
             'lng': lng,
@@ -3254,9 +3390,23 @@ def map_all_buses_json(buses, waiting, search_target=None, show_waiting=True):
             'departure': departure,
             'reason': reason,
             'bus_status': b.status,
+            'eta_wait': corridor.get('eta_wait'),
+            'nearby': bool(corridor.get('nearby')),
             'route_from': terminal_json(frm),
             'route_to': terminal_json(to),
         })
+    return items
+
+
+def map_all_buses_json(
+    buses, waiting, search_target=None, show_waiting=True, results_by_bus=None,
+):
+    """Map payload listing every active bus with its movement status label.
+
+    ``show_waiting`` controls the passenger waiting pin: it is drawn on the
+    public passenger map but suppressed on the staff operations map.
+    """
+    items = map_bus_items(buses, waiting, results_by_bus)
     return json.dumps({
         'waiting': {'name': waiting['name'], 'lat': waiting['lat'], 'lng': waiting['lng']} if waiting else None,
         'show_waiting': bool(show_waiting),
@@ -3264,7 +3414,7 @@ def map_all_buses_json(buses, waiting, search_target=None, show_waiting=True):
         'terminals': [terminal_json(t) for t in TERMINALS],
         'places': _search_places_json(),
         'search_target': search_target,
-    })
+    }, default=str)
 
 
 def _resolve_trip_params(request):
@@ -3298,6 +3448,14 @@ def bus_map_page(request):
     active_buses = list(
         buses_qs.filter(status=Bus.STATUS_ACTIVE).order_by('bus_number')
     )
+    # Live tracking is for buses still on a trip. A bus that has already
+    # reached its destination is done, so it disappears from the map and the
+    # "Buses on route" list (the terminal monitor keeps showing it).
+    finished_numbers = _kiosk_at_destination_numbers()
+    active_buses = [
+        bus for bus in active_buses
+        if bus.bus_number not in finished_numbers
+    ]
     if origin is None or dest is None or waiting is None:
         error = 'Please select a valid origin, destination, and waiting place.'
     elif origin.get('label') == dest.get('label'):
@@ -3305,13 +3463,12 @@ def bus_map_page(request):
     else:
         results = build_eta_results(active_buses, origin, dest, waiting, today, now)
 
-    # The staff live map is an operations view: only moving (en-route) buses
-    # are drawn, and the passenger waiting pin is omitted. That human icon
-    # marks where a passenger stands, which is meaningful to riders only.
+    # The live map is an operations view but it must mirror the terminal
+    # monitor: every active bus is drawn and listed, whatever its movement
+    # status. Only the passenger waiting pin stays staff-hidden.
     map_buses = active_buses
-    if is_staff:
-        results = [r for r in results if r['movement_status'] == Bus.MOVE_EN_ROUTE]
-        map_buses = [b for b in active_buses if b.movement_status == Bus.MOVE_EN_ROUTE]
+    results_by_bus = {r['bus_id']: r for r in results}
+    map_items = map_bus_items(map_buses, waiting, results_by_bus)
 
     search_query = request.GET.get('place', '').strip()
     search_place = _find_search_place(search_query)
@@ -3329,8 +3486,13 @@ def bus_map_page(request):
         'dest_name': dest.get('label', dest['name']) if dest else dest_name,
         'waiting_name': waiting.get('label', waiting['name']) if waiting else waiting_name,
         'results': results, 'error': error,
+        'sidebar_buses': map_items,
         'today': today, 'now': timezone.localtime(now),
-        'map_json': map_all_buses_json(map_buses, waiting, search_target, show_waiting=not is_staff),
+        'map_json': map_all_buses_json(
+            map_buses, waiting, search_target,
+            show_waiting=not is_staff,
+            results_by_bus=results_by_bus,
+        ),
         'movement_choices': Bus.MOVEMENT_CHOICES,
         'is_admin': is_admin,
         'search_query': search_query,
@@ -3343,10 +3505,14 @@ def bus_locations_ajax(request):
 
     Public read-only. Buses without a GPS fix get an approximate
     route-terminal pin so every available bus is located on the map
-    (flagged with is_approx).
+    (flagged with is_approx). Buses that already reached their destination
+    are left out, matching the live map and its bus list.
     """
     buses_qs = Bus.objects.all()
-    buses = buses_qs.order_by('bus_number')
+    finished_numbers = _kiosk_at_destination_numbers()
+    buses = buses_qs.exclude(
+        bus_number__in=finished_numbers
+    ).order_by('bus_number')
     return JsonResponse({'buses': [_bus_gps_payload(b, use_fallback=True) for b in buses]})
 
 

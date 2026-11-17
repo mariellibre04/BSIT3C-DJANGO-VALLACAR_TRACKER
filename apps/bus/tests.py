@@ -370,6 +370,68 @@ class KioskRefreshTests(TestCase):
 
         self.assertNotIn('At Destination', data['board_html'])
 
+    def test_kiosk_destination_pill_from_stale_trip_reads_at_destination(self):
+        """A time-only final ETA belongs to the trip's day, not to today."""
+        self.bus.final_destination = 'Kabankalan'
+        self.bus.final_destination_eta = (
+            timezone.localtime() - timedelta(hours=1)
+        ).time()
+        self.bus.last_gps_update = timezone.now() - timedelta(days=3)
+        self.bus.save(update_fields=[
+            'final_destination', 'final_destination_eta', 'last_gps_update',
+        ])
+
+        data = self.client.get(reverse('bus:bus_kiosk_refresh')).json()
+        rows = {
+            row['number']: row
+            for row in _kiosk_board_context()['kiosk_departures']
+        }
+        row = rows['101']
+
+        self.assertIn('Destination Kabankalan', data['board_html'])
+        self.assertIn('At Destination', data['board_html'])
+        self.assertTrue(row['at_destination'])
+        self.assertEqual(row['status_label'], 'At Destination')
+
+    def test_kiosk_destination_label_and_status_always_agree(self):
+        self.bus.final_destination = 'Kabankalan'
+        self.bus.final_destination_eta = (
+            timezone.localtime() - timedelta(hours=1)
+        ).time()
+        self.bus.last_gps_update = timezone.now() - timedelta(days=3)
+        self.bus.save(update_fields=[
+            'final_destination', 'final_destination_eta', 'last_gps_update',
+        ])
+
+        context = _kiosk_board_context(area_key='kabankalan')
+        rows = {row['number']: row for row in context['kiosk_departures']}
+        row = rows['101']
+
+        # area_role "arrives" is what makes the stop cell say
+        # "Destination Kabankalan"; the badge must agree with it.
+        self.assertEqual(row['area_role'], 'arrives')
+        self.assertEqual(row['status_label'], 'At Destination')
+        self.assertTrue(row['at_destination'])
+
+    def test_kiosk_route_end_point_that_is_not_final_is_only_passed(self):
+        """Only the real final stop gets a "Destination (place)" pill."""
+        Bus.objects.create(
+            bus_number='303',
+            plate_number='ABC-303',
+            capacity=49,
+            route='Narra-Bacolod',
+            movement_status=Bus.MOVE_EN_ROUTE,
+            current_terminal='Narra',
+            final_destination='Bacolod South',
+        )
+
+        context = _kiosk_board_context(area_key='bacolod-north')
+        rows = {row['number']: row for row in context['kiosk_departures']}
+        row = rows['303']
+
+        self.assertEqual(row['area_role'], 'passes')
+        self.assertNotEqual(row['status_label'], 'At Destination')
+
     def test_kiosk_area_filter_keeps_relevant_buses(self):
         Bus.objects.create(
             bus_number='202',
