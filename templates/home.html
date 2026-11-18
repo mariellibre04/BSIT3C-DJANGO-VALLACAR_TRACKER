@@ -132,9 +132,6 @@
           <i class="fa-solid fa-bell me-1"></i> Alerts
           {% if alert_count %}<span class="badge bg-danger text-white ms-1">{{ alert_count }}</span>{% endif %}
         </a>
-        <a href="{% url 'trips:reports' %}" class="btn btn-ceres-blue">
-          <i class="fa-solid fa-chart-line me-1"></i> Reports
-        </a>
       </div>
     </div>
     <svg class="vt-hero-route" viewBox="0 0 460 200" aria-hidden="true">
@@ -222,16 +219,6 @@
         </div>
       </a>
     </div>
-    <div class="col-sm-6 col-lg-3">
-      <a href="{% url 'trips:reports' %}" class="vt-stat p-3 d-flex gap-3 align-items-center text-decoration-none" style="--vt-accent:#06b6d4;">
-        <span class="vt-stat-icon" style="background:#CFFAFE;border-color:#A5F3FC;color:#155E75;"><i class="fa-solid fa-chart-line"></i></span>
-        <div class="min-w-0">
-          <div class="vt-stat-num">{{ on_time_pct }}%</div>
-          <div class="vt-stat-label">On-Time Rate</div>
-          <div class="vt-stat-sub">{{ total_trips }} trips &bull; {{ total_riders }} riders</div>
-        </div>
-      </a>
-    </div>
   </div>
 
   <!-- Recent Buses — same structure as screenshot's Recent Trucks -->
@@ -301,9 +288,9 @@
     </div>
   </div>
 
-  <!-- Dispatcher panels: delays, incidents, analytics -->
+  <!-- Dispatcher panels: delays and incidents -->
   <div class="row g-3 mt-1">
-    <div class="col-lg-4">
+    <div class="col-lg-6">
       <div class="vt-table-card h-100">
         <div class="d-flex align-items-center justify-content-between px-3 py-2" style="border-bottom:1px solid var(--tblr-border-color);">
           <strong>Trip &amp; Delay Alerts</strong>
@@ -320,7 +307,7 @@
         </div>
       </div>
     </div>
-    <div class="col-lg-4">
+    <div class="col-lg-6">
       <div class="vt-table-card h-100">
         <div class="d-flex align-items-center justify-content-between px-3 py-2" style="border-bottom:1px solid var(--tblr-border-color);">
           <strong>Emergency &amp; Incidents {% if open_incident_count %}<span class="badge bg-danger text-white">{{ open_incident_count }}</span>{% endif %}</strong>
@@ -331,23 +318,9 @@
           <div class="list-group-item small">
             <strong>{{ i.title|truncatechars:45 }}</strong>
             <span class="badge bg-warning-lt text-warning ms-1">{{ i.get_severity_display }}</span>
-            <div class="text-muted">{% if i.bus %}{{ i.bus.bus_number }} &bull; {% endif %}{{ i.location|default:i.get_incident_type_display }}</div>
+            <div class="text-muted">{% if i.bus %}{{ i.bus.bus_number }} &bull; {% endif %}{{ i.location|default:i.display_type }}</div>
           </div>
           {% empty %}<div class="p-3 text-muted small">No open incidents.</div>{% endfor %}
-        </div>
-      </div>
-    </div>
-    <div class="col-lg-4">
-      <div class="vt-table-card h-100">
-        <div class="d-flex align-items-center justify-content-between px-3 py-2" style="border-bottom:1px solid var(--tblr-border-color);">
-          <strong>Fleet Analytics</strong>
-          <a href="{% url 'trips:reports' %}" class="btn btn-sm btn-outline-primary">Reports</a>
-        </div>
-        <div class="list-group list-group-flush">
-          <div class="list-group-item small d-flex justify-content-between"><span class="text-muted">On-time rate</span><strong>{{ on_time_pct }}%</strong></div>
-          <div class="list-group-item small d-flex justify-content-between"><span class="text-muted">Avg delay</span><strong>{{ avg_delay }} min</strong></div>
-          <div class="list-group-item small d-flex justify-content-between"><span class="text-muted">Trips tracked</span><strong>{{ total_trips }}</strong></div>
-          <div class="list-group-item small d-flex justify-content-between"><span class="text-muted">Riders moved</span><strong>{{ total_riders }}</strong></div>
         </div>
       </div>
     </div>

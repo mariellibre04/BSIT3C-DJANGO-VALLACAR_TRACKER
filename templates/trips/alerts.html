@@ -16,7 +16,7 @@
         <div class="flex-grow-1">
           <div class="text-muted small">Active Delays</div>
           <div class="h1 mb-0">{{ active_delays }}</div>
-          <div class="text-success small">{{ rerouted }} rerouted &bull; {{ unexpected }} stops</div>
+          <div class="text-success small">{{ rerouted }} rerouted &bull; {{ unexpected }} stops &bull; {{ open_incidents }} incidents</div>
         </div>
         <span class="avatar rounded" style="background:#FEE2E2;color:#DC2626;"><i class="fa-regular fa-clock"></i></span>
       </div></div>
@@ -79,13 +79,22 @@
       <tbody>
       {% for d in recent_delays %}
       <tr>
-        <td><i class="fa-solid fa-bus text-muted me-1"></i> Bus {{ d.bus_number }}</td>
+        <td>
+          {% if d.kind == 'incident' %}
+          <i class="fa-solid fa-triangle-exclamation text-danger me-1"></i>
+          {% else %}
+          <i class="fa-solid fa-bus text-muted me-1"></i>
+          {% endif %}
+          Bus {{ d.bus_number }}
+        </td>
         <td class="text-muted">{{ d.route }}</td>
         <td class="text-muted">{{ d.location|truncatechars:40 }}</td>
         <td>{% if d.delay_minutes %}<span class="fw-semibold">{{ d.delay_minutes }} min</span>{% else %}<span class="text-muted">—</span>{% endif %}</td>
         <td class="text-muted">{{ d.reason|truncatechars:40 }}</td>
         <td>
-          {% if d.status == 'delayed' or d.status == 'rerouted' or d.status == 'unexpected_stop' %}
+          {% if d.kind == 'incident' %}
+          <span class="badge bg-danger text-white">incident</span>
+          {% elif d.status == 'delayed' or d.status == 'rerouted' or d.status == 'unexpected_stop' %}
           <span class="badge bg-danger text-white">active</span>
           {% else %}
           <span class="badge bg-primary text-white">resolved</span>
@@ -94,7 +103,7 @@
         <td class="text-muted small">{{ d.updated_at|timesince }} ago</td>
       </tr>
       {% empty %}
-      <tr><td colspan="7"><div class="empty py-4"><p class="empty-title">No delays recorded</p><p class="empty-subtitle">Delayed, rerouted, and stopped trips will appear here.</p></div></td></tr>
+      <tr><td colspan="7"><div class="empty py-4"><p class="empty-title">No delays recorded</p><p class="empty-subtitle">Delayed or stopped trips and open incidents will appear here.</p></div></td></tr>
       {% endfor %}
       </tbody>
     </table></div>

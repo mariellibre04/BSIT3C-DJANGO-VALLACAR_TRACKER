@@ -51,6 +51,10 @@ class Incident(models.Model):
         blank=True,
     )
     incident_type = models.CharField(max_length=20, choices=TYPE_CHOICES, default=TYPE_OTHER)
+    custom_type = models.CharField(
+        max_length=100, blank=True, default='',
+        help_text='Free-text type entered when "Other" is selected.',
+    )
     severity = models.CharField(max_length=20, choices=SEVERITY_CHOICES, default=SEVERITY_MEDIUM)
     title = models.CharField(max_length=255)
     location = models.CharField(max_length=255, blank=True, default='')
@@ -73,6 +77,13 @@ class Incident(models.Model):
 
     def __str__(self):
         return f'{self.title} ({self.get_severity_display()} / {self.get_status_display()})'
+
+    @property
+    def display_type(self):
+        """Friendly type label, including the free-text value for "Other"."""
+        if self.incident_type == self.TYPE_OTHER and self.custom_type:
+            return self.custom_type
+        return self.get_incident_type_display()
 
     @property
     def is_open(self):

@@ -53,7 +53,12 @@ def scoped_trip(user, pk):
     return get_object_or_404(scoped_trips(user), pk=pk)
 
 def scoped_incidents(user):
-    return Incident.objects.filter(user=user)
+    """Incidents are fleet-wide operational records shared by all staff.
+
+    A conductor may report an incident on any bus; dispatchers must see it in
+    the incident log and in Delay Alerts regardless of who filed it.
+    """
+    return Incident.objects.all()
 
 def scoped_incident(user, pk):
     return get_object_or_404(scoped_incidents(user), pk=pk)

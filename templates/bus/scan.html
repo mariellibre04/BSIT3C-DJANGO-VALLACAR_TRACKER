@@ -183,33 +183,40 @@
 
       <div class="card mt-3">
         <div class="card-header">
-          <h3 class="card-title">Static demo buses</h3>
-          <span class="badge bg-secondary-lt text-secondary ms-auto">For testing</span>
+          <h3 class="card-title">Added buses</h3>
+          <span class="badge bg-secondary-lt text-secondary ms-auto">{{ bus_count }} in fleet</span>
         </div>
         <div class="card-body">
           <div class="text-muted small mb-3">
-            No QR card yet? Use these sample buses to try the time in / time out flow.
-            The first tap times in; the next tap asks whether to time out.
+            No QR card yet? Tap any bus below to record its time in, then tap it
+            again when it leaves to record the time out.
           </div>
-          <div class="list-group list-group-flush">
+          <div class="input-group mb-3">
+            <span class="input-group-text"><i class="fas fa-search"></i></span>
+            <input type="search" id="demo_bus_search" class="form-control"
+                   placeholder="Search buses by number, route, plate, or stop"
+                   aria-label="Search buses">
+          </div>
+          <div class="list-group list-group-flush" id="demo_bus_list">
             {% for demo in demo_buses %}
-            <div class="list-group-item px-0 d-flex align-items-center gap-3">
-              <span class="avatar bg-primary-lt text-primary"><i class="fas fa-bus"></i></span>
-              <div class="flex-fill">
+            <div class="list-group-item px-0 d-flex flex-wrap flex-sm-nowrap align-items-center gap-3 demo-bus-item">
+              <span class="avatar bg-primary-lt text-primary flex-shrink-0"><i class="fas fa-bus"></i></span>
+              <div class="flex-fill" style="min-width:0;">
                 <div class="fw-semibold">{{ demo.bus_number }}</div>
-                <div class="text-muted small">{{ demo.route }} &middot; {{ demo.plate_number }}</div>
-                <div class="text-muted small">Stop: {{ demo.terminal }} Terminal</div>
+                <div class="text-muted small text-truncate">{{ demo.route }} &middot; {{ demo.plate_number }}</div>
+                <div class="text-muted small text-truncate">Location: {{ demo.location }}</div>
               </div>
-              <button type="button" class="btn btn-sm btn-outline-primary js-demo-tap"
+              <button type="button" class="btn btn-sm btn-outline-primary js-demo-tap flex-shrink-0"
                       data-bus-number="{{ demo.bus_number }}"
                       data-terminal="{{ demo.terminal }}">
                 <i class="fa-solid fa-hand-pointer me-1"></i> Simulate scan
               </button>
             </div>
             {% empty %}
-            <div class="text-muted small">No demo buses configured.</div>
+            <div class="text-muted small">No buses yet. Add one from the Bus page first.</div>
             {% endfor %}
           </div>
+          <div class="text-muted small d-none" id="demo_bus_no_matches">No buses match your search.</div>
         </div>
       </div>
     </div>
@@ -517,35 +524,153 @@
       );
     }
 
-    // html5-qrcode's bundled ZXing build is strict and frequently misses bus QR
-    // codes rendered at screen sizes. Decode frames with jsQR too (it is much
-    // more tolerant) so a QR that is visible in the frame is always picked up.
-    var jsQrTimer = null;
-    var jsQrCanvas = document.createElement('canvas');
-    var jsQrCtx = jsQrCanvas.getContext('2d', { willReadFrequently: true });
+    // ---- Automatic frame decoding ---------------------------------------
+    // Do not depend on a single decoder: html5-qrcode's ZXing build misses QR
+    // codes rendered on screens, and native BarcodeDetector is not available in
+    // every browser. This loop runs alongside it, using the native detector
+    // when present and jsQR with several crops (centre, medium, full frame and
+    // mirrored) so a QR anywhere in view is decoded without pressing anything.
+    var scanTimer = null;
+    var scanPass = 0;
+    var scanBusy = false;
+    var heldToken = '';
+    var heldTokenAt = 0;
+    var unrelatedText = '';
+    var detector = null;
+    var detectorChecked = false;
+    var scanCanvas = document.createElement('canvas');
+    var scanCtx = scanCanvas.getContext('2d', { willReadFrequently: true });
 
-    function startJsQrFallback() {
-      stopJsQrFallback();
-      if (!window.jsQR) return;
-      jsQrTimer = window.setInterval(scanFrameWithJsQr, 300);
+    function readerVideo() {
+      var reader = document.getElementById(readerId);
+      return reader ? reader.querySelector('video') : null;
     }
 
-    function stopJsQrFallback() {
-      if (jsQrTimer) {
-        window.clearInterval(jsQrTimer);
-        jsQrTimer = null;
+    function startScanLoop() {
+      stopScanLoop();
+      if (!window.jsQR && !('BarcodeDetector' in window)) {
+        setStatus(
+          'No QR decoder is available in this browser. Use Chrome or Edge, or the manual check-in.',
+          'alert-warning'
+        );
+        return;
       }
+      if (!detectorChecked) {
+        detectorChecked = true;
+        try {
+          if ('BarcodeDetector' in window && window.BarcodeDetector.getSupportedFormats) {
+            window.BarcodeDetector.getSupportedFormats().then(function (formats) {
+              if ((formats || []).indexOf('qr_code') !== -1) {
+                detector = new window.BarcodeDetector({ formats: ['qr_code'] });
+              }
+            }).catch(function () {});
+          }
+        } catch (error) {
+          detector = null;
+        }
+      }
+      scanTimer = window.setTimeout(scanTick, 120);
     }
 
-    function decodeJsQrRegion(video, sx, sy, sw, sh, targetWidth) {
+    function stopScanLoop() {
+      if (scanTimer) {
+        window.clearTimeout(scanTimer);
+        scanTimer = null;
+      }
+      scanBusy = false;
+      heldToken = '';
+      heldTokenAt = 0;
+      unrelatedText = '';
+    }
+
+    function scanTick() {
+      scanTimer = null;
+      if (!scanning) return;
+      var video = readerVideo();
+      if (!video || !video.videoWidth || video.readyState < 2 || scanBusy) {
+        scanTimer = window.setTimeout(scanTick, 250);
+        return;
+      }
+      scanBusy = true;
+      Promise.resolve()
+        .then(function () { return detectFromVideo(video); })
+        .then(function (text) { processDecodedFrame(text); })
+        .catch(function () { processDecodedFrame(''); })
+        .finally(function () {
+          scanBusy = false;
+          if (scanning) scanTimer = window.setTimeout(scanTick, 130);
+        });
+    }
+
+    function detectFromVideo(video) {
+      if (!detector) return Promise.resolve(scanWithJsQr(video));
+      var native = null;
+      try {
+        native = detector.detect(video);
+      } catch (error) {
+        return Promise.resolve(scanWithJsQr(video));
+      }
+      if (!native || !native.then) return Promise.resolve(scanWithJsQr(video));
+      return native.then(function (codes) {
+        if (codes && codes.length) {
+          for (var i = 0; i < codes.length; i++) {
+            var value = codes[i].rawValue || codes[i].rawData || '';
+            if (value) return value;
+          }
+        }
+        return scanWithJsQr(video);
+      }).catch(function () {
+        return scanWithJsQr(video);
+      });
+    }
+
+    function processDecodedFrame(text) {
+      if (!scanning) return;
+      if (text) {
+        var token = tokenFromText(text);
+        if (!token) {
+          if (text !== unrelatedText) {
+            unrelatedText = text;
+            setStatus(
+              'QR code detected, but it is not a bus QR. Use the QR code from the Bus list.',
+              'alert-warning'
+            );
+          }
+          return;
+        }
+        unrelatedText = '';
+        heldToken = token;
+        heldTokenAt = Date.now();
+        lastDecodeAt = Date.now();
+        missFrames = 0;
+        missHintShown = false;
+        handleScan(text);
+        return;
+      }
+      // Nothing decoded on this frame. Forget the held QR once it has really
+      // left the frame, so the same bus can be scanned again later.
+      if (heldToken && Date.now() - heldTokenAt > 1200) {
+        heldToken = '';
+        lastToken = '';
+      }
+      handleScanMiss();
+    }
+
+    function decodeJsQrRegion(video, sx, sy, sw, sh, targetWidth, mirror) {
       var width = Math.max(1, Math.round(targetWidth));
       var height = Math.max(1, Math.round(sh * width / sw));
-      jsQrCanvas.width = width;
-      jsQrCanvas.height = height;
-      jsQrCtx.drawImage(video, sx, sy, sw, sh, 0, 0, width, height);
+      scanCanvas.width = width;
+      scanCanvas.height = height;
+      scanCtx.save();
+      if (mirror) {
+        scanCtx.translate(width, 0);
+        scanCtx.scale(-1, 1);
+      }
+      scanCtx.drawImage(video, sx, sy, sw, sh, 0, 0, width, height);
+      scanCtx.restore();
       var image;
       try {
-        image = jsQrCtx.getImageData(0, 0, width, height);
+        image = scanCtx.getImageData(0, 0, width, height);
       } catch (error) {
         return '';
       }
@@ -555,29 +680,46 @@
       return found && found.data ? found.data : '';
     }
 
-    function scanFrameWithJsQr() {
-      var video = document.querySelector('#' + readerId + ' video');
-      if (!video || !video.videoWidth || video.readyState < 2) return;
+    function scanWithJsQr(video) {
+      if (!window.jsQR) return '';
+      scanPass += 1;
       var vw = video.videoWidth;
       var vh = video.videoHeight;
+      if (!vw || !vh) return '';
+      var edge = Math.min(vw, vh);
+      var big = Math.round(edge * 0.9);
+      var mid = Math.round(edge * 0.6);
 
-      // First pass: the centre square at (near) native resolution. A full
-      // frame downscaled to 720 px blurs small QRs away; the crop keeps the
-      // module size the camera actually captured.
-      var side = Math.round(Math.min(vw, vh) * 0.62);
+      // The bus QR can be small in the frame, so try the centre at (near)
+      // native resolution before downscaling it away.
       var text = decodeJsQrRegion(
         video,
-        Math.round((vw - side) / 2),
-        Math.round((vh - side) / 2),
-        side,
-        side,
-        Math.min(side, 800)
+        Math.round((vw - big) / 2),
+        Math.round((vh - big) / 2),
+        big, big, Math.min(big, 960), false
       );
       if (!text) {
-        // Second pass: the whole frame, downscaled, for QRs held off-centre.
-        text = decodeJsQrRegion(video, 0, 0, vw, vh, Math.min(vw, 1280));
+        text = decodeJsQrRegion(
+          video,
+          Math.round((vw - mid) / 2),
+          Math.round((vh - mid) / 2),
+          mid, mid, Math.min(mid, 720), false
+        );
       }
-      if (text) handleScan(text);
+      // Every few frames widen the search to the whole frame, then to a
+      // mirrored pass for front-facing webcams.
+      if (!text && scanPass % 3 === 0) {
+        text = decodeJsQrRegion(video, 0, 0, vw, vh, Math.min(vw, 960), false);
+      }
+      if (!text && scanPass % 4 === 0) {
+        text = decodeJsQrRegion(
+          video,
+          Math.round((vw - big) / 2),
+          Math.round((vh - big) / 2),
+          big, big, Math.min(big, 720), true
+        );
+      }
+      return text;
     }
 
     function cameraErrorText(error) {
@@ -609,7 +751,7 @@
       startBtn.classList.add('d-none');
       stopBtn.classList.remove('d-none');
       setStatus('Camera is live and scanning. Point the bus QR inside the frame.', 'alert-info');
-      startJsQrFallback();
+      startScanLoop();
     }
 
     async function startWithCamera(cameraConfig) {
@@ -649,6 +791,7 @@
     }
 
     async function startCamera() {
+      if (scanning || startBtn.disabled) return;
       if (!window.isSecureContext) {
         setStatus('Camera access needs localhost or HTTPS. Open this page from localhost or use manual check-in.', 'alert-warning');
         return;
@@ -710,7 +853,7 @@
       missHintShown = false;
       lastToken = '';
       lastDecodeAt = 0;
-      stopJsQrFallback();
+      stopScanLoop();
       startBtn.disabled = false;
       startBtn.classList.remove('d-none');
       stopBtn.classList.add('d-none');
@@ -1198,6 +1341,15 @@
     terminalSelect.addEventListener('change', onTerminalChange);
     startBtn.addEventListener('click', startCamera);
     stopBtn.addEventListener('click', stopCamera);
+    // Start scanning on its own when the browser already allows camera access;
+    // otherwise the conductor clicks "Start camera" once to grant permission.
+    try {
+      if (navigator.permissions && navigator.permissions.query) {
+        navigator.permissions.query({ name: 'camera' }).then(function (status) {
+          if (status.state === 'granted') startCamera();
+        }).catch(function () {});
+      }
+    } catch (error) {}
     window.addEventListener('beforeunload', function () {
       if (scanner && scanning) scanner.stop().catch(function () {});
     });
@@ -1215,6 +1367,24 @@
     }
     tick();
     window.setInterval(tick, 1000);
+  })();
+</script>
+<script>
+  (function () {
+    var input = document.getElementById('demo_bus_search');
+    var list = document.getElementById('demo_bus_list');
+    var empty = document.getElementById('demo_bus_no_matches');
+    if (!input || !list) return;
+    input.addEventListener('input', function () {
+      var q = input.value.trim().toLowerCase();
+      var visible = 0;
+      Array.prototype.forEach.call(list.querySelectorAll('.demo-bus-item'), function (item) {
+        var match = !q || item.textContent.toLowerCase().indexOf(q) !== -1;
+        item.classList.toggle('d-none', !match);
+        if (match) visible++;
+      });
+      if (empty) empty.classList.toggle('d-none', visible !== 0);
+    });
   })();
 </script>
 {% endblock %}

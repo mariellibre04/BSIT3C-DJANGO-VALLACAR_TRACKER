@@ -218,9 +218,10 @@ def alerts_page(request):
         stopped_series.append(day_trips.filter(status=Trip.STATUS_UNEXPECTED_STOP).count())
 
     recent_delays = []
-    for t in alert_trips[:8]:
+    for t in alert_trips:
         bus = t.bus
         recent_delays.append({
+            'kind': 'trip',
             'bus_number': bus.bus_number if bus else '—',
             'route': t.route or (bus.route if bus else '—'),
             'location': (bus.current_location if bus and bus.current_location else f'{t.origin} - {t.destination}'),
@@ -230,6 +231,28 @@ def alerts_page(request):
             'status_display': t.get_status_display(),
             'updated_at': t.updated_at,
         })
+
+    # An incident on a bus means that bus stops or crawls, so surface open
+    # incidents in the Delay Alerts feed alongside delayed trips.
+    bus_incidents = incidents_qs.select_related('bus').filter(
+        status__in=[Incident.STATUS_REPORTED, Incident.STATUS_RESPONDING],
+    ).order_by('-created_at')[:50]
+    for i in bus_incidents:
+        bus = i.bus
+        recent_delays.append({
+            'kind': 'incident',
+            'bus_number': bus.bus_number if bus else '—',
+            'route': bus.route if bus else '—',
+            'location': i.location or (bus.current_location if bus else ''),
+            'delay_minutes': 0,
+            'reason': f'{i.display_type}: {i.title}',
+            'status': 'incident',
+            'status_display': 'Incident',
+            'updated_at': i.updated_at,
+        })
+
+    recent_delays.sort(key=lambda d: d['updated_at'], reverse=True)
+    recent_delays = recent_delays[:8]
 
     return render(request, 'trips/alerts.html', {
         'today': today,

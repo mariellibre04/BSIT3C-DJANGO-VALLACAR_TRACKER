@@ -1,4 +1,30 @@
 {% extends "theme/base.html" %}
+{% load static %}
+{% block extra_css %}
+<link rel="stylesheet" href="{% static 'libs/tom-select/dist/css/tom-select.bootstrap5.min.css' %}">
+<style>
+  #incidentModal .ts-wrapper { width: 100%; }
+  #incidentModal .ts-control,
+  .ts-dropdown {
+    background-color: var(--tblr-bg-surface, #fff);
+    color: var(--tblr-body-color);
+    border-color: var(--tblr-border-color);
+    border-radius: var(--tblr-border-radius, .375rem);
+  }
+  #incidentModal .ts-control input {
+    color: var(--tblr-body-color);
+  }
+  .ts-dropdown {
+    z-index: 1065;
+    box-shadow: 0 8px 24px rgba(0, 0, 0, .18);
+  }
+  .ts-dropdown .option:hover,
+  .ts-dropdown .active {
+    background-color: var(--tblr-active-bg, rgba(0, 0, 0, .05));
+    color: var(--tblr-body-color);
+  }
+</style>
+{% endblock %}
 {% block content %}
 <div class="container-xl">
   <div class="page-header d-print-none"><div class="row align-items-center"><div class="col">
@@ -30,14 +56,14 @@
   <div class="card">
     <div class="card-header"><div class="card-title">Incident Log</div></div>
     <div class="table-responsive"><table class="table table-vcenter table-hover card-table text-nowrap">
-      <thead><tr><th>#</th><th>Title</th><th>Bus</th><th>Type</th><th>Severity</th><th>Status</th><th>Reported</th><th class="w-1">Actions</th></tr></thead>
+      <thead><tr><th>#</th><th>Title</th><th>Bus</th><th>Type</th><th>Severity</th><th>Status</th><th>Reported</th>{% if can_manage %}<th class="w-1">Actions</th>{% endif %}</tr></thead>
       <tbody>
       {% for i in incidents %}
       <tr>
         <td class="text-muted">{{ forloop.counter0|add:incidents.start_index }}</td>
         <td class="fw-semibold">{{ i.title }}<div class="text-muted small fw-normal">{{ i.location|default:i.description|truncatechars:60 }}</div></td>
         <td class="text-muted">{% if i.bus %}{{ i.bus.bus_number }}{% else %}—{% endif %}</td>
-        <td><span class="badge bg-secondary-lt text-secondary">{{ i.get_incident_type_display }}</span></td>
+        <td><span class="badge bg-secondary-lt text-secondary">{{ i.display_type }}</span></td>
         <td>
           {% if i.severity == 'critical' %}<span class="badge bg-danger text-white">Critical</span>
           {% elif i.severity == 'high' %}<span class="badge bg-danger-lt text-danger">High</span>
@@ -50,15 +76,17 @@
           {% else %}<span class="badge bg-warning-lt text-warning">Reported</span>{% endif %}
         </td>
         <td class="text-muted small">{{ i.created_at|date:"M d, Y h:i A" }}</td>
+        {% if can_manage %}
         <td><div class="d-flex gap-1">
           {% if i.status == 'reported' or i.status == 'responding' %}
           <button type="button" class="btn btn-ghost-success btn-icon btn-sm resolve-incident-btn" data-id="{{ i.id }}" title="Mark resolved"><i class="fas fa-check text-success"></i></button>
           {% endif %}
-          <button type="button" class="btn btn-ghost-secondary btn-icon btn-sm" data-bs-toggle="modal" data-bs-target="#incidentModal" data-mode="edit" data-id="{{ i.id }}" data-bus="{{ i.bus_id|default:'' }}" data-incident_type="{{ i.incident_type }}" data-severity="{{ i.severity }}" data-title="{{ i.title }}" data-location="{{ i.location }}" data-description="{{ i.description }}" data-status="{{ i.status }}" title="Edit"><i class="fas fa-edit text-primary"></i></button>
+          <button type="button" class="btn btn-ghost-secondary btn-icon btn-sm" data-bs-toggle="modal" data-bs-target="#incidentModal" data-mode="edit" data-id="{{ i.id }}" data-bus="{{ i.bus_id|default:'' }}" data-incident_type="{{ i.incident_type }}" data-custom_type="{{ i.custom_type }}" data-severity="{{ i.severity }}" data-title="{{ i.title }}" data-location="{{ i.location }}" data-description="{{ i.description }}" data-status="{{ i.status }}" title="Edit"><i class="fas fa-edit text-primary"></i></button>
           <button type="button" class="btn btn-ghost-secondary btn-icon btn-sm" data-bs-toggle="modal" data-bs-target="#deleteIncidentModal" data-id="{{ i.id }}" data-name="{{ i.title }}" title="Delete"><i class="fas fa-trash-alt text-danger"></i></button>
         </div></td>
+        {% endif %}
       </tr>
-      {% empty %}<tr><td colspan="8"><div class="empty py-5"><p class="empty-title">No incidents reported</p><p class="empty-subtitle">Authorized staff can report accidents and breakdowns here.</p></div></td></tr>{% endfor %}
+      {% empty %}<tr><td colspan="{% if can_manage %}8{% else %}7{% endif %}"><div class="empty py-5"><p class="empty-title">No incidents reported</p><p class="empty-subtitle">Report accidents and breakdowns here.</p></div></td></tr>{% endfor %}
       </tbody>
     </table></div>
     {% if incidents.paginator.num_pages > 1 %}
@@ -80,9 +108,13 @@
       <div class="modal-body"><div id="incidentFormError" class="alert alert-danger d-none"></div>
         <div class="row g-3">
           <div class="col-12"><label class="form-label">Title</label><input type="text" name="title" id="incident_title" class="form-control" placeholder="e.g. Engine breakdown at Km 42" required></div>
-          <div class="col-6"><label class="form-label">Bus (optional)</label><select name="bus" id="incident_bus" class="form-select"><option value="">—</option>{% for b in available_buses %}<option value="{{ b.id }}">{{ b.bus_number }} ({{ b.route }})</option>{% endfor %}</select></div>
-          <div class="col-6"><label class="form-label">Location</label><input type="text" name="location" id="incident_location" class="form-control" placeholder="Where it happened"></div>
-          <div class="col-6"><label class="form-label">Type</label><select name="incident_type" id="incident_type" class="form-select">{% for val, label in type_choices %}<option value="{{ val }}">{{ label }}</option>{% endfor %}</select></div>
+          <div class="col-12"><label class="form-label">Bus</label><select name="bus" id="incident_bus" class="form-select"><option value="">—</option>{% for b in available_buses %}<option value="{{ b.id }}">{{ b.bus_number }} ({{ b.route }})</option>{% endfor %}</select></div>
+          <div class="col-12"><label class="form-label">Location</label><input type="text" name="location" id="incident_location" class="form-control" placeholder="Where it happened"></div>
+          <div class="col-6">
+            <label class="form-label">Type</label>
+            <select name="incident_type" id="incident_type" class="form-select">{% for val, label in type_choices %}<option value="{{ val }}">{{ label }}</option>{% endfor %}</select>
+            <input type="text" name="custom_type" id="incident_custom_type" class="form-control mt-2 d-none" maxlength="100" placeholder="Type your own incident type">
+          </div>
           <div class="col-6"><label class="form-label">Severity</label><select name="severity" id="incident_severity" class="form-select">{% for val, label in severity_choices %}<option value="{{ val }}">{{ label }}</option>{% endfor %}</select></div>
           <div class="col-12"><label class="form-label">Status</label><select name="status" id="incident_status" class="form-select">{% for val, label in status_choices %}<option value="{{ val }}">{{ label }}</option>{% endfor %}</select></div>
           <div class="col-12"><label class="form-label">Details</label><textarea name="description" id="incident_desc" class="form-control" rows="3"></textarea></div>
@@ -102,26 +134,58 @@
 </div>
 {% endblock %}
 {% block extra_js %}
+<script src="{% static 'libs/tom-select/dist/js/tom-select.complete.min.js' %}"></script>
 <script>
 (function() {
   const modalEl = document.getElementById('incidentModal');
   const delEl = document.getElementById('deleteIncidentModal');
   const form = document.getElementById('incidentForm');
   const alertBox = document.getElementById('incidentAlert');
+  const typeSelect = document.getElementById('incident_type');
+  const customInput = document.getElementById('incident_custom_type');
+  const busEl = document.getElementById('incident_bus');
+  let busPicker = null;
+  if (window.TomSelect) {
+    busPicker = new TomSelect(busEl, {
+      create: false,
+      allowEmptyOption: true,
+      maxOptions: 200,
+      placeholder: 'Search bus number or route…',
+      dropdownParent: 'body',
+    });
+  }
   let currentId = null;
+
+  function syncCustomType() {
+    const isOther = typeSelect.value === 'other';
+    customInput.classList.toggle('d-none', !isOther);
+    if (!isOther) customInput.value = '';
+  }
+  typeSelect.addEventListener('change', syncCustomType);
+
   modalEl.addEventListener('show.bs.modal', function(e) {
     const btn = e.relatedTarget; if (!btn) return;
     if (btn.getAttribute('data-mode') === 'edit') {
       currentId = btn.getAttribute('data-id');
       document.getElementById('incident_id').value = currentId;
-      document.getElementById('incident_bus').value = btn.getAttribute('data-bus');
+      const busVal = btn.getAttribute('data-bus') || '';
+      if (busPicker) { busVal ? busPicker.setValue(busVal, true) : busPicker.clear(true); }
+      else { busEl.value = busVal; }
       document.getElementById('incident_type').value = btn.getAttribute('data-incident_type');
+      customInput.value = btn.getAttribute('data-custom_type') || '';
+      syncCustomType();
       document.getElementById('incident_severity').value = btn.getAttribute('data-severity');
       document.getElementById('incident_title').value = btn.getAttribute('data-title');
       document.getElementById('incident_location').value = btn.getAttribute('data-location');
       document.getElementById('incident_desc').value = btn.getAttribute('data-description');
       document.getElementById('incident_status').value = btn.getAttribute('data-status');
-    } else { form.reset(); document.getElementById('incident_id').value=''; currentId=null; }
+    } else {
+      form.reset();
+      document.getElementById('incident_id').value = '';
+      currentId = null;
+      if (busPicker) busPicker.clear(true);
+      syncCustomType();
+    }
   });
   delEl.addEventListener('show.bs.modal', function(e) { const b=e.relatedTarget; if(b){ currentId=b.getAttribute('data-id'); document.getElementById('deleteIncidentName').textContent=b.getAttribute('data-name'); } });
   form.addEventListener('submit', function(e){ e.preventDefault();

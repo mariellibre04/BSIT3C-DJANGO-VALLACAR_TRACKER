@@ -122,24 +122,6 @@
         </li>
 
         <li class="nav-item">
-          <a class="nav-link {% if request.resolver_match.app_name == 'incidents' %}active{% endif %}" href="{% url 'incidents:incident_list' %}">
-            <span class="nav-link-icon d-md-none d-lg-inline-block">
-              <i class="nav-icon fas fa-triangle-exclamation"></i>
-            </span>
-            <span class="nav-link-title">Incidents</span>
-          </a>
-        </li>
-
-        <li class="nav-item">
-          <a class="nav-link {% if request.resolver_match.url_name == 'reports' %}active{% endif %}" href="{% url 'trips:reports' %}">
-            <span class="nav-link-icon d-md-none d-lg-inline-block">
-              <i class="nav-icon fas fa-chart-line"></i>
-            </span>
-            <span class="nav-link-title">Reports</span>
-          </a>
-        </li>
-
-        <li class="nav-item">
           <span class="dh-nav-section">
             Management
           </span>
@@ -192,6 +174,14 @@
             <span class="nav-link-title">Manual Check-in</span>
           </a>
         </li>
+        <li class="nav-item">
+          <a class="nav-link {% if request.resolver_match.app_name == 'incidents' %}active{% endif %}" href="{% url 'incidents:incident_list' %}">
+            <span class="nav-link-icon d-md-none d-lg-inline-block">
+              <i class="nav-icon fas fa-triangle-exclamation"></i>
+            </span>
+            <span class="nav-link-title">Incidents</span>
+          </a>
+        </li>
 
         {% else %}
         <li class="nav-item">
@@ -200,6 +190,14 @@
           </span>
         </li>
         
+        <li class="nav-item">
+          <a class="nav-link {% if request.resolver_match.url_name == 'bus_scan' %}active{% endif %}" href="{% url 'bus:bus_scan' %}">
+            <span class="nav-link-icon d-md-none d-lg-inline-block">
+              <i class="nav-icon fas fa-camera"></i>
+            </span>
+            <span class="nav-link-title">Webcam Scanner</span>
+          </a>
+        </li>
         <li class="nav-item">
           <a class="nav-link {% if request.resolver_match.url_name == 'bus_map' %}active{% endif %}" href="{% url 'bus:bus_map' %}">
             <span class="nav-link-icon d-md-none d-lg-inline-block">
@@ -216,6 +214,16 @@
             <span class="nav-link-title">Terminal Monitor</span>
           </a>
         </li>
+        {% if request.resolver_match.url_name == 'bus_scan' or request.resolver_match.app_name == 'incidents' %}
+        <li class="nav-item">
+          <a class="nav-link {% if request.resolver_match.app_name == 'incidents' %}active{% endif %}" href="{% url 'incidents:incident_list' %}">
+            <span class="nav-link-icon d-md-none d-lg-inline-block">
+              <i class="nav-icon fas fa-triangle-exclamation"></i>
+            </span>
+            <span class="nav-link-title">Incidents</span>
+          </a>
+        </li>
+        {% endif %}
         {% endif %}
 
         <li class="nav-item mt-2">

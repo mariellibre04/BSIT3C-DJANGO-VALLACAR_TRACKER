@@ -2549,6 +2549,24 @@ def bus_scan_page(request):
             terminal_directory.get_terminal(requested_terminal)
             or terminal_directory.match_terminal(requested_terminal)
         )
+    # The quick-tap list mirrors the real fleet, so every bus added from the Bus
+    # page can be tapped from here without a printed QR card.
+    bus_rows = []
+    for bus in Bus.objects.order_by('bus_number'):
+        terminal = _infer_scan_terminal(bus)
+        location = (
+            (bus.current_terminal or '').strip()
+            or (bus.current_location or '').replace(' Terminal', '').strip()
+            or ((terminal or {}).get('name') or '')
+        )
+        bus_rows.append({
+            'bus_number': bus.bus_number,
+            'plate_number': bus.plate_number,
+            'route': bus.route or '—',
+            'terminal': terminal['name'] if terminal else 'Unassigned',
+            'location': location or 'Unassigned',
+            'status': bus.get_status_display(),
+        })
     return render(request, 'bus/scan.html', {
         'terminals': TERMINALS,
         'city_places': sorted(city_places, key=lambda p: (p['province'], p['name'])),
@@ -2557,7 +2575,8 @@ def bus_scan_page(request):
             locked_terminal['terminal'] if locked_terminal else requested_terminal
         ),
         'locked_terminal': locked_terminal,
-        'demo_buses': STATIC_DEMO_BUSES,
+        'demo_buses': bus_rows,
+        'bus_count': len(bus_rows),
         'estimated_stop_minutes': ESTIMATED_STOP_MINUTES,
     })
 
@@ -2951,7 +2970,14 @@ def bus_scan_checkin_ajax(request):
             return JsonResponse({'error': 'That QR code is not a valid bus code.'}, status=400)
     else:
         demo_number = (request.POST.get('bus_number') or '').strip()
-        bus = _demo_bus_for(demo_number) if demo_number else None
+        # Any bus in the fleet can be tapped from the webcam page, not just the
+        # original demo set, so resolve a registered bus number first.
+        bus = (
+            Bus.objects.filter(bus_number__iexact=demo_number).first()
+            if demo_number else None
+        )
+        if bus is None and demo_number:
+            bus = _demo_bus_for(demo_number)
         if bus is None and request.POST.get('bus_id'):
             bus = Bus.objects.filter(pk=request.POST.get('bus_id')).first()
     if bus is None:

@@ -7,12 +7,12 @@ from django.shortcuts import render
 from django.utils import timezone
 from django.views.decorators.http import require_POST
 
-from apps.scoping import scoped_buses, scoped_incident, scoped_incidents
+from apps.scoping import scoped_incident, scoped_incidents
+from apps.bus.models import Bus
 from .models import Incident
-from apps.core.permissions import admin_required
+from apps.core.permissions import conductor_required
 
 
-@admin_required
 def incident_list_page(request):
     query = request.GET.get('q', '').strip()
     status_filter = request.GET.get('status', '').strip()
@@ -23,6 +23,7 @@ def incident_list_page(request):
         incidents = incidents.filter(
             Q(title__icontains=query) | Q(description__icontains=query)
             | Q(location__icontains=query) | Q(bus__bus_number__icontains=query)
+            | Q(custom_type__icontains=query)
         )
     if status_filter in dict(Incident.STATUS_CHOICES):
         incidents = incidents.filter(status=status_filter)
@@ -42,30 +43,34 @@ def incident_list_page(request):
         'status_choices': Incident.STATUS_CHOICES,
         'type_choices': Incident.TYPE_CHOICES,
         'severity_choices': Incident.SEVERITY_CHOICES,
-        'available_buses': scoped_buses(request.user).order_by('bus_number'),
+        'available_buses': Bus.objects.all().order_by('bus_number'),
         'open_count': open_count,
+        'can_manage': request.user.is_authenticated,
     })
 
 
-@admin_required
+@conductor_required
 def incident_get_ajax(request, pk):
     i = scoped_incident(request.user, pk)
     return JsonResponse({
         'id': i.id, 'bus_id': i.bus_id, 'incident_type': i.incident_type,
+        'custom_type': i.custom_type,
         'severity': i.severity, 'title': i.title, 'location': i.location,
         'description': i.description, 'status': i.status,
     })
 
 
-@admin_required
 @require_POST
 def incident_save_ajax(request):
     iid = request.POST.get('id')
+    if iid and not request.user.is_authenticated:
+        return JsonResponse({'error': 'Please sign in to edit an incident.'}, status=403)
     incident = scoped_incident(request.user, iid) if iid else Incident()
     is_update = bool(iid)
 
     bus_id = request.POST.get('bus', '').strip()
     incident_type = request.POST.get('incident_type', Incident.TYPE_OTHER).strip()
+    custom_type = request.POST.get('custom_type', '').strip()[:100]
     severity = request.POST.get('severity', Incident.SEVERITY_MEDIUM).strip()
     title = request.POST.get('title', '').strip()
     location = request.POST.get('location', '').strip()
@@ -74,11 +79,13 @@ def incident_save_ajax(request):
 
     bus = None
     if bus_id:
-        bus = scoped_buses(request.user).filter(pk=bus_id).first()
+        bus = Bus.objects.filter(pk=bus_id).first()
         if bus is None:
             return JsonResponse({'error': 'Selected bus is invalid.'}, status=400)
     if incident_type not in dict(Incident.TYPE_CHOICES):
         return JsonResponse({'error': 'Invalid incident type.'}, status=400)
+    if incident_type != Incident.TYPE_OTHER:
+        custom_type = ''
     if severity not in dict(Incident.SEVERITY_CHOICES):
         return JsonResponse({'error': 'Invalid severity.'}, status=400)
     if not title:
@@ -88,6 +95,7 @@ def incident_save_ajax(request):
 
     incident.bus = bus
     incident.incident_type = incident_type
+    incident.custom_type = custom_type
     incident.severity = severity
     incident.title = title
     incident.location = location
@@ -96,7 +104,7 @@ def incident_save_ajax(request):
     incident.status = status
     if status in (Incident.STATUS_RESOLVED, Incident.STATUS_CLOSED) and prev_status != status:
         incident.resolved_at = timezone.now()
-    if not incident.pk:
+    if not incident.pk and request.user.is_authenticated:
         incident.user = request.user
     try:
         incident.save()
@@ -106,7 +114,7 @@ def incident_save_ajax(request):
     return JsonResponse({'status': 'success', 'id': incident.id})
 
 
-@admin_required
+@conductor_required
 @require_POST
 def incident_resolve_ajax(request, pk):
     incident = scoped_incident(request.user, pk)
@@ -117,7 +125,7 @@ def incident_resolve_ajax(request, pk):
     return JsonResponse({'status': 'resolved'})
 
 
-@admin_required
+@conductor_required
 @require_POST
 def incident_delete_ajax(request, pk):
     incident = scoped_incident(request.user, pk)
